@@ -264,7 +264,7 @@ body[data-state="offline"] .pager { opacity: 0.35; pointer-events: none; }
 .tile:active { transform: scale(0.96); background: var(--surface-2); }
 .tile.launched { border-color: var(--accent); transition: border-color 0s; }
 
-.tile img { width: var(--icon); height: var(--icon); object-fit: contain; pointer-events: none; }
+.tile img { -webkit-user-drag: none; width: var(--icon); height: var(--icon); object-fit: contain; pointer-events: none; }
 .tile .fallback,
 .tile .keycap {
   display: grid;
@@ -399,3 +399,14 @@ body[data-state="offline"] .pager { opacity: 0.35; pointer-events: none; }
 .toast.error { border-color: var(--err); color: var(--err); }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* a macro key: runs a list of steps; marked busy while it runs */
+.tile .keycap.macro { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px; color: var(--accent); background: rgba(124, 156, 255, 0.12); }
+.tile .keycap.macro small { font-size: 0.6rem; font-weight: 500; color: var(--muted); }
+.tile.busy { border-color: var(--accent); opacity: 0.7; }
+
+/* rearranging: the lifted key follows the finger, the page does not scroll */
+.pager.arranging { overflow-x: hidden; scroll-snap-type: none; }
+.tile.lifting { position: relative; z-index: 20; border-color: var(--accent); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55); transition: none !important; will-change: transform; }
+.grid { position: relative; } /* the lifted key is measured against it */
+.tile.drop-target, .slot.drop-target { outline: 2px solid var(--accent); outline-offset: -2px; background: var(--surface-2); }

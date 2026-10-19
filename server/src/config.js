@@ -18,6 +18,13 @@ const DEFAULTS = {
   powerControls: true,
   // the header's play/pause button for whatever is playing. It keeps the media helper running (~90 MB); false turns it off.
   miniPlayer: true,
+  // false turns off the button editor in the app (shortcuts, macros, hidden/ordered apps can then only be changed here)
+  editor: true,
+  // macros: lists of whitelisted steps (see src/macros.js); the editor in the app writes them
+  macros: [],
+  // where each key sits on the Apps and Shortcuts pages: lists of "a:<app id>", "s:<shortcut id>", "m:<macro id>", "c:camera".
+  // Set by holding and dragging a key on the deck; keys not listed follow in their natural order.
+  tileOrder: { apps: [], shortcuts: [] },
   // keyboard shortcuts sent to the PC; "keys" are joined with "+" (see src/keys.js for the names)
   shortcuts: [
     { id: 'desktop', label: 'Área de trabalho', keys: 'win+d' },
@@ -56,4 +63,19 @@ function load() {
   return config;
 }
 
-module.exports = { load, DATA_DIR, ICON_DIR };
+// What the in-app editor may change. Written atomically; the pairing token and every other key stay as they are.
+const EDITABLE = ['shortcuts', 'macros', 'hidden', 'tileOrder'];
+
+function update(config, patch) {
+  const stored = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8').replace(/^﻿/, ''));
+  for (const key of EDITABLE) {
+    if (patch[key] === undefined) continue;
+    stored[key] = patch[key];
+    config[key] = patch[key];
+  }
+  const temporary = `${CONFIG_FILE}.tmp`;
+  fs.writeFileSync(temporary, JSON.stringify(stored, null, 2));
+  fs.renameSync(temporary, CONFIG_FILE);
+}
+
+module.exports = { load, update, DATA_DIR, ICON_DIR };

@@ -257,6 +257,10 @@
       await startSending();
       if (sending) toast('Câmera ligada: transmitindo ao PC');
     },
+    // used by macros: switch to the wanted state, whatever the current one is
+    async set(wanted) {
+      if (wanted !== sending) await this.toggle();
+    },
     openSheet: () => sheet.open(),
     onChange: null,
   };

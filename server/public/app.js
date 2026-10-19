@@ -54,12 +54,14 @@
   function appItem(app) {
     return {
       appId: app.id,
+      key: `a:${app.id}`,
       label: app.name,
       visual() {
         if (!app.hasIcon) return fallbackIcon(app.name);
         const img = document.createElement('img');
         img.src = `/api/icon/${app.id}?v=${app.iconVersion || ''}`;
         img.alt = '';
+        img.draggable = false; // a long press on an icon must not start the browser's own image drag
         img.addEventListener('error', () => img.replaceWith(fallbackIcon(app.name)));
         return img;
       },
@@ -77,6 +79,7 @@
 
   function shortcutItem(shortcut) {
     return {
+      key: `s:${shortcut.id}`,
       label: shortcut.label,
       visual() {
         const keycap = document.createElement('div');
@@ -99,30 +102,53 @@
     tile.type = 'button';
     tile.className = 'tile';
     if (item.appId) tile.dataset.appId = item.appId;
+    if (item.key) tile.dataset.key = item.key;
 
     const text = document.createElement('span');
     text.textContent = item.label;
     tile.append(item.visual(), text);
 
-    // an item may also react to a long press (the camera tile opens its sheet); the click that ends it is then ignored
-    let holdTimer = null;
-    let held = false;
-    if (item.onHold) {
-      tile.addEventListener('pointerdown', () => {
-        held = false;
-        holdTimer = setTimeout(() => { held = true; vibrate(25); item.onHold(); }, 550);
-      });
-      for (const name of ['pointerup', 'pointerleave', 'pointercancel']) tile.addEventListener(name, () => clearTimeout(holdTimer));
-      tile.addEventListener('contextmenu', (event) => event.preventDefault());
-    }
-
     tile.addEventListener('click', () => {
-      if (held) { held = false; return; }
+      if (arranging.justDropped) return; // the touch that ended a drag is not a tap
       tile.classList.add('launched');
       setTimeout(() => tile.classList.remove('launched'), 250);
-      item.onTap();
+      // a macro can take seconds: its key stays marked busy until it ends
+      const result = item.onTap();
+      if (result && typeof result.then === 'function') {
+        tile.classList.add('busy');
+        result.finally(() => tile.classList.remove('busy'));
+      }
     });
     return tile;
+  }
+
+  // A macro (made in the button editor) is one key that runs a list of steps on the PC. The camera steps are for the phone.
+  async function runMacro(id, name) {
+    try {
+      const outcome = await api(`/api/macro/${id}`, { method: 'POST' });
+      const failed = outcome.steps.filter((step) => !step.ok);
+      for (const step of outcome.client || []) if (step.type === 'camera' && Deck.camera) await Deck.camera.set(step.on);
+      if (failed.length) showToast(`${name}: ${failed.length} de ${outcome.steps.length} passos falharam (${failed[0].error})`, true);
+      else showToast(`${name} ✓`);
+      setTimeout(refreshState, 800);
+    } catch (err) {
+      showToast(`Erro: ${err.message}`, true);
+    }
+  }
+  Deck.runMacro = runMacro;
+
+  function macroItem(macro) {
+    return {
+      key: `m:${macro.id}`,
+      label: macro.label,
+      visual() {
+        const box = document.createElement('div');
+        box.className = 'keycap macro';
+        box.append(Deck.icon('play', 22), Object.assign(document.createElement('small'), { textContent: `${macro.steps} passo${macro.steps === 1 ? '' : 's'}` }));
+        return box;
+      },
+      onTap: () => runMacro(macro.id, macro.label),
+    };
   }
 
   // The phone camera as the PC's webcam is one more key on the apps page: a tap turns it on or off, a long press
@@ -130,6 +156,7 @@
   function cameraItem() {
     return {
       appId: 'camera',
+      key: 'c:camera',
       label: 'Câmera',
       visual() {
         const box = document.createElement('div');
@@ -138,7 +165,6 @@
         return box;
       },
       onTap: () => Deck.camera.toggle(),
-      onHold: () => Deck.camera.openSheet(),
     };
   }
 
@@ -147,16 +173,219 @@
     pager.querySelectorAll('.tile[data-app-id="camera"]').forEach((tile) => tile.classList.toggle('live', live));
   }
 
+  // Where each key sits (saved by holding and dragging it): "a:<app>", "s:<shortcut>", "m:<macro>", "c:camera" per page.
+  // Keys not in the saved order keep their natural place, after the ones that are.
+  let tileOrder = { apps: [], shortcuts: [] };
+  const arranging = { justDropped: false };
+
+  function arranged(page, items) {
+    const rank = new Map((tileOrder[page] || []).map((key, index) => [key, index]));
+    const place = (item, index) => (rank.has(item.key) ? rank.get(item.key) : 1e6 + index);
+    return items.map((item, index) => ({ item, at: place(item, index) })).sort((a, b) => a.at - b.at).map(({ item }) => item);
+  }
+
+  async function loadLayout() {
+    try {
+      tileOrder = { apps: [], shortcuts: [], ...(await api('/api/layout')) };
+    } catch {
+      // keep the order we have: the keys just stay where they were
+    }
+  }
+
+  // the apps page: the taskbar apps, the macros placed on it and the camera key, in the saved order
+  let appTiles = [];
+  let appMacroTiles = [];
+  let shortcutTiles = [];
+  const composeApps = () => { sections.apps.items = arranged('apps', [...appTiles, ...appMacroTiles, ...(Deck.camera ? [cameraItem()] : [])]); };
+  const composeShortcuts = () => { sections.shortcuts.items = arranged('shortcuts', shortcutTiles); };
+
   async function loadApps() {
-    const { apps, host } = await api('/api/apps');
+    const [{ apps, host }] = await Promise.all([api('/api/apps'), loadLayout()]);
     if (host) $('host').textContent = host;
-    sections.apps.items = [...apps.map(appItem), ...(Deck.camera ? [cameraItem()] : [])];
+    appTiles = apps.map(appItem);
+    composeApps();
   }
 
   async function loadShortcuts() {
-    const { shortcuts } = await api('/api/shortcuts');
-    sections.shortcuts.items = shortcuts.map(shortcutItem);
+    const [{ shortcuts }, { macros }] = await Promise.all([api('/api/shortcuts'), api('/api/macros'), loadLayout()]);
+    shortcutTiles = [...shortcuts.map(shortcutItem), ...macros.filter((macro) => macro.page !== 'apps').map(macroItem)];
+    appMacroTiles = macros.filter((macro) => macro.page === 'apps').map(macroItem);
+    composeShortcuts();
+    composeApps();
   }
+
+  // --- hold and lift to rearrange ---------------------------------------------------------------------
+  // Hold a key for a moment (it lifts), then drag it over the others: they make room as you go. Letting go saves the order.
+  // Holding without moving does nothing, and the touch that ends a lift never counts as a tap on the key.
+  // Touch is handled with touch events, not pointer events: when the browser starts a scroll it cancels a pointer, but a
+  // touch keeps reporting, and the page's own touchmove handler (registered up front, not passive) is what stops the scroll.
+
+  const HOLD_MS = 450;
+  const HOLD_SLOP = 16; // px of finger movement that still counts as "holding"
+  let press = null; // a finger is down on a key and the hold time has not passed
+  let lift = null; // a key is lifted and follows the finger
+
+  const inside = (rect, x, y) => x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+  const cellsOf = (grid) => [...grid.children].filter((cell) => cell.classList.contains('tile') || cell.classList.contains('slot'));
+  const tileAt = (target) => {
+    const tile = target && target.closest ? target.closest('.tile[data-key]') : null;
+    return tile && tile.parentElement.classList.contains('grid') ? tile : null;
+  };
+
+  function cancelPress() {
+    if (press) clearTimeout(press.timer);
+    press = null;
+  }
+
+  function startLift() {
+    const { tile, x, y } = press;
+    press = null;
+    const grid = tile.parentElement;
+    const rect = tile.getBoundingClientRect();
+    lift = { tile, grid, target: null, grabX: x - rect.left, grabY: y - rect.top, x, y, moved: false, section: grid.closest('.page').dataset.section };
+    tile.classList.add('lifting');
+    pager.classList.add('arranging');
+    vibrate(30);
+    followFinger();
+  }
+
+  // the lifted key sits under the finger, wherever the grid has put its slot
+  function followFinger() {
+    const { tile } = lift;
+    tile.style.transform = '';
+    const natural = tile.getBoundingClientRect();
+    tile.style.transform = `translate(${lift.x - lift.grabX - natural.left}px, ${lift.y - lift.grabY - natural.top}px) scale(1.06)`;
+  }
+
+  // The cell under the finger, by LAYOUT position (offsetLeft/Top ignore transforms), so a key that is still sliding
+  // into place can never be mistaken for the one the finger is over.
+  function cellUnder(grid, tile, x, y) {
+    const box = grid.getBoundingClientRect();
+    const gx = x - box.left;
+    const gy = y - box.top;
+    return cellsOf(grid).find((cell) => cell !== tile
+      && gx >= cell.offsetLeft && gx <= cell.offsetLeft + cell.offsetWidth
+      && gy >= cell.offsetTop && gy <= cell.offsetTop + cell.offsetHeight) || null;
+  }
+
+  function moveLift(x, y) {
+    lift.x = x;
+    lift.y = y;
+    lift.moved = true;
+    const target = cellUnder(lift.grid, lift.tile, x, y);
+    if (target !== lift.target) {
+      if (lift.target) lift.target.classList.remove('drop-target');
+      if (target) target.classList.add('drop-target');
+      lift.target = target;
+    }
+    followFinger();
+  }
+
+  function swapNodes(a, b) {
+    const parent = a.parentNode;
+    const after = a.nextSibling === b ? a : a.nextSibling;
+    b.replaceWith(a);
+    parent.insertBefore(b, after);
+  }
+
+  // a key glides from where it was drawn to where it now is
+  function slide(el, from) {
+    el.style.transform = '';
+    const to = el.getBoundingClientRect();
+    const dx = from.left - to.left;
+    const dy = from.top - to.top;
+    if (!dx && !dy) return;
+    el.style.transition = 'none';
+    el.style.transform = `translate(${dx}px, ${dy}px)`;
+    el.getBoundingClientRect(); // commit the starting point
+    el.style.transition = 'transform 0.18s ease';
+    el.style.transform = '';
+    setTimeout(() => { el.style.transition = ''; }, 230);
+  }
+
+  // Letting go on another key swaps the two; on an empty slot the key goes to the end; anywhere else nothing changes.
+  async function endLift() {
+    const { tile, grid, target, section } = lift;
+    lift = null;
+    pager.classList.remove('arranging');
+    tile.classList.remove('lifting');
+    if (target) target.classList.remove('drop-target');
+    arranging.justDropped = true;
+    setTimeout(() => { arranging.justDropped = false; }, 300);
+
+    const tileFrom = tile.getBoundingClientRect();
+    let changed = false;
+    if (target && target.classList.contains('tile')) {
+      const targetFrom = target.getBoundingClientRect();
+      swapNodes(tile, target);
+      slide(tile, tileFrom);
+      slide(target, targetFrom);
+      changed = true;
+    } else if (target) {
+      const last = [...grid.children].filter((cell) => cell.classList.contains('tile')).pop();
+      if (last !== tile) {
+        last.after(tile);
+        slide(tile, tileFrom);
+        changed = true;
+      }
+    }
+    if (!changed) {
+      slide(tile, tileFrom);
+      return;
+    }
+
+    // the section's order, page by page, as it is on screen now
+    const order = [...pager.querySelectorAll(`.page[data-section="${section}"] .tile[data-key]`)].map((el) => el.dataset.key);
+    tileOrder = { ...tileOrder, [section]: order };
+    try {
+      await api('/api/layout', { method: 'POST', json: { page: section, order } });
+    } catch (err) {
+      showToast(`Não salvou a posição: ${err.message}`, true);
+      Deck.reloadDeck();
+    }
+  }
+
+  const beginPress = (tile, x, y) => {
+    if (lift) return;
+    press = { tile, x, y, timer: setTimeout(startLift, HOLD_MS) };
+  };
+  const movePress = (x, y) => {
+    if (lift) moveLift(x, y);
+    else if (press && Math.hypot(x - press.x, y - press.y) > HOLD_SLOP) cancelPress(); // moved before the hold time: a swipe, not a rearrange
+  };
+  const endPress = () => {
+    cancelPress();
+    if (lift) endLift();
+  };
+
+  // touch (the phone). Not passive, so the browser waits for this handler before it scrolls: it can then refuse.
+  pager.addEventListener('touchstart', (event) => {
+    const tile = event.touches.length === 1 ? tileAt(event.target) : null;
+    if (tile) beginPress(tile, event.touches[0].clientX, event.touches[0].clientY);
+    else endPress();
+  }, { passive: false });
+  pager.addEventListener('touchmove', (event) => {
+    if (lift && event.cancelable) event.preventDefault(); // the page must not scroll under the lifted key
+    const touch = event.touches[0];
+    if (touch) movePress(touch.clientX, touch.clientY);
+  }, { passive: false });
+  pager.addEventListener('touchend', endPress);
+  pager.addEventListener('touchcancel', endPress);
+
+  // mouse (testing in a desktop browser)
+  pager.addEventListener('pointerdown', (event) => {
+    const tile = event.pointerType === 'mouse' && event.button === 0 ? tileAt(event.target) : null;
+    if (tile) beginPress(tile, event.clientX, event.clientY);
+  });
+  pager.addEventListener('pointermove', (event) => { if (event.pointerType === 'mouse') movePress(event.clientX, event.clientY); });
+  pager.addEventListener('pointerup', (event) => { if (event.pointerType === 'mouse') endPress(); });
+  pager.addEventListener('contextmenu', (event) => event.preventDefault());
+
+  // after the editor saved something: read both lists again and redraw
+  Deck.reloadDeck = async () => {
+    await Promise.allSettled([loadApps(), loadShortcuts()]);
+    render();
+  };
 
   // --- generated pages --------------------------------------------------------------------------
 

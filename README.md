@@ -111,6 +111,9 @@ ela mantém a tela ligada sozinha.
 | `port` | Porta (padrão `7878`; `SSD_PORT` sobrescreve só naquela execução). |
 | `lan` | `true` para aceitar conexões pela rede local (padrão `false`). |
 | `hidden` | Ids de apps a esconder (veja `GET /api/apps`). |
+| `editor` | `false` desliga o editor de botões do app (atalhos, macros e apps só mudam aqui no arquivo). Padrão: `true`. |
+| `macros` | Macros criadas no editor: `{ id, label, page, steps }` (veja "Editor de botões e macros"). |
+| `tileOrder` | Posição dos botões nas telas Apps e Atalhos (`{ apps: [...], shortcuts: [...] }`, chaves `a:<app>`, `s:<atalho>`, `m:<macro>`, `c:camera`). Salvo ao arrastar; não precisa editar à mão. |
 | `shortcuts` | Atalhos: `{ "id", "label", "keys" }`, com `keys` como `ctrl+shift+esc`. |
 | `powerControls` | `false` remove as ações de energia da API. |
 | `miniPlayer` | `false` desliga o botão play/pause do cabeçalho (e dispensa manter o helper de mídia ligado, ~90 MB). |
@@ -144,6 +147,9 @@ atrapalha os outros:
 | GET | `/api/apps` · `/api/icon/:id` | Lista e ícones (URL versionada por hash) |
 | POST | `/api/launch/:id` · `/api/refresh` | Abre ou traz para a frente; relê a barra de tarefas |
 | GET/POST | `/api/shortcuts` · `/api/shortcut/:id` | Lista e dispara atalhos |
+| GET/POST | `/api/macros` · `/api/macro/:id` | Lista e executa macros (devolve o resultado de cada passo) |
+| GET/POST | `/api/layout` | Posição dos botões: `{apps, shortcuts}`; POST `{page, order}` |
+| GET/POST | `/api/editor` · `/api/editor/shortcuts` · `/macros` · `/apps` | Editor de botões: lê tudo; salva atalhos, macros, apps ocultos/ordem (validado no servidor) |
 | GET/POST | `/api/volume` | `{level, muted}`; POST `{level}` e/ou `{muted: bool｜"toggle"}` |
 | POST | `/api/mediakey/:key` | `prev`, `playpause`, `next` (teclas globais) |
 | GET | `/api/audio` | Saídas, entradas e sessões por app |
@@ -162,10 +168,29 @@ atrapalha os outros:
 | POST | `/api/camera/copy-link` | Copia o link do OBS para a área de transferência do PC |
 | POST | `/api/screens/brightness` · `/off` · `/project` | `{device, level}`; desligar telas; `{mode: extend｜clone｜first｜second}` (`first`/`second` com `confirm: true`) |
 
+## Reorganizar os botões e editor de macros
+
+**Mudar a posição:** nas telas **Apps** e **Atalhos**, segure um botão por meio segundo (ele levanta e o celular vibra), arraste e solte **sobre outro botão: os dois trocam de lugar**
+(o botão de destino fica destacado enquanto você arrasta). Soltar em um espaço vazio manda o botão para o fim; soltar em qualquer outro lugar não muda nada. A ordem é salva ao soltar.
+Segurar sem mover não faz nada, e o toque que termina o arraste não abre o app. Vale para apps, atalhos, macros e a tecla da câmera.
+
+Menu **⋯ → Editar botões** (ou `config.json`). Três abas:
+
+- **Atalhos:** criar, renomear e excluir atalhos de teclado (modificadores Ctrl/Shift/Alt/Win + uma tecla). **Testar** salva e aperta uma vez.
+- **Macros:** uma macro é uma lista de passos executados em ordem com um toque (a tecla mostra "n passos"; fica marcada enquanto roda). Passos disponíveis:
+  abrir/focar um app, posicionar a janela de um app (metade esquerda/direita ou tela cheia em uma tela), pressionar teclas, tecla de mídia, definir o volume,
+  mudo do som, mudo do microfone, trocar a saída/entrada de áudio padrão, esperar (0,5 a 10 s) e ligar/desligar a câmera do celular.
+  Cada macro escolhe em qual tela aparece (Atalhos ou Apps). Se um passo falha (app fechado, dispositivo ausente), os outros continuam e o aviso diz quantos falharam.
+- **Apps:** ocultar/mostrar os apps da barra de tarefas.
+
+**Segurança:** o servidor só aceita passos de uma lista fixa e confere tudo ao salvar: apps por id da barra de tarefas, dispositivos por id da lista atual, teclas pelos nomes conhecidos.
+Não existe passo de linha de comando, caminho de arquivo, texto digitado ou energia (desligar/reiniciar). Mesmo assim, quem tem o token passa a poder montar atalhos de teclado
+pelo celular; se não quiser isso, ponha `"editor": false` no `config.json`.
+
 ## Câmera do celular (webcam do PC)
 
 O celular vira a webcam do PC. O jeito mais rápido é a tecla **Câmera** na tela de Apps: um toque liga ou desliga a transmissão (fica
-vermelha enquanto transmite) e segurar abre as opções. Também dá para abrir pelo menu **⋯ → Câmera do celular → Transmitir ao PC**. O app pede a permissão da câmera na primeira vez
+vermelha enquanto transmite). As opções abrem pelo ícone vermelho do cabeçalho ou pelo menu **⋯ → Câmera do celular → Transmitir ao PC**. O app pede a permissão da câmera na primeira vez
 ("Durante o uso do app"). O deck manda os quadros em JPEG para o servidor (`POST /api/camera/frame`) e o servidor os republica como
 um stream MJPEG (`GET /api/camera/stream`). Enquanto transmite, um ícone vermelho de câmera aparece no cabeçalho para voltar à tela.
 

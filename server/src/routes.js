@@ -3,7 +3,8 @@
 const os = require('node:os');
 const path = require('node:path');
 const { execFile, spawn } = require('node:child_process');
-const { ICON_DIR } = require('./config');
+const { ICON_DIR, update } = require('./config');
+const macros = require('./macros');
 const taskbar = require('./taskbar');
 const system = require('./system');
 const media = require('./media');
@@ -28,25 +29,43 @@ const percent = (value) => Math.max(0, Math.min(100, Math.round(number(value, 'l
 function createRoutes(config) {
   let apps = [];
 
+  let allApps = []; // every taskbar app, hidden ones included (the editor lists them all)
+
+  // `apps` is what the deck shows: the taskbar apps without the hidden ones (the order on screen is the deck's tileOrder)
+  function applyAppConfig() {
+    const hidden = new Set(config.hidden || []);
+    apps = allApps.filter((app) => !hidden.has(app.id));
+  }
+
   const refreshApps = async () => {
-    apps = await taskbar.listApps(config.hidden);
+    allApps = await taskbar.listApps([]);
+    applyAppConfig();
     return apps;
   };
 
-  // Shortcuts come only from config.json and are sent by id, so a client can never ask for arbitrary key presses.
-  const shortcuts = [];
-  for (const [index, entry] of (config.shortcuts || []).entries()) {
-    try {
-      shortcuts.push({
-        id: String(entry.id ?? `shortcut-${index}`),
-        label: String(entry.label ?? entry.keys),
-        display: keys.display(entry.keys),
-        vks: keys.parse(entry.keys),
-      });
-    } catch (err) {
-      console.warn(`[shortcuts] ignoring "${entry.label ?? entry.id}": ${err.message}`);
+  // Shortcuts come only from config.json (or the editor, which validates them) and are sent by id.
+  let shortcuts = [];
+  function loadShortcuts() {
+    shortcuts = [];
+    for (const [index, entry] of (config.shortcuts || []).entries()) {
+      try {
+        shortcuts.push({
+          id: String(entry.id ?? `shortcut-${index}`),
+          label: String(entry.label ?? entry.keys),
+          keys: String(entry.keys),
+          display: keys.display(entry.keys),
+          vks: keys.parse(entry.keys),
+        });
+      } catch (err) {
+        console.warn(`[shortcuts] ignoring "${entry.label ?? entry.id}": ${err.message}`);
+      }
     }
   }
+  loadShortcuts();
+
+  // Macros: lists of whitelisted steps, validated when saved (src/macros.js)
+  const macroList = () => (Array.isArray(config.macros) ? config.macros.filter((macro) => macro && macro.id && Array.isArray(macro.steps)) : []);
+  const macrosRunning = new Set(); // macros being run: one run of each at a time
 
   const MEDIA_KEYS = { prev: keys.vkOf('prevtrack'), playpause: keys.vkOf('playpause'), next: keys.vkOf('nexttrack') };
   const MEDIA_ACTIONS = new Set(['toggle', 'play', 'pause', 'next', 'previous', 'seek']);
@@ -127,7 +146,7 @@ function createRoutes(config) {
   });
 
   on('GET', '/api/icon/:id', async ({ res, params }) => {
-    const app = apps.find((candidate) => candidate.id === params.id);
+    const app = allApps.find((candidate) => candidate.id === params.id);
     if (!app || !app.hasIcon) throw notFound('not found');
     // the URL carries ?v=<icon hash>, so a cached copy can never be stale
     sendFile(res, path.join(ICON_DIR, `${app.id}.png`), 'image/png', { 'Cache-Control': 'max-age=31536000, immutable' });
@@ -170,16 +189,13 @@ function createRoutes(config) {
 
   // Only ids from the taskbar list can be launched, never arbitrary paths. An app that already has a window is
   // brought to the front instead of being started again.
-  on('POST', '/api/launch/:id', async ({ res, params }) => {
-    const app = apps.find((candidate) => candidate.id === params.id);
-    if (!app) throw notFound('unknown app');
-
+  async function launchApp(app) {
     if (app.proc) {
       try {
         const { windows } = await windowSnapshot();
         if (windows.some((window) => window.name === app.proc) && (await system.focus(app.proc))) {
           console.log(`[focus] ${app.name}`);
-          return sendJson(res, 200, { ok: true, name: app.name, action: 'focused' });
+          return 'focused';
         }
       } catch (err) {
         console.warn(`[focus] ${app.name}: ${err.message}`);
@@ -187,7 +203,13 @@ function createRoutes(config) {
     }
     taskbar.launch(app);
     console.log(`[launch] ${app.name}`);
-    sendJson(res, 200, { ok: true, name: app.name, action: 'launched' });
+    return 'launched';
+  }
+
+  on('POST', '/api/launch/:id', async ({ res, params }) => {
+    const app = apps.find((candidate) => candidate.id === params.id);
+    if (!app) throw notFound('unknown app');
+    sendJson(res, 200, { ok: true, name: app.name, action: await launchApp(app) });
   });
 
   // keyboard shortcuts
@@ -200,6 +222,123 @@ function createRoutes(config) {
     await system.pressKeys(shortcut.vks);
     console.log(`[shortcut] ${shortcut.label} (${shortcut.display})`);
     sendJson(res, 200, { ok: true, label: shortcut.label });
+  });
+
+  // --- macros ---------------------------------------------------------------------------------
+
+  on('GET', '/api/macros', async ({ res }) =>
+    sendJson(res, 200, { macros: macroList().map(({ id, label, page, steps }) => ({ id, label, page: page || 'shortcuts', steps: steps.length })) }));
+
+  // One handler per step type; each throws when its step cannot be done. Apps and devices are looked up by id here, at run time.
+  const macroHandlers = {
+    async launch(step) {
+      const app = allApps.find((candidate) => candidate.id === step.app);
+      if (!app) throw new Error('app not on the taskbar anymore');
+      await launchApp(app);
+    },
+    async keys(step) { await system.pressKeys(keys.parse(step.keys)); },
+    async media(step) { await system.pressKeys([MEDIA_KEYS[step.key]]); },
+    async volume(step) { await system.setVolume(step.level); },
+    async mute(step) {
+      if (step.muted === 'toggle') await system.toggleMute();
+      else await system.setMute(step.muted);
+    },
+    async mic(step) { await system.setMic(step.muted); },
+    async output(step) {
+      if (!(await knownDeviceIds()).has(step.device)) throw new Error(`device not found${step.name ? `: ${step.name}` : ''}`);
+      await system.setDefaultDevice(step.device);
+    },
+    // brings an app's window to a screen's half or full size, waiting a few seconds for the window to exist (it may just have been launched)
+    async place(step) {
+      const app = allApps.find((candidate) => candidate.id === step.app);
+      if (!app || !app.proc) throw new Error('app not found');
+      const until = Date.now() + 8000;
+      for (;;) {
+        const { windows } = await system.windows();
+        const window = windows.find((item) => item.name === app.proc && item.title);
+        if (window) {
+          await system.snapWindow(window.handle, step.monitor, step.zone);
+          return;
+        }
+        if (Date.now() > until) throw new Error(`${app.name} has no window`);
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+    },
+  };
+
+  on('POST', '/api/macro/:id', async ({ res, params }) => {
+    const macro = macroList().find((candidate) => candidate.id === params.id);
+    if (!macro) throw notFound('unknown macro');
+    if (macrosRunning.has(macro.id)) throw Object.assign(new Error('this macro is already running'), { status: 409 });
+    macrosRunning.add(macro.id);
+    try {
+      const outcome = await macros.run(macro, macroHandlers);
+      console.log(`[macro] ${macro.label}: ${outcome.results.length - outcome.failed}/${outcome.results.length} steps`);
+      sendJson(res, 200, { ok: outcome.failed === 0, label: macro.label, steps: outcome.results, client: outcome.client });
+    } finally {
+      macrosRunning.delete(macro.id);
+    }
+  });
+
+  // --- the button editor ------------------------------------------------------------------------
+  // Everything it saves is validated against a whitelist (src/macros.js). The editor can be turned off with "editor": false.
+
+  const editorOn = () => {
+    if (config.editor === false) throw Object.assign(new Error('the editor is turned off in config.json'), { status: 403 });
+  };
+
+  on('GET', '/api/editor', async ({ res }) => {
+    editorOn();
+    const hidden = new Set(config.hidden || []);
+    const [devices, monitors] = await Promise.all([system.devices().catch(() => ({ playback: [], capture: [] })), system.monitors(false).catch(() => [])]);
+    sendJson(res, 200, {
+      shortcuts: shortcuts.map(({ id, label, keys: spec, display }) => ({ id, label, keys: spec, display })),
+      macros: macroList(),
+      apps: allApps.map(({ id, name, hasIcon, iconVersion, proc }) => ({ id, name, hasIcon, iconVersion, hidden: hidden.has(id), canPlace: Boolean(proc) })),
+      devices: { playback: devices.playback.map(({ id, name }) => ({ id, name })), capture: devices.capture.map(({ id, name }) => ({ id, name })) },
+      screens: monitors.length || 1,
+    });
+  });
+
+  on('POST', '/api/editor/shortcuts', async ({ req, res }) => {
+    editorOn();
+    const { items } = await readJson(req, 64 * 1024);
+    update(config, { shortcuts: macros.normalizeShortcuts(items) });
+    loadShortcuts();
+    console.log(`[editor] ${config.shortcuts.length} shortcuts saved`);
+    sendJson(res, 200, { shortcuts: shortcuts.map(({ id, label, keys: spec, display }) => ({ id, label, keys: spec, display })) });
+  });
+
+  on('POST', '/api/editor/macros', async ({ req, res }) => {
+    editorOn();
+    const { items } = await readJson(req, 128 * 1024);
+    update(config, { macros: macros.normalizeMacros(items, new Set(allApps.map((app) => app.id))) });
+    console.log(`[editor] ${config.macros.length} macros saved`);
+    sendJson(res, 200, { macros: macroList() });
+  });
+
+  on('POST', '/api/editor/apps', async ({ req, res }) => {
+    editorOn();
+    const { hidden } = await readJson(req, 64 * 1024);
+    const known = new Set(allApps.map((app) => app.id));
+    if (!Array.isArray(hidden) || hidden.length > 200 || hidden.some((id) => typeof id !== 'string' || !known.has(id))) throw badRequest('invalid hidden');
+    update(config, { hidden: [...new Set(hidden)] });
+    applyAppConfig();
+    console.log(`[editor] apps: ${config.hidden.length} hidden`);
+    sendJson(res, 200, { ok: true });
+  });
+
+  // Where each key sits on the Apps and Shortcuts pages. Holding and dragging a key on the deck saves it here.
+  const TILE_KEY = /^[asmc]:[A-Za-z0-9-]{1,48}$/;
+  const tileOrder = () => ({ apps: [], shortcuts: [], ...(config.tileOrder || {}) });
+  on('GET', '/api/layout', async ({ res }) => sendJson(res, 200, tileOrder()));
+  on('POST', '/api/layout', async ({ req, res }) => {
+    editorOn();
+    const { page, order } = await readJson(req, 64 * 1024);
+    if (page !== 'apps' && page !== 'shortcuts') throw badRequest('invalid page');
+    if (!Array.isArray(order) || order.length > 200 || order.some((key) => typeof key !== 'string' || !TILE_KEY.test(key))) throw badRequest('invalid order');
+    update(config, { tileOrder: { ...tileOrder(), [page]: [...new Set(order)] } });
+    sendJson(res, 200, tileOrder());
   });
 
   // global media keys (what the strip buttons send); the Media page talks to a specific player instead
