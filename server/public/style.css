@@ -1,0 +1,401 @@
+:root {
+  --bg: #0b0c10;
+  --surface: #12141a;
+  --surface-2: #181b22;
+  --border: #1c1f27;
+  --text: #d7dae3;
+  --muted: #7d8394;
+  --accent: #7c9cff;
+  --ok: #4cc38a;
+  --err: #e5646b;
+  --icon: 44px; /* set by app.js from the real tile size */
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* --- header ------------------------------------------------------------- */
+
+header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  height: 48px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.host { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.glyph, .icon-btn svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.glyph { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.host-name { font-size: 0.9rem; font-weight: 600; letter-spacing: 0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.status { display: inline-flex; align-items: center; gap: 6px; font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+.status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.status[data-state="online"]::before { background: var(--ok); }
+.status[data-state="online"] { font-size: 0; gap: 0; } /* online = just the light; any other state says what is wrong */
+.status[data-state="offline"] { color: var(--err); }
+.status[data-state="offline"]::before { background: var(--err); }
+
+/* Section tabs: four places instead of eight pages. The active tab names the current page and shows,
+   as dots under it, where you are inside that section; tapping the active tab goes to its next page. */
+.tabs { display: flex; align-items: center; gap: 2px; }
+.tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  white-space: nowrap;
+  touch-action: manipulation;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.tab .ico { --size: 18px; }
+.tab:active { background: var(--surface-2); }
+.tab[aria-selected="true"] { background: var(--surface); color: var(--text); }
+.tab-dots { position: absolute; left: 50%; bottom: 3px; display: flex; gap: 3px; transform: translateX(-50%); }
+.tab-dots i { width: 4px; height: 4px; border-radius: 50%; background: var(--border); }
+.tab-dots i.on { background: var(--accent); }
+.tab[aria-selected="true"]:has(.tab-dots i) { padding-bottom: 6px; }
+.actions { display: flex; justify-content: flex-end; gap: 4px; }
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  touch-action: manipulation;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.icon-btn svg { width: 18px; height: 18px; }
+.icon-btn:active { background: var(--surface-2); color: var(--text); }
+.icon-btn.spin svg { animation: spin 0.6s linear; }
+
+/* narrow screens (portrait): keep the PC name readable; inactive tabs shrink to their icon, the status to a light */
+@media (max-width: 640px) {
+  header { grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; padding: 0 10px; }
+  .status { font-size: 0; gap: 0; }
+  .tab { padding: 0 9px; gap: 5px; }
+  .tab[aria-selected="false"] .tab-label { display: none; }
+}
+
+/* header buttons for the mic and the player are quiet until they matter */
+.actions { position: relative; align-items: center; }
+.icon-btn.quiet { color: var(--muted); }
+.icon-btn[hidden] { display: none; }
+#cam { color: var(--err); }
+#mic[data-muted="true"] { color: var(--err); background: rgba(229, 100, 107, 0.12); }
+#player[data-status="playing"] { color: var(--text); }
+
+.menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+.menu[hidden] { display: none; }
+.menu-host { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px 8px; font-size: 0.7rem; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.menu-host b { font-size: 0.82rem; }
+.menu button { padding: 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font-family: inherit; font-size: 0.8rem; text-align: left; touch-action: manipulation; }
+.menu button:active { background: var(--surface-2); }
+.menu button[hidden] { display: none; }
+
+/* --- overlay: a full-screen panel over the deck (screen map, system info) ------------------------ */
+
+.overlay { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; background: var(--bg); }
+.overlay[hidden] { display: none; }
+.overlay-bar { display: flex; align-items: center; justify-content: space-between; flex: none; height: 48px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+.overlay-bar b { font-size: 0.9rem; }
+.overlay-close { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); color: var(--text); font-family: inherit; font-size: 0.8rem; font-weight: 600; touch-action: manipulation; }
+.overlay-close:active { background: var(--border); }
+.overlay-body { flex: 1; min-height: 0; padding: 12px 16px; }
+.overlay-body > section { height: 100%; }
+/* --- pager -------------------------------------------------------------- */
+
+.pager {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  transition: opacity 0.2s ease;
+}
+.pager::-webkit-scrollbar { display: none; }
+body[data-state="offline"] .pager { opacity: 0.35; pointer-events: none; }
+
+.page {
+  flex: 0 0 100%;
+  min-width: 0;
+  padding: 12px 16px;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--rows, 2), minmax(0, 1fr));
+  gap: 10px;
+  height: 100%;
+}
+
+/* the shortcuts page: shortcuts and the volume strip on the left, the open windows on the right */
+.split { display: grid; grid-template-columns: repeat(var(--total, 7), minmax(0, 1fr)); gap: 10px; height: 100%; }
+.split > .grid { grid-column: span var(--first, 5); min-width: 0; }
+.split > .wlist { grid-column: span var(--side, 2); }
+
+.wlist { gap: 6px; padding: 8px; overflow: hidden; }
+.wlist .head { align-items: center; }
+.wlist .chip { padding: 6px 12px; }
+.wlist-body { display: flex; flex-direction: column; gap: 6px; }
+.wlist-body:empty::after { content: "Nenhuma janela aberta"; padding: 12px 4px; font-size: 0.74rem; color: var(--muted); }
+.wrow { display: flex; align-items: stretch; flex: none; gap: 4px; height: 48px; }
+.wrow button { display: flex; align-items: center; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--text); font: inherit; touch-action: manipulation; }
+.wrow button:active { background: var(--border); }
+.wmain { flex: 1; min-width: 0; gap: 8px; padding: 0 8px; text-align: left; }
+.wicon { display: grid; place-items: center; flex: none; width: 22px; height: 22px; }
+.wicon img { width: 22px; height: 22px; object-fit: contain; pointer-events: none; }
+.wicon b { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 5px; background: var(--surface); color: var(--muted); font-size: 0.7rem; }
+.wtitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.74rem; font-weight: 600; }
+.wbtn { flex: none; justify-content: center; width: 40px; padding: 0; color: var(--muted); }
+.wrow.dim .wmain { opacity: 0.55; }
+.wrow.front .wmain { border-color: var(--accent); }
+
+.slot {
+  border: 1px dashed rgba(255, 255, 255, 0.05);
+  border-radius: 14px;
+}
+
+/* a dot on app tiles: grey = the process is running, green = it has a window open (a tap brings it to the front) */
+.tile.running::after,
+.tile.open::after {
+  content: "";
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.tile.open::after { background: var(--ok); box-shadow: 0 0 6px rgba(76, 195, 138, 0.6); }
+/* the camera key while it transmits */
+.tile.live { border-color: rgba(229, 100, 107, 0.5); }
+.tile.live::after { content: ""; position: absolute; top: 9px; right: 9px; width: 6px; height: 6px; border-radius: 50%; background: var(--err); box-shadow: 0 0 6px rgba(229, 100, 107, 0.6); }
+.tile.live .fallback.cam { background: rgba(229, 100, 107, 0.14); color: var(--err); }
+.tile .fallback.cam .ico svg { stroke-width: 1.5; }
+
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  touch-action: manipulation;
+  transition: transform 0.08s ease, background 0.15s ease, border-color 0.4s ease;
+}
+.tile:active { transform: scale(0.96); background: var(--surface-2); }
+.tile.launched { border-color: var(--accent); transition: border-color 0s; }
+
+.tile img { width: var(--icon); height: var(--icon); object-fit: contain; pointer-events: none; }
+.tile .fallback,
+.tile .keycap {
+  display: grid;
+  place-items: center;
+  width: var(--icon);
+  height: var(--icon);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+/* shortcut tiles show the key combination instead of an icon */
+.tile .keycap {
+  width: 100%;
+  padding: 0 4px;
+  font: 600 0.62rem/1.25 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  text-align: center;
+  overflow-wrap: break-word;
+}
+.tile span {
+  display: -webkit-box;
+  flex: none;
+  width: 100%;
+  height: 2.5em; /* always two lines, so icons line up across the row */
+  overflow: hidden;
+  font-size: 0.66rem;
+  line-height: 1.25;
+  text-align: center;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* --- volume strip: the last row of the first shortcuts page -------------- */
+
+.volume-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: center;
+  gap: 4px 12px;
+  min-height: 0;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  transition: opacity 0.2s ease;
+}
+.volume-bar[data-ready="false"] { opacity: 0.5; pointer-events: none; }
+
+.volume-bar .icon-btn { width: 44px; height: 44px; border-radius: 12px; background: var(--surface-2); color: var(--text); }
+.volume-bar .icon-btn svg { width: 22px; height: 22px; }
+.volume-bar .icon-btn:active { background: var(--border); }
+
+#mute .cross { display: none; stroke: var(--err); }
+.volume-bar[data-muted="true"] #mute .waves { display: none; }
+.volume-bar[data-muted="true"] #mute .cross { display: block; }
+
+#vol-value {
+  min-width: 3.4em;
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.volume-bar[data-muted="true"] #vol,
+.volume-bar[data-muted="true"] #vol-value { opacity: 0.4; }
+
+.media { display: flex; gap: 8px; margin-left: auto; }
+
+#vol {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1 1 140px;
+  min-width: 0;
+  height: 44px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none; /* horizontal drags belong to the slider, not to the page swipe */
+  --fill: 0%;
+}
+#vol::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--accent) var(--fill), var(--surface-2) var(--fill));
+}
+#vol::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -9px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 0 0 5px rgba(124, 156, 255, 0.15);
+}
+
+/* --- toast -------------------------------------------------------------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  max-width: calc(100% - 32px);
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 0.78rem;
+  color: var(--text);
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.error { border-color: var(--err); color: var(--err); }
+
+@keyframes spin { to { transform: rotate(360deg); } }

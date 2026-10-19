@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Camera do celular</title>
+  <!-- Meant for OBS (Browser Source, then Start Virtual Camera): just the picture, edge to edge, no controls. -->
+  <style>
+    html, body { height: 100%; margin: 0; overflow: hidden; background: #000; }
+    img { display: block; width: 100%; height: 100%; object-fit: contain; }
+  </style>
+</head>
+<body>
+  <img src="/api/camera/stream" alt="">
+</body>
+</html>

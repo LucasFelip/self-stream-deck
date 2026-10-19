@@ -1,0 +1,19 @@
+{
+  "name": "self-stream-deck-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PC-side server for the self-stream-deck Android panel",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "phone": "node src/index.js --phone",
+    "check": "node test/load-check.js && node test/geometry.test.js && node test/camera.test.js && node test/vcam-host.test.js",
+    "autostart:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/autostart.ps1 -Action install",
+    "autostart:uninstall": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/autostart.ps1 -Action uninstall",
+    "autostart:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/autostart.ps1 -Action status",
+    "dev": "node --watch src/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

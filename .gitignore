@@ -1,0 +1,15 @@
+# server runtime data (holds the pairing token)
+server/data/
+node_modules/
+
+# android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
+*.keystore
+*.jks
+
+# local toolchains downloaded by the build helper
+.tools/
