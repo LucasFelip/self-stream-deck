@@ -79,7 +79,7 @@ function createGuard(config) {
     return candidates.some((candidate) => candidate && safeEqual(candidate, config.token));
   };
 
-  const pairingCookie = () => `${COOKIE}=${config.token}; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax`;
+  const pairingCookie = (secure = false) => `${COOKIE}=${config.token}; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`;
 
   return { isLockedOut, recordFailure, isAllowedHost, isSameOrigin, isAuthenticated, pairingCookie };
 }

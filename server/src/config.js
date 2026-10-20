@@ -12,8 +12,10 @@ const DEFAULTS = {
   port: 7878,
   // app ids (see /api/apps) that should not show up on the deck
   hidden: [],
-  // false: listen on 127.0.0.1 only (USB through adb reverse, or this PC). true: also reachable over Wi-Fi/LAN.
+  // false: only this PC and the USB tunnel can reach the deck. true: also over the home network, through an HTTPS server on
+  // httpsPort (self-signed certificate that the phone app pins, firewall rule for the local subnet only). See `npm run lan`.
   lan: false,
+  httpsPort: 7879,
   // false removes the shutdown/restart/sleep/... actions from the API entirely
   powerControls: true,
   // the header's play/pause button for whatever is playing. It keeps the media helper running (~90 MB); false turns it off.

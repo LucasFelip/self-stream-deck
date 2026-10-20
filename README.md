@@ -5,7 +5,7 @@ abrir/focar aplicativos, atalhos de teclado, volume e áudio avançado, mídia t
 sistema e controles de energia.
 
 ```
-┌──────────────┐   HTTP (USB/adb reverse, ou Wi-Fi opcional)   ┌──────────────────────────┐
+┌──────────────┐   HTTP (USB/adb reverse) ou HTTPS (Wi-Fi opcional)   ┌──────────────────────────┐
 │ App Android  │ ───────────────────────────────────────────▶ │ server/ (Node, no PC)    │
 │ (WebView)    │ ◀── interface web, ícones, dados ─────────── │  • helpers PowerShell     │
 └──────────────┘                                               └──────────────────────────┘
@@ -100,10 +100,33 @@ existir, senão o do PATH). Ao plugar o celular ele faz `adb reverse` e abre o *
 pareado por intent) ou o navegador. Em `127.0.0.1` o navegador trata a página como contexto seguro, então
 ela mantém a tela ligada sozinha.
 
+### Conectar pelo Wi-Fi (rede da casa)
+
+Além do USB, o celular pode falar com o PC pela rede local, sem cabo e sem serviços de terceiros:
+
+```powershell
+cd server
+npm run lan -- on        # liga (config.json: "lan": true); depois reinicie o servidor (encerre o processo: o supervisor o sobe)
+npm run lan -- status    # mostra a regra de firewall, a impressão digital do certificado e o link de pareamento
+```
+
+- **HTTPS na porta 7879** (`httpsPort`), só quando `lan` está ligado. O servidor HTTP da porta 7878 continua **só em 127.0.0.1**.
+- **Certificado próprio** (RSA 2048, 5 anos), criado na primeira vez em `server/data/tls/`. O app **fixa a impressão digital (SHA-256)** do
+  certificado: só aceita exatamente aquele, então ninguém na rede consegue se passar pelo servidor, e a câmera do celular funciona (precisa de HTTPS).
+  O certificado não contém IPs, então trocar o IP do PC não exige gerar outro.
+- **Firewall:** o servidor cria a regra "Self Stream Deck (rede local)": só TCP 7879, só da **sub-rede local** (não da internet), em qualquer perfil
+  (a rede da casa costuma estar como "Pública"). Precisa de administrador, que a tarefa de autostart já tem.
+- **Parear sem digitar nada:** plugue o celular **uma vez** com `npm run phone` rodando (ou com o autostart): o app recebe o endereço USB e o do Wi-Fi.
+  Depois funciona sem cabo. Sem cabo, dá para colar o link `https://IP:7879/?token=…&fp=…` na tela "Conectar ao PC" do app.
+- **Qual endereço o app usa:** tenta primeiro o USB (`127.0.0.1`, que falha na hora sem cabo) e depois o Wi-Fi. Se o PC some por uns 12 s, a página pede
+  ao app para trocar de caminho (USB ↔ Wi-Fi).
+- **IP do PC:** reserve o IP no roteador (DHCP fixo) para o endereço não mudar; se mudar, plugue o celular de novo (ou cole o novo link).
+- `npm run lan -- off` desliga e remove a regra de firewall.
+
 ### Segurança
 
-- **Por padrão só escuta em `127.0.0.1`** (PC e USB). Para Wi-Fi: `"lan": true` — e aí qualquer aparelho
-  da rede que tiver o token controla o PC. HTTP puro: use só em rede de confiança.
+- **Por padrão só escuta em `127.0.0.1`** (PC e USB). O Wi-Fi é opcional (`npm run lan -- on`) e usa **HTTPS** com certificado fixado pelo app,
+  numa porta separada e com firewall só para a sub-rede local; quem estiver na rede ainda precisa do token para controlar o PC.
 - Toda requisição exige o token (cookie, header `x-token` ou `?token=`); 10 falhas bloqueiam o IP por 1 min.
 - Cabeçalho `Host` é validado (contra DNS rebinding) e `POST` de outra origem é recusado.
 - O cliente só dispara o que está nas listas do servidor, por id: apps da barra de tarefas, atalhos do
@@ -114,7 +137,8 @@ ela mantém a tela ligada sozinha.
 | Campo | Descrição |
 |---|---|
 | `port` | Porta (padrão `7878`; `SSD_PORT` sobrescreve só naquela execução). |
-| `lan` | `true` para aceitar conexões pela rede local (padrão `false`). |
+| `lan` | `true` liga o acesso pelo Wi-Fi (HTTPS na `httpsPort`, padrão 7879). Use `npm run lan -- on/off/status`. Padrão `false`. |
+| `httpsPort` | Porta do HTTPS da rede local (padrão `7879`). |
 | `hidden` | Ids de apps a esconder (veja `GET /api/apps`). |
 | `editor` | `false` desliga o editor de botões do app (atalhos, macros e apps só mudam aqui no arquivo). Padrão: `true`. |
 | `macros` | Macros criadas no editor: `{ id, label, page, steps }` (veja "Editor de botões e macros"). |

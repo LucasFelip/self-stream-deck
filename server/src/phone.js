@@ -32,7 +32,7 @@ async function listDevices() {
     .map(([serial, state]) => ({ serial, state }));
 }
 
-async function openOnDevice(serial, port, token) {
+async function openOnDevice(serial, port, token, wifi) {
   // 127.0.0.1 on the phone reaches the PC through the USB tunnel; it also counts as a secure
   // context for the browser, which lets the page keep the screen awake.
   await adb(['-s', serial, 'reverse', `tcp:${port}`, `tcp:${port}`]);
@@ -41,7 +41,9 @@ async function openOnDevice(serial, port, token) {
   // Prefer the dedicated app when it is installed (full screen, no browser chrome).
   const packages = await adb(['-s', serial, 'shell', 'pm', 'list', 'packages', APP_PACKAGE]);
   if (packages.includes(`package:${APP_PACKAGE}`)) {
-    await adb(['-s', serial, 'shell', 'am', 'start', '-n', `${APP_PACKAGE}/.MainActivity`, '--es', 'url', `'${url}'`]);
+    // the app also learns the Wi-Fi address here, so after one cable pairing it works without the cable
+    const extras = ['--es', 'url', `'${url}'`, ...(wifi ? ['--es', 'wifi', `'${wifi}'`] : [])];
+    await adb(['-s', serial, 'shell', 'am', 'start', '-n', `${APP_PACKAGE}/.MainActivity`, ...extras]);
     return 'app';
   }
   await adb(['-s', serial, 'shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', `'${url}'`]);
@@ -51,7 +53,7 @@ async function openOnDevice(serial, port, token) {
 /**
  * Watches for a USB-debugging phone and opens the deck in its browser each time it is plugged in.
  */
-function watch({ port, token }) {
+function watch({ port, token, wifi = null }) {
   const opened = new Set();
   const warned = new Set();
   let adbMissing = false;
@@ -81,7 +83,7 @@ function watch({ port, token }) {
 
       opened.add(serial);
       try {
-        const target = await openOnDevice(serial, port, token);
+        const target = await openOnDevice(serial, port, token, wifi);
         console.log(`[phone] deck opened on ${serial} (${target})`);
       } catch (err) {
         opened.delete(serial);

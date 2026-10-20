@@ -877,6 +877,7 @@
   let online = false;
   // One request per tick (the state already carries the volume), and none while the screen is off or the app is in the
   // background: that saves the phone's radio and lets the PC's media helper stop when nobody is looking.
+  let missedTicks = 0;
   async function tick() {
     if (document.hidden) return;
     try {
@@ -884,8 +885,12 @@
     } catch (err) {
       online = false;
       setStatus('offline', err.status === 401 ? 'não autorizado' : 'sem conexão');
+      // Lost for ~12 s: if the app knows another way to the PC (USB or Wi-Fi), let it switch to it
+      missedTicks += 1;
+      if (missedTicks % 4 === 0 && err.status !== 401 && window.Android && typeof window.Android.reconnect === 'function') window.Android.reconnect();
       return;
     }
+    missedTicks = 0;
     if (!online) {
       online = true;
       setStatus('online', 'online');

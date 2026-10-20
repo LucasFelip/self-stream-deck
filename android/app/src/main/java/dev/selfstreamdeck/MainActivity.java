@@ -1,13 +1,15 @@
 package dev.selfstreamdeck;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.Manifest;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.graphics.Color;
+import android.net.Uri;
+import android.net.http.SslCertificate;
+import android.net.http.SslError;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.VibrationEffect;
@@ -19,6 +21,7 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
+import android.webkit.SslErrorHandler;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -30,22 +33,35 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Thin shell around the web UI served by the PC (server/). All the deck logic lives on the
- * server; this app only stores the pairing URL, keeps the screen on and renders the page.
+ * server; this app only stores the pairing addresses, keeps the screen on and renders the page.
+ *
+ * It knows up to two addresses for the same PC: the USB tunnel (http://127.0.0.1:PORT, tried first because it fails at once
+ * when no cable is plugged in) and the home network (https://IP:PORT). The home-network server uses a self-signed
+ * certificate: the app trusts it only when its SHA-256 fingerprint is the one it was paired with.
  */
 public class MainActivity extends Activity {
 
     private static final String PREFS = "deck";
-    private static final String KEY_URL = "url";
+    private static final String KEY_URL = "url";   // this PC / USB tunnel
+    private static final String KEY_WIFI = "wifi"; // home network (https)
+    private static final String KEY_FP = "fp";     // the certificate's SHA-256, lower-case hex
+    private static final int USB_PORT = 7878;
+    private static final int REQUEST_CAMERA = 7;
     private static final int BACKGROUND = Color.parseColor("#0E0F13");
 
     private SharedPreferences prefs;
     private WebView web;
-    private static final int REQUEST_CAMERA = 7;
-
     private boolean showingSetup;
     private PermissionRequest pendingCamera; // a page asked for the camera while the system permission was still unknown
+
+    private List<String> candidates = new ArrayList<>();
+    private int candidateIndex;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,24 +70,54 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         savePairingFromIntent(getIntent());
 
-        String url = prefs.getString(KEY_URL, null);
-        if (url == null) showSetup();
-        else showDeck(url);
+        if (buildCandidates().isEmpty()) showSetup();
+        else showDeck();
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        if (savePairingFromIntent(intent)) showDeck(prefs.getString(KEY_URL, ""));
+        if (savePairingFromIntent(intent)) showDeck();
     }
 
-    /** The PC can pair the app over adb: am start -n dev.selfstreamdeck/.MainActivity --es url "http://…" */
+    /**
+     * The PC can pair the app over adb:
+     * am start -n dev.selfstreamdeck/.MainActivity --es url "http://127.0.0.1:7878/?token=…" --es wifi "https://IP:7879/?token=…&fp=…"
+     */
     private boolean savePairingFromIntent(Intent intent) {
-        String url = intent == null ? null : normalize(intent.getStringExtra(KEY_URL));
-        if (url == null) return false;
-        prefs.edit().putString(KEY_URL, url).apply();
+        if (intent == null) return false;
+        String url = normalize(intent.getStringExtra(KEY_URL));
+        String wifi = normalize(intent.getStringExtra(KEY_WIFI));
+        if (url == null && wifi == null) return false;
+        savePairing(url, wifi);
         return true;
+    }
+
+    private void savePairing(String url, String wifi) {
+        SharedPreferences.Editor editor = prefs.edit();
+        if (url != null) editor.putString(KEY_URL, url);
+        if (wifi != null) {
+            editor.putString(KEY_WIFI, wifi);
+            String fingerprint = Uri.parse(wifi).getQueryParameter("fp");
+            if (fingerprint != null) editor.putString(KEY_FP, fingerprint.toLowerCase());
+        }
+        editor.apply();
+    }
+
+    /** The addresses to try, in order: this PC / USB first, then the home network. */
+    private List<String> buildCandidates() {
+        List<String> list = new ArrayList<>();
+        String url = prefs.getString(KEY_URL, null);
+        String wifi = prefs.getString(KEY_WIFI, null);
+        if (url != null) {
+            list.add(url);
+        } else if (wifi != null) {
+            String token = Uri.parse(wifi).getQueryParameter("token");
+            if (token != null) list.add("http://127.0.0.1:" + USB_PORT + "/?token=" + token);
+        }
+        if (wifi != null) list.add(wifi);
+        return list;
     }
 
     @Override
@@ -83,9 +129,8 @@ public class MainActivity extends Activity {
     @Override
     @SuppressWarnings("deprecation")
     public void onBackPressed() {
-        // A stray back press must not drop the deck; only leave the setup screen if a URL is saved.
-        String url = prefs.getString(KEY_URL, null);
-        if (showingSetup && url != null) showDeck(url);
+        // A stray back press must not drop the deck; only leave the setup screen if an address is saved.
+        if (showingSetup && !buildCandidates().isEmpty()) showDeck();
     }
 
     @SuppressWarnings("deprecation")
@@ -101,9 +146,11 @@ public class MainActivity extends Activity {
 
     // --- deck -----------------------------------------------------------------
 
-    private void showDeck(final String url) {
+    private void showDeck() {
         showingSetup = false;
         destroyWebView();
+        candidates = buildCandidates();
+        candidateIndex = 0;
 
         web = new WebView(this);
         web.setBackgroundColor(BACKGROUND);
@@ -117,7 +164,21 @@ public class MainActivity extends Activity {
         web.setWebViewClient(new WebViewClient() {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                if (request.isForMainFrame()) showLoadError(url);
+                if (!request.isForMainFrame()) return;
+                // this address did not answer: try the next one before giving up
+                if (candidateIndex + 1 < candidates.size()) {
+                    candidateIndex += 1;
+                    web.loadUrl(candidates.get(candidateIndex));
+                } else {
+                    showLoadError();
+                }
+            }
+
+            // The home-network server's certificate is self-signed: accept it only if it is exactly the one paired with.
+            @Override
+            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                if (matchesPinnedCertificate(error.getCertificate())) handler.proceed();
+                else handler.cancel();
             }
         });
 
@@ -135,15 +196,33 @@ public class MainActivity extends Activity {
         });
 
         setContentView(web);
-        web.loadUrl(url);
+        web.loadUrl(candidates.get(0));
         hideSystemBars();
     }
 
+    private boolean matchesPinnedCertificate(SslCertificate certificate) {
+        String pinned = prefs.getString(KEY_FP, null);
+        if (pinned == null || certificate == null) return false;
+        try {
+            // saveState keeps the DER bytes of the certificate under this key on every Android version
+            byte[] der = SslCertificate.saveState(certificate).getByteArray("x509-certificate");
+            if (der == null) return false;
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(der);
+            StringBuilder hex = new StringBuilder();
+            for (byte b : digest) hex.append(String.format("%02x", b));
+            return hex.toString().equals(pinned);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private boolean isDeckOrigin(Uri origin) {
-        String saved = prefs.getString(KEY_URL, null);
-        if (origin == null || saved == null) return false;
-        Uri deck = Uri.parse(saved);
-        return origin.getHost() != null && origin.getHost().equalsIgnoreCase(deck.getHost()) && origin.getPort() == deck.getPort();
+        if (origin == null || origin.getHost() == null) return false;
+        for (String candidate : buildCandidates()) {
+            Uri deck = Uri.parse(candidate);
+            if (origin.getHost().equalsIgnoreCase(deck.getHost()) && origin.getPort() == deck.getPort()) return true;
+        }
+        return false;
     }
 
     private void answerCameraRequest(PermissionRequest request) {
@@ -173,14 +252,15 @@ public class MainActivity extends Activity {
         pendingCamera = null;
     }
 
-    private void showLoadError(String url) {
+    private void showLoadError() {
+        String base = candidates.isEmpty() ? "about:blank" : candidates.get(0);
         String html = "<body style='background:#0e0f13;color:#eceef4;font-family:sans-serif;text-align:center;padding:48px 16px'>"
                 + "<h2>Sem conexão com o PC</h2>"
-                + "<p style='color:#8b90a0'>Confira se o servidor está rodando e se o celular está na mesma rede (ou use USB com adb reverse).</p>"
-                + "<p><button style='font-size:1.1rem;padding:12px 24px' onclick='location.href=\"" + url + "\"'>Tentar de novo</button></p>"
+                + "<p style='color:#8b90a0'>Confira se o servidor está rodando e se o celular está na mesma rede Wi-Fi (ou plugue o cabo USB).</p>"
+                + "<p><button style='font-size:1.1rem;padding:12px 24px' onclick='Android.retry()'>Tentar de novo</button></p>"
                 + "<p><button style='font-size:1.1rem;padding:12px 24px' onclick='Android.openSettings()'>Configurar endereço</button></p>"
                 + "</body>";
-        web.loadDataWithBaseURL(url, html, "text/html", "UTF-8", null);
+        web.loadDataWithBaseURL(base, html, "text/html", "UTF-8", null);
     }
 
     private void destroyWebView() {
@@ -194,6 +274,22 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void openSettings() {
             runOnUiThread(MainActivity.this::showSetup);
+        }
+
+        /** Starts over from the first address (the error screen's "try again"). */
+        @JavascriptInterface
+        public void retry() {
+            runOnUiThread(MainActivity.this::showDeck);
+        }
+
+        /** The page lost the PC for a while: try the other address (USB <-> Wi-Fi), if there is one. */
+        @JavascriptInterface
+        public void reconnect() {
+            runOnUiThread(() -> {
+                if (web == null || candidates.size() < 2) return;
+                candidateIndex = (candidateIndex + 1) % candidates.size();
+                web.loadUrl(candidates.get(candidateIndex));
+            });
         }
 
         /** Short haptic tick for button presses; the page calls it through Deck.vibrate(). */
@@ -230,7 +326,7 @@ public class MainActivity extends Activity {
         title.setTextSize(22);
 
         TextView hint = new TextView(this);
-        hint.setText("Cole o endereço que o servidor mostra ao iniciar:\nhttp://IP:7878/?token=…");
+        hint.setText("Cole o endereço que o servidor mostra ao iniciar (npm run lan -- status):\nWi-Fi: https://IP:7879/?token=…&fp=…\nUSB: http://127.0.0.1:7878/?token=…");
         hint.setTextColor(Color.parseColor("#8B90A0"));
         hint.setPadding(0, dp(8), 0, dp(16));
 
@@ -239,8 +335,9 @@ public class MainActivity extends Activity {
         input.setSingleLine(true);
         input.setTextColor(Color.WHITE);
         input.setHintTextColor(Color.parseColor("#555A6B"));
-        input.setHint("http://192.168.0.10:7878/?token=...");
-        input.setText(prefs.getString(KEY_URL, ""));
+        input.setHint("https://192.168.0.10:7879/?token=...&fp=...");
+        String shown = prefs.getString(KEY_WIFI, prefs.getString(KEY_URL, ""));
+        input.setText(shown);
 
         final TextView error = new TextView(this);
         error.setTextColor(Color.parseColor("#FF6B6B"));
@@ -248,13 +345,21 @@ public class MainActivity extends Activity {
         Button connect = new Button(this);
         connect.setText("Conectar");
         connect.setOnClickListener(v -> {
-            String url = normalize(input.getText().toString());
-            if (url == null) {
-                error.setText("Endereço inválido. Use o formato http://IP:7878/?token=…");
+            String link = normalize(input.getText().toString());
+            if (link == null) {
+                error.setText("Endereço inválido. Use o formato https://IP:7879/?token=…&fp=… (Wi-Fi) ou http://127.0.0.1:7878/?token=… (USB)");
                 return;
             }
-            prefs.edit().putString(KEY_URL, url).apply();
-            showDeck(url);
+            if (link.startsWith("https://")) {
+                if (Uri.parse(link).getQueryParameter("fp") == null) {
+                    error.setText("Faltou o &fp=… no endereço Wi-Fi: copie o link completo do servidor.");
+                    return;
+                }
+                savePairing(null, link);
+            } else {
+                savePairing(link, null);
+            }
+            showDeck();
         });
 
         ViewGroup.LayoutParams wide = new LinearLayout.LayoutParams(
