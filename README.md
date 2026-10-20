@@ -88,6 +88,11 @@ A tarefa roda no logon, **sem janela**, como administrador (necessário para os 
 elevadas) e escreve em `server/data/server.log` (rotaciona em 2 MB). Pare o servidor manual antes: só uma
 instância pode usar a porta.
 
+A tarefa inicia um **supervisor** (`src/supervisor.js`) que sobe o servidor e o reinicia sozinho se ele cair ou for encerrado
+(espera 2 s, aumentando até 30 s se falhar logo ao iniciar). O motivo de cada parada fica no `server.log`
+(`[server] stopping (SIGTERM)`, `[server] uncaught exception…`, `[supervisor] server exited (code …)`). Para reiniciar de propósito,
+encerre o processo do servidor (o supervisor o sobe de novo) ou pare a tarefa e inicie-a outra vez.
+
 ### Abrir no celular via USB
 
 Com a depuração USB ativa, `npm run phone` fica vigiando o `adb` (usa `.tools/platform-tools/adb.exe` se

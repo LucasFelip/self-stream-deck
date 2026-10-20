@@ -75,7 +75,9 @@ function lanAddresses() {
     .map((iface) => iface.address);
 }
 
-function shutdown() {
+// Says why the server stopped: a silent exit is what made "the phone shows no connection" hard to explain.
+function shutdown(signal) {
+  console.log(`[server] stopping (${signal})`);
   system.stop();
   media.stop();
   monitor.stop();
@@ -83,8 +85,16 @@ function shutdown() {
   vcam.stop();
   process.exit(0);
 }
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGBREAK', 'SIGHUP']) process.on(signal, () => shutdown(signal));
+process.on('uncaughtException', (err) => {
+  console.error('[server] uncaught exception:', err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  // a rejected promise nobody awaited: log it and keep serving instead of taking the deck down
+  console.error('[server] unhandled rejection:', reason);
+});
+process.on('exit', (code) => console.log(`[server] exit (code ${code})`));
 
 // The keys/audio helper compiles native code: start it now so the first tap isn't slow. The media and
 // monitor helpers are heavier and rarely used, so they start on demand and stop again when idle.

@@ -30,4 +30,4 @@ End If
 
 shell.CurrentDirectory = serverDir
 ' 0 = hidden window, False = don't wait
-shell.Run "cmd /c " & q & q & node & q & " src\index.js --phone >> " & q & logFile & q & " 2>&1" & q, 0, False
+shell.Run "cmd /c " & q & q & node & q & " src\supervisor.js --phone >> " & q & logFile & q & " 2>&1" & q, 0, False
