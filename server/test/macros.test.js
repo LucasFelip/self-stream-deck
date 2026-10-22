@@ -36,7 +36,7 @@ const apps = new Set(['brave-1', 'discord-2']);
   await test('steps that could run anything else are refused', () => {
     const attempt = (step) => () => macros.normalizeMacros([{ label: 'x', steps: [step] }], apps);
     assert.throws(attempt({ type: 'run', command: 'calc.exe' }), /unknown step type/);
-    assert.throws(attempt({ type: 'launch', app: 'C:\Windows\notepad.exe' }), /unknown app/);
+    assert.throws(attempt({ type: 'launch', app: 'C:\\Windows\\notepad.exe' }), /unknown app/);
     assert.throws(attempt({ type: 'launch', app: 'not-an-app' }), /unknown app/);
     assert.throws(attempt({ type: 'power', action: 'shutdown' }), /unknown step type/);
     assert.throws(attempt({ type: 'volume', level: 150 }), /level/);

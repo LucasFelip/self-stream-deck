@@ -7,7 +7,11 @@
   "scripts": {
     "start": "node src/index.js",
     "phone": "node src/index.js --phone",
-    "check": "node test/load-check.js && node test/geometry.test.js && node test/camera.test.js && node test/vcam-host.test.js && node test/macros.test.js && node test/lan.test.js",
+    "lint": "eslint .",
+    "test": "node test/load-check.js && node test/geometry.test.js && node test/camera.test.js && node test/vcam-host.test.js && node test/macros.test.js && node test/lan.test.js && node test/live.test.js && node test/events.test.js && node test/security.test.js && node test/http.test.js && node test/config.test.js && node test/routes.test.js && node test/host.test.js",
+    "test:ui": "node test/ui/deck.ui.test.js",
+    "test:integration": "node test/native-parity.test.js && node test/helpers.test.js",
+    "check": "npm run lint && npm test && npm run test:ui && npm run test:integration",
     "autostart:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/autostart.ps1 -Action install",
     "autostart:uninstall": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/autostart.ps1 -Action uninstall",
     "autostart:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/autostart.ps1 -Action status",
@@ -16,5 +20,10 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^17.13.0"
   }
 }

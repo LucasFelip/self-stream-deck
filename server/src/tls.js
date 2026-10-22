@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { DATA_DIR } = require('./config');
+const { log } = require('./log');
 
 /**
  * The certificate for the Wi-Fi (HTTPS) side. It is created once with PowerShell and kept in data/tls/: a PFX for the server
@@ -47,8 +48,9 @@ async function ensure() {
     try {
       const current = read();
       if (current.expires.getTime() - Date.now() > RENEW_BEFORE_MS) return current;
-    } catch {
-      // unreadable: make a new one below
+    } catch (err) {
+      // a new certificate has a new fingerprint: phones paired over Wi-Fi must be paired again, so this is worth saying
+      log.warn(`[tls] the certificate could not be read (${err.message}): making a new one`);
     }
   }
 

@@ -11,6 +11,7 @@ const media = require('./media');
 const monitor = require('./monitor');
 const camera = require('./camera');
 const vcam = require('./vcam');
+const events = require('./events');
 const tls = require('./tls');
 const firewall = require('./firewall');
 const { homeAddresses } = require('./addresses');
@@ -18,6 +19,8 @@ const { homeAddresses } = require('./addresses');
 const config = load();
 const guard = createGuard(config);
 const routes = createRoutes(config);
+
+const requestCounts = { since: new Date().toISOString(), byRoute: new Map() };
 
 // --- request handling -----------------------------------------------------------------------------
 
@@ -34,6 +37,14 @@ async function handle(req, res) {
   }
 
   if (req.method !== 'GET' && !guard.isSameOrigin(req)) return sendJson(res, 403, { error: 'cross-origin request refused' });
+
+  // how often each route is used (static files count as one): GET /api/requests shows it, for judging what the phone costs
+  if (url.pathname === '/api/requests' && req.method === 'GET') {
+    return sendJson(res, 200, { since: requestCounts.since, counts: Object.fromEntries([...requestCounts.byRoute].sort((a, b) => b[1] - a[1])) });
+  }
+  const route = isStaticPath(url.pathname) ? 'static' : url.pathname.replace(/\/[0-9a-f]{8,}$/i, '/:id');
+  const key = `${req.method} ${route}`;
+  requestCounts.byRoute.set(key, (requestCounts.byRoute.get(key) || 0) + 1);
 
   if (req.method === 'GET' && isStaticPath(url.pathname)) {
     // Pairing link: /?token=... stores the token in a cookie and drops it from the URL.
@@ -112,6 +123,7 @@ function shutdown(signal) {
   monitor.stop();
   camera.stop();
   vcam.stop();
+  events.stopAll();
   process.exit(0);
 }
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGBREAK', 'SIGHUP']) process.on(signal, () => shutdown(signal));
@@ -127,21 +139,26 @@ process.on('exit', (code) => console.log(`[server] exit (code ${code})`));
 
 // The keys/audio helper compiles native code: start it now so the first tap isn't slow. The media and
 // monitor helpers are heavier and rarely used, so they start on demand and stop again when idle.
+require('./native').ensure(); // builds the native helper on the very first run (about a second), then it is only looked up
 system.warmUp();
 
-routes
-  .refreshApps()
-  .catch((err) => console.error(`Could not read the taskbar: ${err.message}`))
-  .finally(() => {
-    server.listen(config.port, '127.0.0.1', async () => {
-      console.log(`self-stream-deck: ${routes.appCount()} apps from the taskbar`);
-      console.log(`\nOpen on this PC or over USB (adb reverse tcp:${config.port} tcp:${config.port}):`);
-      console.log(`  http://127.0.0.1:${config.port}/?token=${config.token}`);
-      const links = await startLan();
+// Listening comes first: the apps are known from the last run (disk cache) and are checked in the background, so a phone
+// reconnecting after a restart is answered in milliseconds instead of waiting for the taskbar to be read again.
+const startedAt = Date.now();
+server.listen(config.port, '127.0.0.1', async () => {
+  console.log(`self-stream-deck: listening after ${Date.now() - startedAt} ms, ${routes.appCount()} apps from the last run`);
+  console.log(`\nOpen on this PC or over USB (adb reverse tcp:${config.port} tcp:${config.port}):`);
+  console.log(`  http://127.0.0.1:${config.port}/?token=${config.token}`);
 
-      if (process.argv.includes('--phone') || config.autoOpenPhone) {
-        console.log('');
-        require('./phone').watch({ port: config.port, token: config.token, wifi: links[0] || null });
-      }
-    });
-  });
+  routes
+    .refreshApps()
+    .then(() => console.log(`[apps] ${routes.appCount()} apps from the taskbar`))
+    .catch((err) => console.error(`Could not read the taskbar: ${err.message}`));
+
+  const links = await startLan();
+
+  if (process.argv.includes('--phone') || config.autoOpenPhone) {
+    console.log('');
+    require('./phone').watch({ port: config.port, token: config.token, wifi: links[0] || null });
+  }
+});

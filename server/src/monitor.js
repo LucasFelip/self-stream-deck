@@ -4,7 +4,7 @@ const { Host } = require('./host');
 
 // Starting this helper creates dozens of performance counters, which takes several seconds.
 const IDLE_STOP_MS = 3 * 60 * 1000;
-const host = new Host('monitor', 'monitor-host.ps1', { timeoutMs: 20000, idleStopMs: IDLE_STOP_MS });
+const host = new Host('monitor', 'monitor-host.ps1', { timeoutMs: 20000, idleStopMs: IDLE_STOP_MS, native: 'monitor', retryOps: ['sample', 'processes', 'info'] });
 
 let infoCache = null;
 let infoPending = null;

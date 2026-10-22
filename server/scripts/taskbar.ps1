@@ -9,7 +9,9 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 Add-Type -AssemblyName System.Drawing
 
-Add-Type @'
+. "$PSScriptRoot\lib\cache-type.ps1"
+
+$iconSource = @'
 using System;
 using System.Runtime.InteropServices;
 public static class IconNative {
@@ -20,6 +22,8 @@ public static class IconNative {
     public static extern bool DestroyIcon(IntPtr hIcon);
 }
 '@
+
+Add-CachedType -Name 'deck-icons' -Source $iconSource
 
 function Save-Icon([string]$source, [string]$out) {
     if (-not $source -or -not (Test-Path -LiteralPath $source)) { return $false }

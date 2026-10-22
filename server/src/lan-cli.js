@@ -12,7 +12,7 @@ const tls = require('./tls');
 const { homeAddresses } = require('./addresses');
 
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
-const read = () => JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8').replace(/^﻿/, ''));
+const read = () => JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8').replace(/^\uFEFF/, ''));
 const write = (config) => fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
 
 async function main() {

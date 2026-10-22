@@ -45,7 +45,11 @@ function newId(prefix, label, taken) {
 
 function keysSpec(value) {
   const spec = text(value, 'keys', 60).toLowerCase().replace(/\s+/g, '');
-  keys.parse(spec); // throws on an unknown key or too many keys
+  try {
+    keys.parse(spec); // throws on an unknown key or too many keys
+  } catch (err) {
+    throw bad(err.message); // the person typed it: a 400 with the reason, not a server error
+  }
   return spec;
 }
 

@@ -22,7 +22,7 @@
   let selected = null; // handle of the selected window
   let drag = null;
   let layout = null;
-  let pollTimer = null;
+  let watcher = null; // live updates (or the fallback poller) while the list or the map is on screen
   let inFlight = false;
   let pollAgain = false; // a refresh was asked for while one was running: run again as soon as it ends
   let pending = 0; // actions sent and not yet answered: a poll in between would show the old picture
@@ -467,6 +467,19 @@
   }
   // --- data -----------------------------------------------------------------------------------
 
+  // a new list of windows (pushed by the PC, or fetched): drawn unless the person is in the middle of something, because a
+  // picture taken before the PC finished their action would show the old state
+  function apply(reply) {
+    if (drag || pending > 0 || document.hidden) return;
+    windows = reply.windows;
+    windows.forEach((win) => remember(win));
+    if (selected && !windows.some((win) => win.handle === selected)) selected = null;
+    renderWindows();
+    renderBar();
+    renderList();
+  }
+
+  // reads the list once more right away (after an action); the live stream keeps it fresh the rest of the time
   async function poll() {
     // a drag whose element is gone, or that has been 'in progress' for 10 s, is a lost gesture: forget it
     if (drag && (!drag.el.isConnected || (!drag.finishing && Date.now() - drag.at > 10000))) {
@@ -481,13 +494,7 @@
     inFlight = true;
     try {
       // a request that never answers must not freeze the map: give up after a few seconds and try again
-      const reply = await Promise.race([api('/api/windows'), new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))]);
-      windows = reply.windows;
-      windows.forEach((win) => remember(win));
-      if (selected && !windows.some((win) => win.handle === selected)) selected = null;
-      renderWindows();
-      renderBar();
-      renderList();
+      apply(await Promise.race([api('/api/windows'), new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))]));
     } catch {
       // keep what is on screen; the header's connection indicator reports outages
     } finally {
@@ -610,13 +617,21 @@
 
   // polling runs only while the list or the map is on screen
   const visible = { list: false, map: false };
+  // a title that only changes its leading spinner glyph (a terminal at work) is not a change
+  const bare = (title) => String(title).replace(/^[^\p{L}\p{N}]+/u, '');
+  const signatureOf = (reply) => JSON.stringify(reply.windows.map((w) => [w.handle, w.state, w.monitor, w.x, w.y, w.w, w.h, bare(w.title)]));
+
   function sync() {
-    clearInterval(pollTimer);
-    pollTimer = null;
-    if (!visible.list && !visible.map) return;
+    const wanted = visible.list || visible.map;
+    if (!wanted) {
+      if (watcher) watcher.stop();
+      watcher = null;
+      return;
+    }
     if (!screens.length) loadScreens(); // actions predict their result from the screens' geometry
-    poll();
-    pollTimer = setInterval(poll, POLL_MS);
+    if (watcher) return;
+    // pushed by the PC when a window changes; only if the stream is not open does the page ask on a timer (slower when idle)
+    watcher = Deck.live.watch('windows', { apply, poll: () => api('/api/windows'), ms: POLL_MS, idleMs: 2000, idleAfter: 12, signature: signatureOf });
   }
 
   Deck.windowsUi = { list: listEl };

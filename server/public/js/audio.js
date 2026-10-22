@@ -10,8 +10,7 @@
   const { h, icon, api, toast, slider } = Deck;
 
   const POLL_MS = 2000;
-  let pollTimer = null;
-  let inFlight = false;
+  let watcher = null; // live updates (or the fallback poller) while the page is the visible one
 
   const post = (path, json) => api(path, { method: 'POST', json });
   const fail = (err) => toast(`Erro: ${err.message}`, true);
@@ -158,15 +157,13 @@
     renderMixer(sessions);
   }
 
+  // reads once more right away (after an action); the live stream or the fallback poller keeps it fresh otherwise
   async function poll() {
-    if (inFlight || document.hidden) return;
-    inFlight = true;
+    if (document.hidden) return;
     try {
       render(await api('/api/audio'));
     } catch {
       // keep what is on screen; the connection indicator in the header reports outages
-    } finally {
-      inFlight = false;
     }
   }
 
@@ -177,13 +174,12 @@
   Deck.sound.audio = {
     el,
     show() {
-      poll();
-      clearInterval(pollTimer);
-      pollTimer = setInterval(poll, POLL_MS);
+      if (watcher) watcher.stop();
+      watcher = Deck.live.watch('audio', { apply: render, poll: () => api('/api/audio'), ms: POLL_MS, idleMs: 4000, idleAfter: 8 });
     },
     hide() {
-      clearInterval(pollTimer);
-      pollTimer = null;
+      if (watcher) watcher.stop();
+      watcher = null;
     },
   };
 })();

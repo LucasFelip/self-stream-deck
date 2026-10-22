@@ -13,7 +13,9 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Core
 Add-Type -AssemblyName System.Windows.Forms
 
-Add-Type -TypeDefinition @'
+. "$PSScriptRoot\lib\cache-type.ps1"
+
+$memorySource = @'
 using System;
 using System.Runtime.InteropServices;
 public static class MemoryNative {
@@ -34,6 +36,8 @@ public static class MemoryNative {
     }
 }
 '@
+
+Add-CachedType -Name 'deck-monitor' -Source $memorySource
 
 $cores = [Environment]::ProcessorCount
 $MB = 1MB

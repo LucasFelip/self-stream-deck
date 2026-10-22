@@ -58,9 +58,8 @@
 
   let power = null; // last GET /api/power
   let fetchedAt = 0;
-  let pollTimer = null;
+  let watcher = null; // live updates (or the fallback poller) while the page is the visible one
   let clockTimer = null;
-  let inFlight = false;
 
   // --- status side ----------------------------------------------------------------------------
 
@@ -135,17 +134,19 @@
     }
   }
 
+  function apply(data) {
+    power = data;
+    fetchedAt = Date.now();
+    render();
+  }
+
+  // reads once more right away (after scheduling or cancelling something)
   async function poll() {
-    if (inFlight || document.hidden) return;
-    inFlight = true;
+    if (document.hidden) return;
     try {
-      power = await api('/api/power');
-      fetchedAt = Date.now();
-      render();
+      apply(await api('/api/power'));
     } catch {
       // keep what is on screen
-    } finally {
-      inFlight = false;
     }
   }
 
@@ -253,14 +254,16 @@
     title: 'Energia',
     el,
     show() {
-      poll();
-      clearInterval(pollTimer);
+      if (watcher) watcher.stop();
+      // the countdown of a scheduled action is counted here, so the value only changes when something is (un)scheduled
+      const signature = (data) => JSON.stringify({ ...data, scheduled: data.scheduled ? { ...data.scheduled, inSec: 0 } : null });
+      watcher = Deck.live.watch('power', { apply, poll: () => api('/api/power'), ms: POLL_MS, idleMs: 15000, idleAfter: 4, signature });
       clearInterval(clockTimer);
-      pollTimer = setInterval(poll, POLL_MS);
       clockTimer = setInterval(paintClock, 1000);
     },
     hide() {
-      clearInterval(pollTimer);
+      if (watcher) watcher.stop();
+      watcher = null;
       clearInterval(clockTimer);
     },
   });

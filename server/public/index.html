@@ -68,8 +68,9 @@
   <div id="modal-root"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <!-- deck.js first (shared toolkit), then the page modules, then app.js, which owns the pager and starts everything -->
+  <!-- deck.js first (shared toolkit), then the page modules (they register with Deck.addPage), then the deck modules (keys, pager, header, ...), then app.js, which puts them together and starts -->
   <script src="/deck.js"></script>
+  <script src="/js/live.js"></script>
   <script src="/js/geometry.js"></script>
   <script src="/js/windows.js"></script>
   <script src="/js/media.js"></script>
@@ -79,6 +80,14 @@
   <script src="/js/power.js"></script>
   <script src="/js/camera.js"></script>
   <script src="/js/editor.js"></script>
+  <script src="/js/tiles.js"></script>
+  <script src="/js/arrange.js"></script>
+  <script src="/js/pager.js"></script>
+  <script src="/js/pc.js"></script>
+  <script src="/js/header.js"></script>
+  <script src="/js/volume.js"></script>
+  <script src="/js/reload.js"></script>
+  <script src="/js/connection.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

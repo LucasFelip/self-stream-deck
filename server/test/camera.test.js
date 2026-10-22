@@ -69,5 +69,14 @@ test('status reports the frame rate and data rate of what arrived', () => {
   assert.ok(status.fps >= 0);
 });
 
+test('wanted: true only while somebody watches the stream', () => {
+  const watcher = viewer();
+  camera.attach(watcher.req, watcher.res);
+  assert.strictEqual(camera.wanted(), true);
+  assert.strictEqual(camera.status().wanted, true);
+  watcher.req.emit('close');
+  assert.strictEqual(camera.wanted(), false);
+});
+
 console.log(`\n${passed} passed`);
 process.exit(0);

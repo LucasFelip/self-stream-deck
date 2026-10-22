@@ -73,6 +73,10 @@ function attach(req, res) {
   req.on('close', () => viewers.delete(res));
 }
 
+// Does anybody use the picture right now? An OBS source watching the stream, or an app that has the direct virtual camera open.
+// The phone sends full speed only then; otherwise it drops to one frame a second.
+const wanted = () => viewers.size > 0 || vcam.inUse();
+
 function status() {
   const now = Date.now();
   const span = recent.length > 1 ? (recent[recent.length - 1] - recent[0]) / 1000 : 0;
@@ -83,6 +87,7 @@ function status() {
     fps: live && span > 0 ? Math.round((recent.length - 1) / span) : 0,
     kbps: live ? Math.round(kb / 2) : 0,
     viewers: viewers.size,
+    wanted: wanted(),
     ageMs: latest ? now - latest.at : null,
   };
 }
@@ -92,4 +97,4 @@ const stop = () => {
   viewers.clear();
 };
 
-module.exports = { push, attach, status, stop, MAX_FRAME };
+module.exports = { push, attach, status, wanted, stop, MAX_FRAME };

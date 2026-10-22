@@ -6,6 +6,7 @@ const https = require('node:https');
 const path = require('node:path');
 const { execFile, spawn } = require('node:child_process');
 const { DATA_DIR } = require('./config');
+const { log } = require('./log');
 
 /**
  * The direct virtual camera: a "Stream Deck Camera" device that every Windows app lists next to real webcams, with no
@@ -87,7 +88,7 @@ async function install() {
     if (error || !(await isInstalled(true))) {
       throw fail(`registration failed${error ? ` (code ${error.code})` : ''}: the server needs administrator rights to register a camera. ${stderr || stdout}`.trim());
     }
-    console.log(`[vcam] installed "${NAME}"`);
+    log.info(`[vcam] installed "${NAME}"`);
   } finally {
     busy = false;
   }
@@ -99,14 +100,18 @@ async function uninstall() {
   installedCache.at = 0;
   if (await isInstalled(true)) throw fail('could not unregister the camera (administrator rights needed)');
   try { fs.rmSync(DIR, { recursive: true, force: true }); } catch { /* a process may still hold the file: harmless, it is unregistered */ }
-  console.log('[vcam] removed');
+  log.info('[vcam] removed');
 }
 
 // --- feeding frames ------------------------------------------------------------------------------
 
 function startHelper() {
   if (child) return;
-  child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
+  // the native helper when it is built (a fraction of the memory), the PowerShell script otherwise
+  const exe = require('./native').current();
+  child = exe
+    ? spawn(exe, ['vcam'], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] })
+    : spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
   const current = child;
   let buffered = '';
   current.stdout.on('data', (chunk) => {
@@ -159,4 +164,7 @@ async function status() {
 
 const stop = () => stopHelper();
 
-module.exports = { NAME, status, install, uninstall, feed, stop, DLL_SHA256 };
+/** Some app has the device open and takes frames (as last reported by the helper). */
+const inUse = () => childReady;
+
+module.exports = { NAME, status, install, uninstall, feed, stop, inUse, DLL_SHA256 };

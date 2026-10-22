@@ -22,9 +22,8 @@
   let seeking = false;
   let shownArtKey = null;
 
-  let pollTimer = null;
+  let watcher = null; // live updates (or the fallback poller) while the page is the visible one
   let clockTimer = null;
-  let inFlight = false;
 
   // --- DOM ------------------------------------------------------------------------------------
 
@@ -155,23 +154,26 @@
 
   // --- talking to the server ------------------------------------------------------------------
 
+  // a new picture of what is playing (pushed by the PC, or fetched when the stream is not open)
+  function apply(data) {
+    sessions = data.sessions;
+    currentId = data.current;
+    if (selectedId && !sessions.some((s) => s.id === selectedId)) selectedId = null;
+    error = null;
+    syncClock();
+    render();
+  }
+
+  // reads once more right away (after a command)
   async function poll() {
-    if (inFlight || document.hidden) return;
-    inFlight = true;
+    if (document.hidden) return;
     try {
-      const data = await api('/api/media');
-      sessions = data.sessions;
-      currentId = data.current;
-      if (selectedId && !sessions.some((s) => s.id === selectedId)) selectedId = null;
-      error = null;
-      syncClock();
+      apply(await api('/api/media'));
     } catch (err) {
       error = err;
       sessions = [];
-    } finally {
-      inFlight = false;
+      render();
     }
-    render();
   }
 
   async function control(action, position) {
@@ -223,16 +225,17 @@
   Deck.sound.media = {
     el,
     show() {
-      poll();
-      clearInterval(pollTimer);
+      if (watcher) watcher.stop();
+      // the position moves all the time: it only counts as a change in 5 s steps (the page keeps its own clock between)
+      const signature = (data) => JSON.stringify(data.sessions.map((s) => ({ ...s, position: Math.floor((s.position || 0) / 5) })));
+      watcher = Deck.live.watch('media', { apply, poll: () => api('/api/media'), ms: POLL_MS, idleMs: 3000, idleAfter: 6, signature });
       clearInterval(clockTimer);
-      pollTimer = setInterval(poll, POLL_MS);
       clockTimer = setInterval(paintClock, CLOCK_MS);
     },
     hide() {
-      clearInterval(pollTimer);
+      if (watcher) watcher.stop();
+      watcher = null;
       clearInterval(clockTimer);
-      pollTimer = null;
       clockTimer = null;
     },
   };

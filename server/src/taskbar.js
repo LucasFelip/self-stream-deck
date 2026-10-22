@@ -1,8 +1,11 @@
 'use strict';
 
+const crypto = require('node:crypto');
+const fs = require('node:fs');
 const path = require('node:path');
 const { execFile, spawn } = require('node:child_process');
-const { ICON_DIR } = require('./config');
+const { ICON_DIR, DATA_DIR } = require('./config');
+const { log, swallow } = require('./log');
 
 const SCRIPT = path.join(__dirname, '..', 'scripts', 'taskbar.ps1');
 
@@ -57,19 +60,81 @@ function processName(item) {
   return name === 'wt' ? 'windowsterminal' : name;
 }
 
+const toApps = (items, hidden = []) => dedupe(items)
+  .filter((item) => !hidden.includes(item.id))
+  .map((item) => ({
+    id: item.id,
+    name: displayName(item.file),
+    lnk: item.lnk,
+    proc: processName(item),
+    hasIcon: item.hasIcon,
+    // part of the icon URL, so clients refetch when the icon changes
+    iconVersion: item.iconHash ? item.iconHash.slice(0, 8) : '',
+  }));
+
+// --- cache ------------------------------------------------------------------------------------------
+// Reading the taskbar costs ~2.5 s of PowerShell (shortcuts, icons). The result is kept on disk together with a signature of the
+// pinned-shortcuts folder (names, sizes, modification times): the server starts with the last list at once and runs the script
+// again only when that signature changed (or when asked to, with the Refresh button).
+
+const CACHE_FILE = path.join(DATA_DIR, 'taskbar-cache.json');
+const TASKBAR_DIR = path.join(process.env.APPDATA || '', 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar');
+
+function signature() {
+  try {
+    const parts = fs.readdirSync(TASKBAR_DIR)
+      .filter((name) => /\.lnk$/i.test(name))
+      .sort()
+      .map((name) => {
+        const stat = fs.statSync(path.join(TASKBAR_DIR, name));
+        return `${name}|${stat.size}|${Math.round(stat.mtimeMs)}`;
+      });
+    return crypto.createHash('sha1').update(parts.join('\n')).digest('hex');
+  } catch (err) {
+    swallow('[taskbar] could not sign the taskbar folder', err); // no signature: the list is simply read again
+    return 'none';
+  }
+}
+
+function readCache() {
+  try {
+    const cached = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+    return Array.isArray(cached.items) ? cached : null;
+  } catch (err) {
+    swallow('[taskbar] no usable cache', err); // missing on the first run, damaged otherwise: the list is read again
+    return null;
+  }
+}
+
+/** The apps from the last run, instantly (empty on the very first start). */
+function cachedApps(hidden = []) {
+  const cached = readCache();
+  return cached ? toApps(cached.items, hidden) : [];
+}
+
+/**
+ * Brings the list up to date. Resolves to { apps, changed }: without `force` and with an unchanged folder it is a no-op
+ * (changed: false). Icons already extracted stay in ICON_DIR, so only a changed signature pays for PowerShell.
+ */
+async function refreshApps({ force = false, hidden = [] } = {}) {
+  const now = signature();
+  const cached = readCache();
+  if (!force && cached && cached.signature === now) return { apps: toApps(cached.items, hidden), changed: false };
+
+  const items = await runScript();
+  const changed = !cached || JSON.stringify(cached.items) !== JSON.stringify(items);
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(CACHE_FILE, JSON.stringify({ signature: now, items }));
+  } catch (err) {
+    log.warn(`[taskbar] could not save the cache (the next start reads the taskbar again): ${err.message}`);
+  }
+  return { apps: toApps(items, hidden), changed };
+}
+
+// the full read, every time (kept for callers that want it)
 async function listApps(hidden = []) {
-  const items = dedupe(await runScript());
-  return items
-    .filter((item) => !hidden.includes(item.id))
-    .map((item) => ({
-      id: item.id,
-      name: displayName(item.file),
-      lnk: item.lnk,
-      proc: processName(item),
-      hasIcon: item.hasIcon,
-      // part of the icon URL, so clients refetch when the icon changes
-      iconVersion: item.iconHash ? item.iconHash.slice(0, 8) : '',
-    }));
+  return toApps(await runScript(), hidden);
 }
 
 // Launching goes through explorer.exe so the shortcut behaves exactly like a click on
@@ -79,4 +144,4 @@ function launch(app) {
   child.unref();
 }
 
-module.exports = { listApps, launch };
+module.exports = { listApps, cachedApps, refreshApps, signature, launch };

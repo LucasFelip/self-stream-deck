@@ -3,7 +3,7 @@
 const { Host } = require('./host');
 
 const IDLE_STOP_MS = 3 * 60 * 1000;
-const host = new Host('media', 'media-host.ps1', { timeoutMs: 12000, idleStopMs: IDLE_STOP_MS });
+const host = new Host('media', 'media-host.ps1', { timeoutMs: 12000, idleStopMs: IDLE_STOP_MS, native: 'media', retryOps: ['state', 'art'] });
 
 // "Spotify.exe" -> "Spotify", "brave" -> "Brave", "Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic" -> "ZuneMusic"
 const KNOWN = { spotify: 'Spotify', brave: 'Brave', chrome: 'Chrome', msedge: 'Edge', firefox: 'Firefox', vlc: 'VLC', opera: 'Opera', vivaldi: 'Vivaldi' };

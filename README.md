@@ -7,7 +7,7 @@ sistema e controles de energia.
 ```
 ┌──────────────┐   HTTP (USB/adb reverse) ou HTTPS (Wi-Fi opcional)   ┌──────────────────────────┐
 │ App Android  │ ───────────────────────────────────────────▶ │ server/ (Node, no PC)    │
-│ (WebView)    │ ◀── interface web, ícones, dados ─────────── │  • helpers PowerShell     │
+│ (WebView)    │ ◀── interface web, ícones, dados ─────────── │  • helpers nativos        │
 └──────────────┘                                               └──────────────────────────┘
 ```
 
@@ -18,7 +18,7 @@ sistema e controles de energia.
 
 ## Páginas
 
-Não há rolagem na tela principal: o painel é dividido em **páginas**, agrupadas em **4 abas** fixas no
+Não há rolagem na tela principal: o painel é dividido em **páginas**, agrupadas em **6 abas** fixas no
 topo para não ser preciso ficar deslizando até achar a certa:
 
 | Aba | Páginas |
@@ -88,6 +88,8 @@ A tarefa roda no logon, **sem janela**, como administrador (necessário para os 
 elevadas) e escreve em `server/data/server.log` (rotaciona em 2 MB). Pare o servidor manual antes: só uma
 instância pode usar a porta.
 
+O log mostra o essencial; `SSD_LOG=debug` (variável de ambiente) mostra também os erros que o servidor ignora de propósito, útil para investigar algo estranho.
+
 A tarefa inicia um **supervisor** (`src/supervisor.js`) que sobe o servidor e o reinicia sozinho se ele cair ou for encerrado
 (espera 2 s, aumentando até 30 s se falhar logo ao iniciar). O motivo de cada parada fica no `server.log`
 (`[server] stopping (SIGTERM)`, `[server] uncaught exception…`, `[supervisor] server exited (code …)`). Para reiniciar de propósito,
@@ -149,53 +151,12 @@ npm run lan -- status    # mostra a regra de firewall, a impressão digital do c
 | `autoOpenPhone` | `true` para sempre abrir no celular via USB ao iniciar. |
 | `token` | Token de pareamento. Apague e reinicie para gerar outro. |
 
+Ao iniciar, o servidor confere o arquivo e avisa no log de valores errados (tipo errado, id repetido, texto com caracteres danificados), sem parar.
+O editor do app recusa salvar algo assim. **Cada gravação guarda a versão anterior em `config.json.bak`**, e se o `config.json` ficar ilegível o servidor não sobe nem o sobrescreve
+(isso trocaria o token): conserte-o ou copie o `.bak` por cima.
+
 Atalhos: teclas em `server/src/keys.js` (`ctrl`, `shift`, `alt`, `win`, letras, números, `f1`–`f24`, setas,
 `esc`, `tab`, `enter`, `space`, `printscreen`, teclas de mídia…). Atalhos inválidos são ignorados com aviso.
-
-## Verificação
-
-`npm run check` carrega todos os scripts da interface (na mesma ordem do `index.html`) contra um DOM de mentira e falha se algum quebrar ao iniciar ou se uma página não for registrada. Pega erros que `node --check` (só sintaxe) não vê.
-
-## Como funciona por dentro
-
-PowerShell leva ~1–7 s para iniciar e compilar código nativo, então cada tipo de trabalho tem um **helper
-de longa duração** (`server/scripts/*.ps1`, falando JSON por linha) que um erro ou lentidão em um não
-atrapalha os outros:
-
-| Helper | Faz |
-|---|---|
-| `input-host.ps1` | Teclas (`keybd_event`), janelas (listar, focar, minimizar, mover, fechar), monitores (brilho DDC/CI, desligar), áudio por Core Audio (dispositivos, `IPolicyConfig`, mixer por app). |
-| `media-host.ps1` | Mídia via *System Media Transport Controls* (a mesma fonte do controle de mídia do Windows). |
-| `monitor-host.ps1` | Contadores de desempenho, `nvidia-smi`, MSI Afterburner, CIM/WMI. |
-
-## API
-
-| Método | Rota | Descrição |
-|---|---|---|
-| GET | `/api/ping` · `/api/state` | Conexão; apps rodando/abertos e agendamento de energia |
-| GET | `/api/apps` · `/api/icon/:id` | Lista e ícones (URL versionada por hash) |
-| POST | `/api/launch/:id` · `/api/refresh` | Abre ou traz para a frente; relê a barra de tarefas |
-| GET/POST | `/api/shortcuts` · `/api/shortcut/:id` | Lista e dispara atalhos |
-| GET/POST | `/api/macros` · `/api/macro/:id` | Lista e executa macros (devolve o resultado de cada passo) |
-| GET/POST | `/api/layout` | Posição dos botões: `{apps, shortcuts}`; POST `{page, order}` |
-| GET/POST | `/api/editor` · `/api/editor/shortcuts` · `/macros` · `/apps` | Editor de botões: lê tudo; salva atalhos, macros, apps ocultos/ordem (validado no servidor) |
-| GET/POST | `/api/volume` | `{level, muted}`; POST `{level}` e/ou `{muted: bool｜"toggle"}` |
-| POST | `/api/mediakey/:key` | `prev`, `playpause`, `next` (teclas globais) |
-| GET | `/api/audio` | Saídas, entradas e sessões por app |
-| POST | `/api/audio/default` · `/device` · `/session` | Trocar padrão; volume/mudo de dispositivo; volume/mudo de app |
-| GET | `/api/media` · `/api/media/art` | Sessões de mídia; capa (por `session` e `key`) |
-| POST | `/api/media/control` | `{session, action: toggle｜play｜pause｜next｜previous｜seek, position?}` |
-| GET | `/api/monitor/sample` · `/processes` · `/info` | Medições ao vivo; top processos; hardware (em cache) |
-| GET/POST | `/api/power` | Estado; ação `{action, confirm: true, delaySec?, force?}` ou `{action: "cancel"}` |
-| GET | `/api/windows` | Janelas abertas: `{handle, title, app, state, monitor, x, y, w, h}` (pixels reais) |
-| POST | `/api/windows/place` · `/snap` | `{handle, x, y}`; `{handle, monitor, zone: left｜right｜full}` |
-| POST | `/api/windows/action` · `/move` | `{handle, action: focus｜minimize｜maximize｜restore｜close}`; `{handle, monitor}` (só em janelas da lista atual) |
-| GET | `/api/screens` | Monitores e brilho (DDC/CI); `?brightness=0` pula a leitura lenta do brilho |
-| POST | `/api/mic` | `{muted: true｜false｜"toggle"}` no microfone padrão |
-| POST | `/api/camera/frame` | Um quadro JPEG do celular (corpo binário) |
-| GET | `/api/camera/stream` · `/status` | Stream MJPEG; estado (ao vivo, fps, KB/s, quem assiste) e o link para o OBS |
-| POST | `/api/camera/copy-link` | Copia o link do OBS para a área de transferência do PC |
-| POST | `/api/screens/brightness` · `/off` · `/project` | `{device, level}`; desligar telas; `{mode: extend｜clone｜first｜second}` (`first`/`second` com `confirm: true`) |
 
 ## Reorganizar os botões e editor de macros
 
@@ -250,3 +211,10 @@ cd android
 
 Com o app instalado, `npm run phone` abre o app (já pareado, via intent `--es url`) em vez do navegador.
 O app expõe duas funções à página: `Android.openSettings()` e `Android.vibrate(ms)`, e libera a câmera do celular só para a página do PC pareado (permissão CAMERA).
+
+## Para quem vai mexer no código
+
+- [docs/ARQUITETURA.md](docs/ARQUITETURA.md): como o servidor, os helpers nativos, a atualização por push e a interface se encaixam; consumo medido; testes; variáveis de ambiente; a API completa.
+- [CONTRIBUTING.md](CONTRIBUTING.md): como rodar os testes e o lint, e como adicionar uma rota, uma página ou uma operação de helper.
+
+`npm run check` roda tudo (lint, testes de lógica, da interface e dos helpers nativos).

@@ -1,9 +1,16 @@
 'use strict';
 
 const { Host } = require('./host');
+const { swallow } = require('./log');
 
 // Keys, windows and audio share one helper: these calls are quick and benefit from running in order.
-const input = new Host('system', 'input-host.ps1');
+const input = new Host('system', 'input-host.ps1', { native: 'input', retryOps: ['getVolume', 'getMic', 'devices', 'sessions', 'windows', 'monitors'] });
+
+// The native helper pushes window changes only while it was told to; a helper that was restarted forgot, so tell it again.
+let watching = false;
+input.events.on('ready', () => {
+  if (watching) input.request({ op: 'watchWindows', on: true }).catch((err) => swallow('[system] could not resume the window watch', err));
+});
 
 const state = ({ level, muted }) => ({ level, muted });
 
@@ -37,6 +44,10 @@ module.exports = {
   focus: (name) => input.request({ op: 'focus', name }).then(({ focused }) => focused),
 
   // window management (by handle, validated against the live window list by the helper)
+  // push: with the native helper, changes to the windows arrive as events (no polling); rejects with the PowerShell helper
+  watchWindows: (on) => input.request({ op: 'watchWindows', on }).then((reply) => { watching = Boolean(on); return reply; }),
+  onWindowsChanged: (callback) => { input.events.on('windows', callback); return () => input.events.off('windows', callback); },
+
   windowAction: (handle, action) => input.request({ op: 'windowAction', handle, action }),
   moveWindow: (handle, monitor) => input.request({ op: 'moveWindow', handle, monitor }),
   placeWindow: (handle, x, y) => input.request({ op: 'placeWindow', handle, x, y }),

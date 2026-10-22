@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { swallow } = require('./log');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
@@ -123,8 +124,8 @@ function uiVersion() {
   };
   try {
     walk(PUBLIC_DIR);
-  } catch {
-    // keep the last known value if the folder is being rewritten
+  } catch (err) {
+    swallow('[http] could not read public/ for the version', err); // keep the last known value if the folder is being rewritten
     return versionCache.value;
   }
   versionCache = { at: Date.now(), value: Math.round(newest) };

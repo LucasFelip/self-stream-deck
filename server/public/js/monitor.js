@@ -283,30 +283,8 @@
 
   // --- lifecycle ------------------------------------------------------------------------------
 
-  const timers = { sample: null, processes: null, clock: null };
-  let sampling = false;
-
-  async function pollSample() {
-    if (sampling || document.hidden) return;
-    sampling = true;
-    try {
-      latest = await api('/api/monitor/sample');
-      updatePerformance(latest);
-    } catch {
-      // the header's connection indicator reports outages; keep the last numbers on screen
-    } finally {
-      sampling = false;
-    }
-  }
-
-  async function pollProcesses() {
-    if (document.hidden) return;
-    try {
-      updateProcesses(await api('/api/monitor/processes'));
-    } catch {
-      // keep the previous lists
-    }
-  }
+  const timers = { clock: null };
+  const watchers = { sample: null, processes: null }; // live updates (or the fallback poller) while a page is the visible one
 
   async function loadInfo() {
     if (info) return;
@@ -326,11 +304,19 @@
     show() {
       // the monitor helper starts on demand (a few seconds the first time) and stops again when idle
       if (!latest) cpuCard.sub.textContent = 'iniciando sensores…';
-      pollSample();
-      clearInterval(timers.sample);
-      timers.sample = setInterval(pollSample, SAMPLE_MS);
+      if (watchers.sample) watchers.sample.stop();
+      // every sample is new (the numbers always move): no slowing down when "unchanged"
+      watchers.sample = Deck.live.watch('monitor', {
+        apply: (sample) => { latest = sample; updatePerformance(sample); },
+        poll: () => api('/api/monitor/sample'),
+        ms: SAMPLE_MS,
+        idleAfter: Infinity,
+      });
     },
-    hide() { clearInterval(timers.sample); },
+    hide() {
+      if (watchers.sample) watchers.sample.stop();
+      watchers.sample = null;
+    },
   });
 
   // Hardware and OS facts are rarely needed: a sheet opened from the menu instead of a page on the swipe path
@@ -352,10 +338,17 @@
     title: 'Processos',
     el: processesEl,
     show() {
-      pollProcesses();
-      clearInterval(timers.processes);
-      timers.processes = setInterval(pollProcesses, PROCESS_MS);
+      if (watchers.processes) watchers.processes.stop();
+      watchers.processes = Deck.live.watch('processes', {
+        apply: updateProcesses,
+        poll: () => api('/api/monitor/processes'),
+        ms: PROCESS_MS,
+        idleAfter: Infinity,
+      });
     },
-    hide() { clearInterval(timers.processes); },
+    hide() {
+      if (watchers.processes) watchers.processes.stop();
+      watchers.processes = null;
+    },
   });
 })();

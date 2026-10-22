@@ -19,7 +19,6 @@
   let sending = false;
   let loopId = 0; // a running loop stops when this changes
   let statusTimer = null;
-  let sent = 0;
 
   // --- DOM ------------------------------------------------------------------------------------
 
@@ -126,7 +125,16 @@
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+  // When nobody uses the picture (no OBS source watching, no app with the virtual camera open) one frame a second is enough:
+  // the PC says so in every answer, and the phone goes back to full speed on the first answer that says someone does.
+  const IDLE_FRAME_MS = 1000;
+  const IDLE_AFTER = 3; // consecutive "nobody" answers before slowing down, so a short gap does not make it flap
+  let nobody = 0;
+  let idle = false;
+
   async function loop(id) {
+    nobody = 0;
+    idle = false;
     while (sending && id === loopId) {
       const started = performance.now();
       if (capture.readyState >= 2 && capture.videoWidth > 0 && !document.hidden) {
@@ -142,21 +150,26 @@
         try {
           const response = await fetch('/api/camera/frame', { method: 'POST', body: blob, headers: { 'Content-Type': 'application/octet-stream' } });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          sent += 1;
+          if (response.headers.get('X-Camera-Wanted') === '0') {
+            nobody += 1;
+            if (nobody >= IDLE_AFTER) idle = true;
+          } else {
+            nobody = 0;
+            idle = false;
+          }
         } catch {
           await sleep(600); // the PC is unreachable for a moment: do not spin
         }
       } else {
         await sleep(200);
       }
-      await sleep(Math.max(0, FRAME_MS - (performance.now() - started)));
+      await sleep(Math.max(0, (idle ? IDLE_FRAME_MS : FRAME_MS) - (performance.now() - started)));
     }
   }
 
   async function startSending() {
     if (!(await startCamera())) return;
     sending = true;
-    sent = 0;
     loopId += 1;
     paintSend();
     pollStatus();
@@ -193,7 +206,8 @@
       return;
     }
     const watching = status.viewers > 0 ? 'OBS conectado' : (direct.inUse ? 'câmera direta em uso' : 'nenhum app usando ainda');
-    statusLine.textContent = status.live ? `Transmitindo · ${status.fps} fps · ${status.kbps} KB/s · ${watching}` : 'Aguardando o PC receber…';
+    if (status.live && !status.wanted) statusLine.textContent = 'Transmitindo em espera: nenhum app usa a câmera (1 quadro/s, economiza bateria)';
+    else statusLine.textContent = status.live ? `Transmitindo · ${status.fps} fps · ${status.kbps} KB/s · ${watching}` : 'Aguardando o PC receber…';
   }
 
   async function pollStatus() {
