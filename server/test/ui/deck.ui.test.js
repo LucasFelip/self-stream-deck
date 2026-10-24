@@ -754,7 +754,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       await check.touch('touchEnd', from.x, from.y + distance);
     };
 
-    await test('menu: a gear (not the dots) named Configurações, the PC name on top and 3 items of 48 px (Editar botões, Câmera do celular, Atualizar)', async () => {
+    await test('menu: a gear (not the dots) named Configurações, the PC name on top and 4 items of 48 px (Editar botões, Câmera do celular, Escurecer após…, Atualizar)', async () => {
       assert.strictEqual(await page.eval(`document.getElementById('menu').getAttribute('aria-label')`), 'Configurações');
       assert.strictEqual(await page.eval(`document.querySelectorAll('#menu svg circle').length`), 1, 'the gear has one centre circle, the old dots had three');
       await page.tap('#menu');
@@ -763,7 +763,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.strictEqual(await page.eval(`document.getElementById('menu').getAttribute('aria-expanded')`), 'true');
       const menu = await page.eval(`(() => { const pop = document.getElementById('menu-pop'); const rows = [...pop.querySelectorAll('button')].filter((b) => !b.hidden); return { host: pop.querySelector('.menu-host').textContent, items: rows.map((b) => b.textContent.trim()), heights: rows.map((b) => Math.round(b.getBoundingClientRect().height)) }; })()`);
       assert.match(menu.host, /PC-TESTE/);
-      assert.deepStrictEqual(menu.items, ['Editar botões', 'Câmera do celular', 'Atualizar']);
+      assert.deepStrictEqual(menu.items, ['Editar botões', 'Câmera do celular', 'Escurecer após…', 'Atualizar']);
       assert.ok(menu.heights.every((height) => height >= 48), JSON.stringify(menu));
       await page.eval('Deck.back()');
     });
@@ -810,7 +810,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
         await wide.tap('#menu');
         await wide.waitFor(`!document.getElementById('menu-pop').hidden`, 'the menu');
         await sleep(300);
-        assert.deepStrictEqual(await wide.eval(`[...document.querySelectorAll('#menu-pop button')].filter((b) => !b.hidden).map((b) => b.textContent.trim())`), ['Editar botões', 'Câmera do celular', 'Endereço do PC…', 'Atualizar']);
+        assert.deepStrictEqual(await wide.eval(`[...document.querySelectorAll('#menu-pop button')].filter((b) => !b.hidden).map((b) => b.textContent.trim())`), ['Editar botões', 'Câmera do celular', 'Escurecer após…', 'Endereço do PC…', 'Atualizar']);
         const nav = await rectOf(wide, 'nav.nav');
         const menu = await rectOf(wide, '#menu-pop');
         assert.ok(menu.l >= nav.r && 387 - menu.b >= 8 && menu.t >= 8 && menu.r < 836 - 8, JSON.stringify({ nav, menu }));
@@ -1224,6 +1224,76 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
         assert.deepStrictEqual(edit.errors, []);
       } finally {
         edit.close();
+      }
+    });
+
+    // --- idle dimmer (phase 4) ---------------------------------------------------------------------------------------------
+    await test('idle dimmer: off by default, the menu item opens a 4-option picker and the choice is saved', async () => {
+      const idle = await browser.open(`${deck.url}/`);
+      try {
+        await idle.waitFor(`document.querySelectorAll('.tile[data-key]').length >= 6 && window.Deck && Deck.idle`, 'the deck');
+        assert.strictEqual(await idle.eval(`Deck.idle.minutes`), 0);
+        await idle.tap('#menu');
+        await idle.waitFor(`!document.getElementById('menu-pop').hidden`, 'the menu');
+        await idle.eval(`[...document.querySelectorAll('#menu-pop button')].find((b) => b.textContent.includes('Escurecer após')).click()`);
+        await idle.waitFor(`!document.querySelector('.idle-page').closest('.overlay').hidden`, 'the picker');
+        assert.deepStrictEqual(await idle.eval(`[...document.querySelectorAll('.idle-page .seg-btn')].map((b) => b.textContent)`), ['Desligado', '1 min', '2 min', '5 min']);
+        assert.strictEqual(await idle.eval(`document.querySelector('.idle-page .seg-btn[aria-selected="true"]').textContent`), 'Desligado');
+        await idle.tap('.idle-page .seg-btn[data-seg="2"]');
+        assert.strictEqual(await idle.eval(`Deck.idle.minutes`), 2);
+        assert.strictEqual(await idle.eval(`localStorage.getItem('ssd.idleMinutes')`), '2');
+        await idle.eval(`Deck.back()`);
+        await idle.eval(`Deck.idle.set(0)`);
+        assert.deepStrictEqual(idle.errors, []);
+      } finally {
+        idle.close();
+      }
+    });
+
+    await test('idle dimmer: dims after the time, calls Android.setDim, and the first touch only wakes (no key fires) and restarts the timer', async () => {
+      const DIM = `window.__dim = []; window.Android = { vibrate() {}, setDim(on) { window.__dim.push(on); } };`;
+      const idle = await browser.open(`${deck.url}/`, { script: DIM });
+      try {
+        await idle.waitFor(`document.querySelectorAll('.tile[data-key^="a:"]').length >= 1 && window.Deck && Deck.idle`, 'the deck');
+        const launches = () => deck.model.calls.filter((c) => c.path.startsWith('/api/launch')).length;
+        const before = launches();
+        await idle.eval(`Deck.idle.unitMs = 1200; Deck.idle.set(1)`);
+        await sleep(300);
+        assert.strictEqual(await idle.eval(`Deck.idle.dimmed`), false, 'not yet');
+        await idle.waitFor(`Deck.idle.dimmed && !document.querySelector('.idle-veil').hidden`, 'the veil', 4000);
+        assert.deepStrictEqual(await idle.eval(`window.__dim`), [true]);
+        assert.ok(Number(await idle.eval(`getComputedStyle(document.querySelector('.idle-veil')).opacity`)) > 0.9);
+        await idle.tap('.tile[data-key^="a:"]');
+        await idle.waitFor(`!Deck.idle.dimmed`, 'waking');
+        await sleep(600);
+        assert.strictEqual(await idle.eval(`document.querySelector('.idle-veil').hidden`), true);
+        assert.deepStrictEqual(await idle.eval(`window.__dim`), [true, false]);
+        assert.strictEqual(launches(), before, 'the waking tap did not launch the app');
+        await idle.waitFor(`Deck.idle.dimmed`, 'dims again after the idle time', 4000);
+        await idle.eval(`Deck.idle.set(0)`);
+        await idle.waitFor(`!Deck.idle.dimmed`, 'turning it off wakes');
+        assert.deepStrictEqual(idle.errors, []);
+      } finally {
+        idle.close();
+      }
+    });
+
+    await test('idle dimmer: works without Android.setDim (old APK) and with localStorage unavailable; an open sheet or edit mode postpones it', async () => {
+      const NOSTORE = `window.Android = { vibrate() {} }; Object.defineProperty(window, 'localStorage', { get() { throw new Error('denied'); } });`;
+      const idle = await browser.open(`${deck.url}/`, { script: NOSTORE });
+      try {
+        await idle.waitFor(`document.querySelectorAll('.tile[data-key]').length >= 6 && window.Deck && Deck.idle`, 'the deck');
+        assert.strictEqual(await idle.eval(`Deck.idle.minutes`), 0);
+        await idle.eval(`Deck.idle.unitMs = 200; Deck.idle.set(1)`);
+        assert.strictEqual(await idle.eval(`Deck.idle.minutes`), 1);
+        await idle.eval(`Deck.camera.openSheet()`);
+        await sleep(1000);
+        assert.strictEqual(await idle.eval(`Deck.idle.dimmed`), false, 'an open overlay blocks it');
+        await idle.eval(`Deck.back()`);
+        await idle.waitFor(`Deck.idle.dimmed`, 'dims once nothing is open', 8000);
+        assert.ok(!idle.errors.length, JSON.stringify(idle.errors));
+      } finally {
+        idle.close();
       }
     });
 

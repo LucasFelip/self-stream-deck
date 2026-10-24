@@ -513,3 +513,9 @@ body.editing .slot::before { content: "+"; font-size: 1.8rem; font-weight: 300; 
 @media (orientation: portrait) {
   .scrim { background: rgba(4, 5, 8, 0.45); }
 }
+
+/* idle dimmer (idle.js): a black veil above everything; the first touch only wakes it */
+.idle-veil { position: fixed; inset: 0; z-index: 9999; background: #000; opacity: 0.97; touch-action: none; transition: opacity 0.2s; }
+.idle-veil.waking { opacity: 0; }
+.idle-page { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+.idle-page p { margin: 0; font-size: 0.85rem; }
