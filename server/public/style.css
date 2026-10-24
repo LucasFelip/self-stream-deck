@@ -377,6 +377,29 @@ body[data-state="offline"] .pager { opacity: 0.35; pointer-events: none; }
   box-shadow: 0 0 0 5px rgba(124, 156, 255, 0.15);
 }
 
+/* --- game frame rate pill (js/game.js): over any page but Desempenho, while a game is running ---- */
+
+.fps-float {
+  position: fixed;
+  top: 56px;
+  right: 10px;
+  z-index: 25;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 5px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(24, 27, 34, 0.88);
+  backdrop-filter: blur(6px);
+  color: var(--accent);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.fps-float[hidden] { display: none; }
+.fps-float b { font-size: 1rem; }
+.fps-float small { font-size: 0.62rem; color: var(--muted); }
+
 /* --- toast -------------------------------------------------------------- */
 
 .toast {

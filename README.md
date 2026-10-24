@@ -202,7 +202,7 @@ O celular precisa ficar com o app aberto e a tela ligada enquanto transmite; nad
 O toolchain (JDK 17, Gradle 8.7, Android SDK 34, adb) fica em `.tools/`, fora do git:
 
 ```powershell
-$t = "D:\Workspace\self-stream-deck\.tools"
+$t = "E:\Workspace\self-stream-deck\.tools"
 $env:JAVA_HOME = "$t\jdk17"; $env:ANDROID_SDK_ROOT = "$t\android-sdk"
 cd android
 & "$t\gradle-8.7\bin\gradle.bat" assembleDebug

@@ -595,6 +595,24 @@ static class MonitorOps {
     public static void Register(HostLoop host) {
         host.On("ping", r => HostLoop.Ok());
         host.On("sample", r => Sample());
+        // just the frame rate (a read of shared memory), so the phone can notice a game without sampling every counter
+        host.On("fps", r => {
+            var result = HostLoop.Ok();
+            var fps = ReadFps();
+            if (fps == null) {
+                var sensors = ReadAfterburner();
+                double framerate;
+                if (sensors != null && sensors.TryGetValue("Framerate", out framerate) && framerate > 0) {
+                    fps = new Dictionary<string, object>();
+                    fps["source"] = "MSI Afterburner";
+                    fps["app"] = null;
+                    fps["fps"] = Round(framerate, 0);
+                    fps["frameMs"] = Round(1000.0 / framerate, 1);
+                }
+            }
+            result["fps"] = fps;
+            return result;
+        });
         host.On("processes", r => {
             Init();
             var result = HostLoop.Ok();

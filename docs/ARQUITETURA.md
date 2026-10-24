@@ -68,7 +68,7 @@ com `id`). `host.js` o inicia no primeiro uso e o reinicia se morrer.
 
 ## Atualização por push (SSE)
 
-`GET /api/events?topics=windows,state,audio,media,monitor,processes,power` mantém a resposta aberta e envia um valor **só quando ele muda**
+`GET /api/events?topics=windows,state,audio,media,monitor,game,processes,power` mantém a resposta aberta e envia um valor **só quando ele muda**
 (comparado por uma assinatura). Um tópico tem um *produtor* (`routes/events.js`) que **só roda enquanto alguém escuta**; quem chega depois recebe o último valor
 na hora. `windows` é empurrado pelo próprio helper nativo (`SetWinEventHook`); os outros perguntam ao PC num intervalo (uma pergunta para todos os celulares).
 Se a conexão não abre, a interface volta a perguntar de tempos em tempos e espaça os pedidos enquanto nada muda. `GET /api/requests` mostra quantas
@@ -138,7 +138,7 @@ A lista da barra de tarefas fica em cache (`data/taskbar-cache.json`) e só é r
 
 | Método | Rota | Descrição |
 |---|---|---|
-| GET | `/api/events?topics=…` | Fluxo de atualizações ao vivo (server-sent events): `windows`, `state`, `audio`, `media`, `monitor`, `processes`, `power` |
+| GET | `/api/events?topics=…` | Fluxo de atualizações ao vivo (server-sent events): `windows`, `state`, `audio`, `media`, `monitor`, `game`, `processes`, `power` |
 | GET | `/api/ping` · `/api/state` | Conexão; apps rodando/abertos e agendamento de energia |
 | GET | `/api/requests` | Quantas vezes cada rota foi usada desde que o servidor iniciou |
 | GET | `/api/apps` · `/api/icon/:id` | Lista e ícones (URL versionada por hash) |
@@ -153,7 +153,7 @@ A lista da barra de tarefas fica em cache (`data/taskbar-cache.json`) e só é r
 | POST | `/api/audio/default` · `/device` · `/session` | Trocar padrão; volume/mudo de dispositivo; volume/mudo de app |
 | GET | `/api/media` · `/api/media/art` | Sessões de mídia; capa (por `session` e `key`) |
 | POST | `/api/media/control` | `{session, action: toggle｜play｜pause｜next｜previous｜seek, position?}` |
-| GET | `/api/monitor/sample` · `/processes` · `/info` | Medições ao vivo; top processos; hardware (em cache) |
+| GET | `/api/monitor/sample` · `/fps` · `/processes` · `/info` | Medições ao vivo; FPS do jogo (ou `null`); top processos; hardware (em cache) |
 | GET/POST | `/api/power` | Estado; ação `{action, confirm: true, delaySec?, force?}` ou `{action: "cancel"}` |
 | GET | `/api/windows` | Janelas abertas: `{handle, title, app, state, monitor, x, y, w, h}` (pixels reais) |
 | POST | `/api/windows/place` · `/snap` | `{handle, x, y}`; `{handle, monitor, zone: left｜right｜full}` |

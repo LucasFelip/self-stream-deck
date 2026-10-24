@@ -84,6 +84,8 @@ module.exports = function eventsRoutes(ctx, on) {
     signature: JSON.stringify(state.sessions.map((s) => ({ ...s, position: Math.floor((s.position || 0) / 5) }))),
   })));
   events.register('monitor', every(2000, () => monitor.sample(), () => ({ force: true })));
+  // the game's frame rate (or null): lets the phone notice a game from any page, not only from Desempenho
+  events.register('game', every(1000, () => monitor.fps()));
   events.register('processes', every(3000, () => monitor.processes(), () => ({ force: true })));
   events.register('power', every(5000, () => ctx.build.power(), (info) => ({ signature: withoutCountdown(info) })));
 

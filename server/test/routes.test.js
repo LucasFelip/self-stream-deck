@@ -46,7 +46,7 @@ const fakes = {
     watchWindows: async () => {},
   },
   media: { state: record('mediaState', { current: null, sessions: [] }), control: record('mediaControl', true), art: record('mediaArt', null) },
-  monitor: { sample: record('sample', {}), processes: record('processes', {}), info: record('info', {}) },
+  monitor: { sample: record('sample', {}), fps: record('fps', null), processes: record('processes', {}), info: record('info', {}) },
   power: { schedule: () => null, info: record('powerInfo', {}), perform: record('perform', {}), ACTIONS: ['shutdown', 'restart', 'cancel'] },
   camera: { MAX_FRAME: 1000, push() {}, wanted: () => false, attach() {}, status: () => ({}) },
   vcam: { status: record('vcamStatus', {}), install: record('vcamInstall', true), uninstall: record('vcamUninstall', true) },

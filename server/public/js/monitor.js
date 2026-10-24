@@ -303,6 +303,7 @@
     el: monitorEl,
     show() {
       // the monitor helper starts on demand (a few seconds the first time) and stops again when idle
+      Deck.game?.monitorOpen(true);
       if (!latest) cpuCard.sub.textContent = 'iniciando sensores…';
       if (watchers.sample) watchers.sample.stop();
       // every sample is new (the numbers always move): no slowing down when "unchanged"
@@ -314,6 +315,7 @@
       });
     },
     hide() {
+      Deck.game?.monitorOpen(false);
       if (watchers.sample) watchers.sample.stop();
       watchers.sample = null;
     },

@@ -43,7 +43,7 @@ const sandbox = {
 sandbox.window = sandbox;
 vm.createContext(sandbox);
 
-const scripts = ['deck.js', 'js/live.js', 'js/geometry.js', 'js/windows.js', 'js/media.js', 'js/audio.js', 'js/sound.js', 'js/monitor.js', 'js/power.js', 'js/camera.js', 'js/editor.js', 'js/tiles.js', 'js/arrange.js', 'js/pager.js', 'js/pc.js', 'js/header.js', 'js/volume.js', 'js/reload.js', 'js/connection.js', 'app.js'];
+const scripts = ['deck.js', 'js/live.js', 'js/geometry.js', 'js/windows.js', 'js/media.js', 'js/audio.js', 'js/sound.js', 'js/monitor.js', 'js/game.js', 'js/power.js', 'js/camera.js', 'js/editor.js', 'js/tiles.js', 'js/arrange.js', 'js/pager.js', 'js/pc.js', 'js/header.js', 'js/volume.js', 'js/reload.js', 'js/connection.js', 'app.js'];
 let failed = false;
 for (const file of scripts) {
   try {

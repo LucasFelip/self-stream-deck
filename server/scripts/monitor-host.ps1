@@ -337,6 +337,17 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
                 $res.uptime = (Round (Read-Counter $sysUptime) 0)
             }
 
+            # just the frame rate (a read of shared memory), so the phone can notice a game without sampling every counter
+            'fps' {
+                $res.fps = Read-Fps
+                if (-not $res.fps) {
+                    $sensors = Read-Afterburner
+                    if ($sensors -and $sensors['Framerate'] -gt 0) {
+                        $res.fps = [ordered]@{ source = 'MSI Afterburner'; app = $null; fps = (Round $sensors['Framerate'] 0); frameMs = (Round (1000.0 / $sensors['Framerate']) 1) }
+                    }
+                }
+            }
+
             'processes' { $res.top = Read-TopProcesses }
             'info' { $res.info = Get-SystemInfo }
 

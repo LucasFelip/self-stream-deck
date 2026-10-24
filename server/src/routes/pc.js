@@ -10,6 +10,7 @@ module.exports = function pcRoutes(ctx, on) {
   const { config, monitor, power } = ctx;
 
   on('GET', '/api/monitor/sample', async ({ res }) => sendJson(res, 200, await monitor.sample()));
+  on('GET', '/api/monitor/fps', async ({ res }) => sendJson(res, 200, await monitor.fps())); // the game's frame rate, or null
   on('GET', '/api/monitor/processes', async ({ res }) => sendJson(res, 200, await monitor.processes()));
   on('GET', '/api/monitor/info', async ({ res }) => sendJson(res, 200, await monitor.info()));
 
