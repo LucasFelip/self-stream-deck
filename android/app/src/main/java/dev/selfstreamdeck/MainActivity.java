@@ -299,6 +299,16 @@ public class MainActivity extends Activity {
             });
         }
 
+        /** Idle dimmer for the AMOLED screen: window brightness to the minimum, or back to the system value. */
+        @JavascriptInterface
+        public void setDim(boolean on) {
+            runOnUiThread(() -> {
+                WindowManager.LayoutParams lp = getWindow().getAttributes();
+                lp.screenBrightness = on ? 0.01f : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+                getWindow().setAttributes(lp);
+            });
+        }
+
         /** Short haptic tick for button presses; the page calls it through Deck.vibrate(). */
         @JavascriptInterface
         @SuppressWarnings("deprecation")
