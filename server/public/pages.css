@@ -1,4 +1,4 @@
-/* Styles for the module pages (media, audio, monitor, power) and the pieces they share. */
+/* Styles for the module pages (windows, sound, PC, power, ...) and the pieces they share. */
 
 :root {
   --warn: #e0a243;
@@ -63,6 +63,12 @@ button.chip:active { background: var(--border); }
 .chip[aria-pressed="true"], .chip.active { border-color: var(--accent); color: var(--text); }
 
 .muted { color: var(--muted); }
+
+/* segmented selector (Deck.segmented): "Lista | Mapa", "Desempenho | Processos | Sistema". 48 px targets, one lit. */
+.seg { display: flex; flex: none; gap: 6px; }
+.seg-btn { flex: 1 1 0; min-width: 0; height: 48px; padding: 0 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--muted); font-family: inherit; font-size: 0.8rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; touch-action: manipulation; }
+.seg-btn:active { background: var(--surface-2); }
+.seg-btn[aria-selected="true"] { border-color: var(--accent); background: var(--surface-2); color: var(--text); }
 .mono { font-variant-numeric: tabular-nums; }
 
 /* generic range slider (same look as the volume strip) */
@@ -216,10 +222,14 @@ button.chip:active { background: var(--border); }
   gap: 10px;
 }
 .monitor-page .card { overflow: hidden; gap: 6px; }
+.pc-page .monitor-page .card { padding-top: 8px; padding-bottom: 8px; } /* the selector above takes 54 px: the cards give some back */
 .monitor-page .col-cpu { grid-area: cpu; display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; }
 .monitor-page .col-cpu .c-cpu { flex: 1; }
 .monitor-page .c-cpu .spark { flex: 1; height: auto; min-height: 30px; }
 .monitor-page .c-mem .stats, .monitor-page .c-gpu .stats { grid-template-columns: 1fr; }
+/* GPU: fan and clock share a row (the PC page spends 58 px on its selector, and a fifth row would be cut off) */
+.monitor-page .c-gpu .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.monitor-page .c-gpu .stats > :nth-child(-n + 3) { grid-column: 1 / -1; }
 .monitor-page .c-mem { grid-area: mem; }
 .monitor-page .c-gpu { grid-area: gpu; }
 /* the FPS card sits above the CPU card, only while a game is drawing frames */
@@ -278,12 +288,19 @@ button.chip:active { background: var(--border); }
 .divider { height: 1px; margin: 4px 0; background: var(--border); }
 .loading { padding: 24px 0; text-align: center; font-size: 0.8rem; color: var(--muted); }
 
-.processes-page { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.processes-page { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); gap: 10px; }
 .proc { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 4px 0; font-size: 0.74rem; }
 .proc .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .proc .name small { color: var(--muted); }
 .proc .val { font-variant-numeric: tabular-nums; color: var(--muted); }
 .proc .bar { grid-column: 1 / -1; height: 3px; }
+
+/* --- PC: one page, three panes behind a segmented selector ------------------------------------- */
+
+.pc-page { display: flex; flex-direction: column; gap: 6px; height: 100%; min-height: 0; }
+/* the pane takes what the selector leaves (the shared 100% height above would push it past the page) */
+.pc-page > .pc-pane { flex: 1; height: auto; min-height: 0; }
+.pc-page > .pc-pane[hidden] { display: none; }
 
 /* --- power ---------------------------------------------------------------------------------- */
 
@@ -393,10 +410,15 @@ button.chip:active { background: var(--border); }
 
 /* --- windows and screens (Deck > Janelas): a to-scale map you can drag windows around on ---------- */
 
-.windows-page { display: grid; grid-template-columns: minmax(0, 1fr) 236px; gap: 10px; height: 100%; min-height: 0; }
-.win-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; }
+/* landscape: the list on the left, the map and its panel on the right; portrait (below) shows one at a time */
+.windows-page { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 10px; height: 100%; min-height: 0; }
+.windows-page .seg { display: none; }
+.wpane { min-width: 0; min-height: 0; }
+.wpane-map { display: grid; grid-template-columns: minmax(0, 1fr) 170px; gap: 10px; }
+.win-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-x pan-y; scrollbar-width: none; }
+.win-side::-webkit-scrollbar { display: none; }
 .win-side .card[hidden] { display: none; }
-.win-side .card { flex: 1; }
+.win-side .card { flex: 1 0 auto; }
 .wmap-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
 
 /* touch-action none: drags on the map move windows instead of swiping to another page (use the tabs for that) */
@@ -444,7 +466,8 @@ button.chip:active { background: var(--border); }
 .small { font-size: 0.62rem; }
 
 /* the list of windows sits on top, with generous targets: the bottom edge is the hardest to reach in a phone stand */
-.sel-chips { display: flex; flex: none; gap: 8px; height: 46px; min-width: 0; overflow-x: auto; scrollbar-width: none; touch-action: pan-x; }
+/* landscape: the list beside the map already names every window, so the chips would only repeat it */
+.sel-chips { display: none; flex: none; gap: 8px; height: 46px; min-width: 0; overflow-x: auto; scrollbar-width: none; touch-action: pan-x; }
 .sel-chips::-webkit-scrollbar { display: none; }
 .sel-chips .chip.big-chip { flex: none; max-width: 190px; padding: 0 16px; font-size: 0.74rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sel-chips .chip.dim { opacity: 0.55; }
@@ -462,6 +485,29 @@ button.chip:active { background: var(--border); }
 .screens-extra { display: flex; flex-direction: column; gap: 8px; }
 .chip.wide { justify-content: center; padding: 9px 10px; font-size: 0.74rem; }
 .hold.small { height: 36px; border: 0; border-radius: 10px; font-family: inherit; font-size: 0.7rem; font-weight: 600; }
+
+/* the list of windows: tap a row to bring it to the front; two 48 px buttons minimize / maximize it */
+.wlist { gap: 6px; padding: 8px; overflow: hidden; }
+.wpane-list .wlist { height: 100%; }
+.wlist-body { display: flex; flex-direction: column; gap: 6px; }
+.wlist-body:empty::after { content: "Nenhuma janela aberta"; padding: 12px 4px; font-size: 0.74rem; color: var(--muted); }
+.wrow { display: flex; align-items: stretch; flex: none; gap: 4px; height: 48px; }
+.wrow button { display: flex; align-items: center; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--text); font: inherit; touch-action: manipulation; }
+.wrow button:active { background: var(--border); }
+.wmain { flex: 1; min-width: 0; gap: 8px; padding: 0 8px; text-align: left; }
+.wicon { display: grid; place-items: center; flex: none; width: 22px; height: 22px; }
+.wicon img { width: 22px; height: 22px; object-fit: contain; pointer-events: none; }
+.wicon b { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 5px; background: var(--surface); color: var(--muted); font-size: 0.7rem; }
+/* the app's name over the window's title, each on one line */
+.wtitle { display: flex; flex: 1; flex-direction: column; justify-content: center; gap: 1px; min-width: 0; line-height: 1.2; }
+.wtitle b, .wtitle small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wtitle b { font-size: 0.74rem; font-weight: 600; }
+.wtitle small { font-size: 0.62rem; color: var(--muted); }
+.wtitle small:empty { display: none; }
+.wbtn { flex: none; justify-content: center; width: 48px; padding: 0; color: var(--muted); }
+.wrow.dim .wmain { opacity: 0.55; }
+.wrow.front .wmain { border-color: #3a4152; }
+.wrow.sel .wmain { border-color: var(--accent); background: var(--border); }
 /* --- portrait / narrow ---------------------------------------------------------------------- */
 
 @media (orientation: portrait) {
@@ -471,9 +517,9 @@ button.chip:active { background: var(--border); }
   .track-title, .track-artist { text-align: center; }
   .track-source { justify-content: center; }
 
-  .audio-page, .monitor-page, .system-page, .processes-page, .power-page, .windows-page, .sound-page { display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-x pan-y; /* vertical scroll inside, horizontal swipes still reach the pager */ scrollbar-width: none; }
-  .audio-page::-webkit-scrollbar, .monitor-page::-webkit-scrollbar, .system-page::-webkit-scrollbar, .processes-page::-webkit-scrollbar, .power-page::-webkit-scrollbar, .windows-page::-webkit-scrollbar, .sound-page::-webkit-scrollbar { display: none; }
-  .audio-page > .card, .monitor-page > .card, .processes-page > .card, .windows-page > .card, .sound-page > .card { flex: none; }
+  .audio-page, .monitor-page, .system-page, .processes-page, .power-page, .sound-page { display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-x pan-y; /* vertical scroll inside, horizontal swipes still reach the pager */ scrollbar-width: none; }
+  .audio-page::-webkit-scrollbar, .monitor-page::-webkit-scrollbar, .system-page::-webkit-scrollbar, .processes-page::-webkit-scrollbar, .power-page::-webkit-scrollbar, .sound-page::-webkit-scrollbar { display: none; }
+  .audio-page > .card, .monitor-page > .card, .processes-page > .card, .sound-page > .card { flex: none; }
 
   /* Som: the page itself scrolls; the audio block inside it must not become a second scroller */
   .sound-page .audio-page { display: flex; flex: none; height: auto; overflow: visible; }
@@ -483,8 +529,19 @@ button.chip:active { background: var(--border); }
   .sound-media .media-page[data-empty="true"] .media-empty { flex-direction: row; gap: 10px; }
   .sound-media .media-empty p { margin: 0; }
 
+  /* Janelas: the selector stays on top, the chosen pane (list or map) scrolls under it */
+  .windows-page { display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+  .windows-page .seg { display: flex; }
+  .windows-page[data-pane="list"] .wpane-map, .windows-page[data-pane="map"] .wpane-list { display: none; }
+  .windows-page .wpane { flex: 1; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-x pan-y; scrollbar-width: none; }
+  .windows-page .wpane::-webkit-scrollbar { display: none; }
+  .wpane-list .wlist { height: auto; overflow: visible; }
+  .wpane-map { display: flex; flex-direction: column; }
+  .wpane-map > * { flex: none; }
+  .win-side { overflow: visible; }
+  .sel-chips { display: flex; }
   .windows-page .wmap-col { flex: none; height: 62vh; }
-  .system-page .col { overflow: visible; }
+  .system-page .col { flex: none; overflow: visible; } /* stacked columns keep their full height: the pane scrolls, the cards must not squash into each other */
   .actions-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; grid-auto-rows: 104px; flex: none; }
   .card .scroll { overflow: visible; }
 

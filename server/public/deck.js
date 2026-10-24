@@ -58,6 +58,8 @@ window.Deck = (() => {
     camera: '<path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z"/><circle cx="12" cy="12.5" r="3.5"/>',
     keys: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/>',
     list: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
+    windows: '<rect x="3" y="7" width="13" height="11" rx="1.5"/><path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h10A1.5 1.5 0 0 1 21 5.5v8a1.5 1.5 0 0 1-1.5 1.5H16M3 10.5h13"/>',
+    pc: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
     grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
   };
 
@@ -232,13 +234,26 @@ window.Deck = (() => {
   /** def: { id, title, el, show?(), hide?() } - show/hide fire when the page becomes/stops being the visible one. */
   function addPage(def) { pages.push(def); }
 
-  // show/hide hooks for pages that app.js generates itself (the shortcuts page hosts the windows list): id -> { show, hide }
-  const lifecycle = {};
+  /**
+   * A segmented selector ("Lista | Mapa"): one button per item, 48 px targets, exactly one selected. `set(id)` selects without
+   * calling onChange (the caller already knows); a tap calls onChange(id).
+   */
+  function segmented(items, onChange, label) {
+    const buttons = new Map();
+    const el = h('div', { class: 'seg', role: 'tablist', 'aria-label': label || '' });
+    const set = (id) => buttons.forEach((button, key) => button.setAttribute('aria-selected', String(key === id)));
+    for (const item of items) {
+      const button = h('button', { type: 'button', class: 'seg-btn', role: 'tab', data: { seg: item.id }, text: item.label, on: { click: () => { set(item.id); onChange(item.id); } } });
+      buttons.set(item.id, button);
+      el.append(button);
+    }
+    return { el, set };
+  }
 
   // entries the ⋯ menu shows besides its own: { label, onClick }
   const menuItems = [];
 
-  // A full-screen panel over the deck (the screen map, the system info): one tap in the menu or on a button opens it,
+  // A full-screen panel over the deck (the camera, the button editor): one tap in the menu or on a button opens it,
   // one tap on its close button returns. onOpen/onClose are where a panel starts and stops its polling.
   // the overlays that are open, oldest first: Deck.back() closes the newest
   const openOverlays = [];
@@ -296,5 +311,5 @@ window.Deck = (() => {
     return false;
   }
 
-  return { $, h, icon, api, toast, vibrate, fmt, slider, holdButton, pages, addPage, lifecycle, menuItems, overlay, back, state: { online: false } };
+  return { $, h, icon, api, toast, vibrate, fmt, slider, holdButton, pages, addPage, segmented, menuItems, overlay, back, state: { online: false } };
 })();

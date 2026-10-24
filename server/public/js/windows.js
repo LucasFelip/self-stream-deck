@@ -1,11 +1,12 @@
 'use strict';
 
 /**
- * "Janelas" page (third page of the Deck tab): a to-scale map of your screens with every open window drawn
- * where it really is. Drag a window to move it, also from one screen to another; drag it to a screen's edge to
- * snap it (left half, right half) or to the top to maximize. Tap a window to select it and bring it to the
- * front. A bar underneath lists every window (including minimized and hidden ones) and has the actions for the
- * selected one. Each screen has its own brightness slider (DDC/CI) right under it.
+ * "Janelas" destination: the list of every open window (tap a row to bring it to the front, two buttons to minimize /
+ * maximize it) and a to-scale map of your screens with every window drawn where it really is. Drag a window to move it,
+ * also from one screen to another; drag it to a screen's edge to snap it (left half, right half) or to the top to maximize.
+ * Tap a window to select it. Each screen has its own brightness slider (DDC/CI) right under it, and the screens card has
+ * the projection modes. Landscape: list on the left, map on the right. Portrait: a "Lista | Mapa" selector, one at a time.
+ * The list and the map share `selected`, so picking a window in one shows its actions in the other.
  */
 (() => {
   const { h, icon, api, toast, slider, holdButton } = Deck;
@@ -22,7 +23,7 @@
   let selected = null; // handle of the selected window
   let drag = null;
   let layout = null;
-  let watcher = null; // live updates (or the fallback poller) while the list or the map is on screen
+  let watcher = null; // live updates (or the fallback poller) while the page is on screen
   let inFlight = false;
   let pollAgain = false; // a refresh was asked for while one was running: run again as soon as it ends
   let pending = 0; // actions sent and not yet answered: a poll in between would show the old picture
@@ -41,8 +42,9 @@
   const chips = h('div', { class: 'sel-chips' });
   const hint = h('div', { class: 'sel-hint', text: 'Toque numa janela para selecionar. Arraste para mover; até a borda de uma tela para encaixar. Toque no vazio para desmarcar.' });
 
-  // The controls for the selected window live in a big-button panel on the right, and the list of windows on
-  // top: both stay away from the bottom edge, which is the hardest part to reach when the phone sits in a stand.
+  // The controls for the selected window live in a big-button panel beside the map, and the window chips on top
+  // (portrait; in landscape the list takes their job): both stay away from the bottom edge, which is the hardest
+  // part to reach when the phone sits in a stand.
   const winPanel = h('div', { class: 'card win-panel', hidden: true });
   let closeButton = null;
 
@@ -303,6 +305,7 @@
     selected = handle;
     disarm();
     renderBar();
+    renderList();
     winLayer?.querySelectorAll('.mwin').forEach((el) => el.classList.toggle('sel', Number(el.dataset.handle) === handle));
   }
 
@@ -536,41 +539,40 @@
       holdButton('Só tela 1', () => project('first', true), { className: 'small' }),
       holdButton('Só tela 2', () => project('second', true), { className: 'small' })));
 
-  const el = h('section', { class: 'windows-page' }, column, h('div', { class: 'win-side' }, winPanel, screensCard));
+  // the map side: the map column and, beside it, the selected window's panel / the screens card
+  const mapPane = h('div', { class: 'wpane wpane-map' }, column, h('div', { class: 'win-side' }, winPanel, screensCard));
 
-  new ResizeObserver(() => { if (screens.length) renderScreens(); }).observe(wrap);
+  // The map only measures and draws while the page is on screen and its pane is showing: hidden, it has no size
+  // (portrait, list pane) and drawing at size 0 would empty it.
+  new ResizeObserver(() => { if (screens.length && visible && wrap.clientWidth > 0) renderScreens(); }).observe(wrap);
 
-  // --- the list on the shortcuts page -----------------------------------------------------------
-  // Every open window, one tap away from the shortcuts: tap a row to bring it to the front, or use its two buttons to
-  // minimize / maximize it. The map (drag and drop, brightness, projection) opens as a sheet from the "Mapa" button.
+  // --- the list ---------------------------------------------------------------------------------
+  // Every open window, with its actions one tap away. Tap a row to bring it to the front; its two buttons minimize /
+  // maximize (or restore) it. The row also selects the window, so the map shows the same selection.
 
   const rows = new Map(); // handle -> row
   const listBody = h('div', { class: 'scroll wlist-body' });
-  const mapSheet = Deck.overlay({
-    title: 'Janelas e telas',
-    el,
-    onOpen() { visible.map = true; sync(); },
-    onClose() { visible.map = false; sync(); },
-  });
-  const mapButton = h('button', { type: 'button', class: 'chip', 'aria-label': 'Abrir o mapa de telas', on: { click: () => mapSheet.open() } }, icon('grid', 15), h('span', { text: 'Mapa' }));
-  const listEl = h('div', { class: 'card wlist' }, h('div', { class: 'head' }, h('h3', { text: 'Janelas' }), mapButton), listBody);
+  const listEl = h('div', { class: 'card wlist' }, h('h3', { text: 'Janelas' }), listBody);
+  const listPane = h('div', { class: 'wpane wpane-list' }, listEl);
 
   function windowAction(handle, action) {
-    selected = handle;
+    select(handle);
     act(action);
   }
 
   function makeRow(handle) {
     const iconBox = h('span', { class: 'wicon' });
-    const title = h('span', { class: 'wtitle' });
+    const app = h('b');
+    const title = h('small');
+    const label = h('span', { class: 'wtitle' }, app, title);
     const shrink = h('button', { type: 'button', class: 'wbtn' });
     const grow = h('button', { type: 'button', class: 'wbtn' });
-    const row = h('div', { class: 'wrow' },
-      h('button', { type: 'button', class: 'wmain', on: { click: () => windowAction(handle, 'focus') } }, iconBox, title),
+    const row = h('div', { class: 'wrow', data: { handle } },
+      h('button', { type: 'button', class: 'wmain', on: { click: () => windowAction(handle, 'focus') } }, iconBox, label),
       shrink, grow);
     shrink.addEventListener('click', () => windowAction(handle, row._win.state === 1 ? 'focus' : 'minimize'));
     grow.addEventListener('click', () => windowAction(handle, row._win.state === 2 ? 'restore' : 'maximize'));
-    Object.assign(row, { _icon: iconBox, _title: title, _shrink: shrink, _grow: grow });
+    Object.assign(row, { _icon: iconBox, _app: app, _title: title, _shrink: shrink, _grow: grow });
     return row;
   }
 
@@ -587,10 +589,12 @@
         rows.set(handle, row);
       }
       row._win = win;
-      row.className = `wrow${win.state === 1 ? ' dim' : ''}${win === frontmost ? ' front' : ''}`;
-      // the app's name fits the narrow column and is what you look for; the full title is the tooltip
-      const label = win.app || win.title;
-      if (row._title.textContent !== label) row._title.textContent = label;
+      row.className = `wrow${win.state === 1 ? ' dim' : ''}${win === frontmost ? ' front' : ''}${handle === selected ? ' sel' : ''}`;
+      // the app's name on top, the window's title under it (the list is wide enough for both)
+      const appName = win.app || win.title;
+      if (row._app.textContent !== appName) row._app.textContent = appName;
+      const sub = win.title && win.title !== appName ? win.title : '';
+      if (row._title.textContent !== sub) row._title.textContent = sub;
       row.title = win.title;
 
       const iconKey = `${win.appId}:${win.iconVersion}:${win.app}`;
@@ -615,28 +619,45 @@
     }
   }
 
-  // polling runs only while the list or the map is on screen
-  const visible = { list: false, map: false };
+  // --- the page ---------------------------------------------------------------------------------
+  // Portrait shows one pane at a time (the choice is kept for the session); landscape shows both and hides the selector.
+
+  const el = h('section', { class: 'windows-page', data: { pane: 'list' } });
+  const selector = Deck.segmented([{ id: 'list', label: 'Lista' }, { id: 'map', label: 'Mapa' }], (pane) => showPane(pane), 'Janelas');
+  selector.set('list');
+  el.append(selector.el, listPane, mapPane);
+
+  function showPane(pane) {
+    el.dataset.pane = pane;
+    selector.set(pane);
+    if (pane === 'map' && visible && screens.length) renderScreens(); // it had no size while hidden
+  }
+
+  // polling runs only while the page is on screen
+  let visible = false;
   // a title that only changes its leading spinner glyph (a terminal at work) is not a change
   const bare = (title) => String(title).replace(/^[^\p{L}\p{N}]+/u, '');
   const signatureOf = (reply) => JSON.stringify(reply.windows.map((w) => [w.handle, w.state, w.monitor, w.x, w.y, w.w, w.h, bare(w.title)]));
 
   function sync() {
-    const wanted = visible.list || visible.map;
-    if (!wanted) {
+    if (!visible) {
       if (watcher) watcher.stop();
       watcher = null;
       return;
     }
     if (!screens.length) loadScreens(); // actions predict their result from the screens' geometry
+    else renderScreens();
     if (watcher) return;
     // pushed by the PC when a window changes; only if the stream is not open does the page ask on a timer (slower when idle)
     watcher = Deck.live.watch('windows', { apply, poll: () => api('/api/windows'), ms: POLL_MS, idleMs: 2000, idleAfter: 12, signature: signatureOf });
   }
 
-  Deck.windowsUi = { list: listEl };
-  Deck.lifecycle['shortcuts-0'] = {
-    show() { visible.list = true; sync(); },
-    hide() { visible.list = false; sync(); },
-  };
+  Deck.addPage({
+    id: 'windows',
+    section: 'windows',
+    title: 'Janelas',
+    el,
+    show() { visible = true; sync(); },
+    hide() { visible = false; sync(); },
+  });
 })();

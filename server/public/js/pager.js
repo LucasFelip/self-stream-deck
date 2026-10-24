@@ -69,10 +69,7 @@
     for (const [key, section] of Object.entries(Deck.tiles.sections)) {
       // The volume strip takes the last row of the first shortcuts page, so shortcuts and sound share one page.
       const footer = key === 'shortcuts' ? volumeBox : null;
-      // the same page also carries the open windows: the last columns of its first page belong to that list
-      const side = footer && Deck.windowsUi && cols >= 5 ? 2 : 0;
-      const firstCols = cols - side;
-      const firstPageCapacity = footer ? firstCols * (rows - 1) : perPage;
+      const firstPageCapacity = footer ? cols * (rows - 1) : perPage;
 
       if (section.items.length === 0 && !footer) {
         if (key === 'apps') {
@@ -90,11 +87,11 @@
         const capacity = index === 0 ? firstPageCapacity : perPage;
         const hasFooter = footer && index === 0;
 
-        const title = hasFooter ? (side ? 'Atalhos' : 'Atalhos e som') : section.title;
+        const title = hasFooter ? 'Atalhos e som' : section.title;
         const page = buildPage(`${key}-${index}`, title, count > 1 ? `${index + 1}/${count}` : '', key);
         const grid = document.createElement('div');
         grid.className = 'grid';
-        grid.style.setProperty('--cols', hasFooter ? firstCols : cols);
+        grid.style.setProperty('--cols', cols);
         grid.style.setProperty('--rows', rows);
 
         const tiles = section.items.slice(start, start + capacity).map(Deck.tiles.makeTile);
@@ -102,18 +99,7 @@
         const slots = Array.from({ length: capacity - tiles.length }, () => Object.assign(document.createElement('div'), { className: 'slot' }));
         grid.append(...tiles, ...slots);
         if (hasFooter) grid.append(footer);
-
-        if (hasFooter && side) {
-          const split = document.createElement('div');
-          split.className = 'split';
-          split.style.setProperty('--total', cols);
-          split.style.setProperty('--first', firstCols);
-          split.style.setProperty('--side', side);
-          split.append(grid, Deck.windowsUi.list);
-          page.append(split);
-        } else {
-          page.append(grid);
-        }
+        page.append(grid);
         pages.push(page);
       }
     }
@@ -129,10 +115,10 @@
   const SECTIONS = [
     { id: 'apps', label: 'Apps', icon: 'grid' },
     { id: 'shortcuts', label: 'Atalhos', icon: 'keys' },
+    { id: 'windows', label: 'Janelas', icon: 'windows' },
     { id: 'sound', label: 'Som', icon: 'speaker' },
-    { id: 'monitor', label: 'Desempenho', icon: 'chip' },
+    { id: 'pc', label: 'PC', icon: 'pc' },
     { id: 'power', label: 'Energia', icon: 'power' },
-    { id: 'processes', label: 'Processos', icon: 'list' },
   ];
   const lastPageIn = {}; // section id -> id of the page last seen there
 
@@ -197,8 +183,8 @@
   // would be wrong: the browser may have re-snapped to a different page in the meantime.
   let currentId = null;
 
-  // show/hide hooks of the pages (their own polling starts and stops with them): from addPage and from Deck.lifecycle
-  const hooks = () => [...Deck.pages, ...Object.entries(Deck.lifecycle).map(([id, hook]) => ({ id, ...hook }))];
+  // show/hide hooks of the pages (their own polling starts and stops with them), from addPage
+  const hooks = () => Deck.pages;
 
   function notifyPages(previous, current) {
     for (const def of hooks()) {
@@ -275,9 +261,9 @@
   Deck.pager = {
     render,
     goToId,
-    // the show/hide hook of the page on screen, if it has one (connection.js pauses it with the screen)
-    // the section (apps, shortcuts, sound...) of the page on screen, for Deck.back()
+    // the section (apps, shortcuts, windows, sound...) of the page on screen, for Deck.back()
     currentSection: () => { const page = allPages()[currentIndex()]; return page ? sectionOf(page) : null; },
+    // the show/hide hook of the page on screen, if it has one (connection.js pauses it with the screen)
     activeHook: () => hooks().find((def) => def.id === currentId),
   };
   Deck.goTo = goToId; // modules can ask to jump to a page

@@ -259,29 +259,6 @@ body[data-state="offline"] .offline { display: flex; }
   height: 100%;
 }
 
-/* the shortcuts page: shortcuts and the volume strip on the left, the open windows on the right */
-.split { display: grid; grid-template-columns: repeat(var(--total, 7), minmax(0, 1fr)); gap: 10px; height: 100%; }
-.split > .grid { grid-column: span var(--first, 5); min-width: 0; }
-.split > .wlist { grid-column: span var(--side, 2); }
-
-.wlist { gap: 6px; padding: 8px; overflow: hidden; }
-.wlist .head { align-items: center; }
-.wlist .chip { padding: 6px 12px; }
-.wlist-body { display: flex; flex-direction: column; gap: 6px; }
-.wlist-body:empty::after { content: "Nenhuma janela aberta"; padding: 12px 4px; font-size: 0.74rem; color: var(--muted); }
-.wrow { display: flex; align-items: stretch; flex: none; gap: 4px; height: 48px; }
-.wrow button { display: flex; align-items: center; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--text); font: inherit; touch-action: manipulation; }
-.wrow button:active { background: var(--border); }
-.wmain { flex: 1; min-width: 0; gap: 8px; padding: 0 8px; text-align: left; }
-.wicon { display: grid; place-items: center; flex: none; width: 22px; height: 22px; }
-.wicon img { width: 22px; height: 22px; object-fit: contain; pointer-events: none; }
-.wicon b { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 5px; background: var(--surface); color: var(--muted); font-size: 0.7rem; }
-/* two lines: long names ("Steamwebhelper") are no longer cut after a few letters */
-.wtitle { display: -webkit-box; flex: 1; min-width: 0; overflow: hidden; font-size: 0.74rem; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
-.wbtn { flex: none; justify-content: center; width: 40px; padding: 0; color: var(--muted); }
-.wrow.dim .wmain { opacity: 0.55; }
-.wrow.front .wmain { border-color: var(--accent); }
-
 .slot {
   border: 1px dashed rgba(255, 255, 255, 0.05);
   border-radius: 14px;
