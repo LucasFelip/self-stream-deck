@@ -3,14 +3,13 @@
 // "Nothing overlaps": at a landscape (836x387) and a portrait (411x914) viewport, on every destination, the bar elements
 // must not run past the viewport or sit on top of each other, the FPS pill (in the header's actions) must show outside Desempenho, and the body must not scroll sideways. A game is faked (already running at load) so the pill is on screen.
 //
-// Today some of these fail on purpose (FPS over the Mapa button; the header in portrait, where the .host grid column
-// shrinks to 1px so its glyph and status overflow onto the first tab). So that `npm run check` stays green during Phase 0
-// the violations are listed as warnings and the test exits 0; with LAYOUT_STRICT=1 they fail it. Phase 1 fixes the app
-// and makes strict mode the default.
+// Strict by default: any violation fails the run (LAYOUT_STRICT=0 turns it back into a list of warnings, handy while
+// working on a layout). Each header group (host, tabs, actions) must also have at least one measured element, so the test
+// cannot pass empty if a redesign renames or moves the navigation.
 // Skipped, not failed, when no Chromium-based browser is installed (set CHROME_PATH).
 const { fakeDeck, launchBrowser, findBrowser, sleep } = require('./harness');
 
-const STRICT = process.env.LAYOUT_STRICT === '1';
+const STRICT = process.env.LAYOUT_STRICT !== '0';
 const VIEWPORTS = [
   { name: 'paisagem', width: 836, height: 387 },
   { name: 'retrato', width: 411, height: 914 },
@@ -22,7 +21,7 @@ const probe = (section) => `(() => {
   const out = [];
   const box = (el) => el.getBoundingClientRect();
   const shown = (el) => { const r = box(el); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
-  const name = (el) => el.id ? '#' + el.id : el.tagName.toLowerCase() + (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(' ').join('.') : '');
+  const name = (el) => { const cls = (el.getAttribute('class') || '').trim(); return el.id ? '#' + el.id : el.tagName.toLowerCase() + (cls ? '.' + cls.split(' ').join('.') : ''); };
   const hit = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
 
   // (a) the bar: nothing past the viewport, and siblings do not overlap
@@ -43,6 +42,7 @@ const probe = (section) => `(() => {
     ['abas', pick('#tabs .tab')],
     ['acoes', pick('.actions .icon-btn, .actions .pill, .actions .fps-float')],
   ];
+  for (const [group, members] of groups) if (!members.length) out.push('bar: grupo ' + group + ' sem nenhum elemento medido');
   const label = (el) => name(el) + (el.classList.contains('tab') && el.textContent.trim() ? ' "' + el.textContent.trim().slice(0, 12) + '"' : '');
   const hostEl = document.querySelector('.host');
   if (hostEl && shown(hostEl)) {
@@ -103,7 +103,7 @@ const probe = (section) => `(() => {
     console.log(`\n${violations.length} violation(s):`);
     for (const v of violations) console.log(`  - ${v}`);
     if (STRICT) process.exit(1);
-    console.log('(warning only: set LAYOUT_STRICT=1 to fail)');
+    console.log('(warning only: LAYOUT_STRICT=0)');
   } else {
     console.log('no overlaps');
   }

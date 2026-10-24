@@ -118,11 +118,19 @@ header {
 .icon-btn:active { background: var(--surface-2); color: var(--text); }
 .icon-btn.spin svg { animation: spin 0.6s linear; }
 
-/* narrow screens (portrait): keep the PC name readable; inactive tabs shrink to their icon, the status to a light */
+/* narrow screens (portrait). INTERIM: the header holds everything on one row only until the navigation moves to a bottom bar
+   (phase 2 of docs/plano-redesign.md). Until then: no PC glyph (just the status light), the light first and the tabs in the
+   flexible column so they can shrink; inactive tabs show only their icon and the active one can ellipsize its label.
+   With every optional button on at once (live camera + mic + player + power pill + FPS) 411 px is still not enough. */
 @media (max-width: 640px) {
-  header { grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; padding: 0 10px; }
-  .tab { padding: 0 9px; gap: 5px; }
+  header { grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px; padding: 0 10px; }
+  .glyph { display: none; }
+  .tabs { min-width: 0; justify-content: center; }
+  .tab { flex: 0 1 auto; min-width: 0; padding: 0 7px; gap: 5px; }
+  .tab[aria-selected="true"] .tab-label { overflow: hidden; text-overflow: ellipsis; }
   .tab[aria-selected="false"] .tab-label { display: none; }
+  .actions { gap: 2px; }
+  .icon-btn { width: 32px; }
 }
 
 /* header buttons for the mic and the player are quiet until they matter */
