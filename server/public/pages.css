@@ -477,7 +477,8 @@ button.chip:active { background: var(--border); }
 
   /* Som: the page itself scrolls; the audio block inside it must not become a second scroller */
   .sound-page .audio-page { display: flex; flex: none; height: auto; overflow: visible; }
-  .sound-media .media-body { overflow: visible; }
+  .sound-media .media-body { overflow: visible; justify-items: stretch; }
+  .sound-media .cover { width: 92px; height: 92px; } /* the generic portrait cover (52vw) would not fit the compact player grid */
   /* nothing playing: the player is a thin strip instead of a whole column */
   .sound-media .media-page[data-empty="true"] .media-empty { flex-direction: row; gap: 10px; }
   .sound-media .media-empty p { margin: 0; }
