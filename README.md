@@ -26,7 +26,7 @@ topo para não ser preciso ficar deslizando até achar a certa:
 | **Apps** | Aplicativos |
 | **Atalhos** | Atalhos de teclado (a grade inteira; o volume fica no botão da faixa de ativos) |
 | **Som** | Mídia e áudio numa tela só |
-| **Desempenho** | Desempenho ("Sobre este PC" fica no menu ⋯) |
+| **Desempenho** | Desempenho ("Sobre este PC" é o painel Sistema da aba PC) |
 | **Energia** | Energia |
 | **Processos** | Processos |
 
@@ -44,7 +44,7 @@ Um módulo novo escolhe a aba com `Deck.addPage({ section: 'pc', ... })`.
 | **Som · mídia** (à esquerda) | O que está tocando (Spotify, YouTube ou qualquer coisa no navegador, VLC…): capa, título, artista, barra de tempo com busca, anterior/play/próxima. Vários players viram abas. |
 | **Som · áudio** (à direita) | Saída e entrada padrão (trocar dispositivo, volume, mudo — inclusive o microfone) e mixer de volume por aplicativo. |
 | **Desempenho** | CPU (total e por núcleo, clock, temperatura e potência), memória, GPU, disco e rede, ao vivo. Com um jogo desenhando quadros, o cartão da GPU mostra o FPS e o tempo de quadro (lido do RTSS, que acompanha o MSI Afterburner). |
-| **Sobre este PC** (menu ⋯) | Hardware e Windows: processador, memória (módulos), vídeo, placa-mãe/BIOS, armazenamento, rede, monitores, uptime. |
+| **Sobre este PC** (aba PC, painel Sistema) | Hardware e Windows: processador, memória (módulos), vídeo, placa-mãe/BIOS, armazenamento, rede, monitores, uptime. |
 | **Processos** | Maiores usos de CPU e de memória. |
 | **Energia** | Teclas (4x2 deitado, 2x4 em pé): bloquear, suspender, hibernar, sair da conta, reiniciar, desligar, reiniciar para a BIOS e para o menu avançado, com atraso, contagem regressiva e cancelamento. |
 

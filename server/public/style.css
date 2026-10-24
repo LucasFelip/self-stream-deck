@@ -178,7 +178,6 @@ body {
   .nav-status { left: calc(10px + var(--safe-left)); }
   .glyph { display: none; }
   .nav-end { right: calc(4px + var(--safe-right)); }
-  .scrim { background: rgba(4, 5, 8, 0.45); }
   /* the menu and the volume panel are bottom sheets over the bar: full width, rounded top, a grabber to drag them down */
   .menu, .vol-panel { left: 0; right: 0; bottom: calc(var(--bar-h) + var(--safe-bottom)); border-bottom: 0; border-radius: 18px 18px 0 0; animation: sheet-up 0.18s ease; }
   .menu { max-height: calc(100vh - var(--bar-h) - var(--safe-top) - var(--safe-bottom) - 56px); padding: 0 calc(12px + var(--safe-right)) 12px calc(12px + var(--safe-left)); }
@@ -496,4 +495,9 @@ body[data-state="offline"] .offline { display: flex; }
   .overlay-bar { padding-top: 10px; touch-action: none; }
   .grabber { position: absolute; top: 6px; left: 50%; display: block; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: var(--muted); opacity: 0.5; }
   .overlay-scrim:not([hidden]) { position: fixed; inset: 0; z-index: 39; display: block; background: rgba(4, 5, 8, 0.7); touch-action: none; }
+}
+
+/* portrait: the scrim behind the volume panel / menu sheet dims the deck (after the base rule, or the base would win); it still only closes */
+@media (orientation: portrait) {
+  .scrim { background: rgba(4, 5, 8, 0.45); }
 }

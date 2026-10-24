@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Button editor ("Editar botões" in the ⋯ menu): create, change, reorder and delete keyboard shortcuts and macros, and hide or
+ * Button editor ("Editar botões" in the ⚙ menu): create, change, reorder and delete keyboard shortcuts and macros, and hide or
  * reorder the apps on the Apps page, all from the phone. Everything is saved through /api/editor/*, where the server validates
  * it against a whitelist; a macro is a list of steps picked from fixed kinds (open an app, press keys, volume, audio output,
  * place a window, wait, camera...), never a free-form command.
