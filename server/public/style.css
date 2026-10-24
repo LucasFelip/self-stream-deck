@@ -10,7 +10,7 @@
   --err: #e5646b;
   --icon: 44px; /* set by app.js from the real tile size */
   --touch: 48px; /* smallest target for anything in the navigation */
-  --rail-w: 64px; /* the navigation rail (landscape), without the cut-out inset */
+  --rail-w: 72px; /* the navigation rail (landscape), without the cut-out inset */
   --bar-h: 56px; /* the navigation bar (portrait), without the bottom inset */
   --strip-h: 36px; /* the strip of live controls above the pages */
   /* the camera cut-out / system bars the window may draw under (viewport-fit=cover); 0 in browsers without any */
