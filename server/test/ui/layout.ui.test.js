@@ -107,6 +107,7 @@ const menuProbe = `(async () => {
   const r = pop.getBoundingClientRect();
   if (pop.hidden || !r.width) out.push('menu: nao abriu');
   else if (r.left < -1 || r.top < -1 || r.right > innerWidth + 1 || r.bottom > innerHeight + 1) out.push('menu: #menu-pop sai da tela (' + Math.round(r.left) + ',' + Math.round(r.top) + ' .. ' + Math.round(r.right) + ',' + Math.round(r.bottom) + ')');
+  else if (innerHeight - r.bottom < 8 || innerWidth - r.right < 8 || r.top < 8) out.push('menu: #menu-pop colado na borda (folga minima 8 px; ' + Math.round(r.left) + ',' + Math.round(r.top) + ' .. ' + Math.round(r.right) + ',' + Math.round(r.bottom) + ' em ' + innerWidth + 'x' + innerHeight + ')');
   document.getElementById('menu').click();
   return out;
 })()`;
