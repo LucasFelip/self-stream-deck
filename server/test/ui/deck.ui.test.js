@@ -358,6 +358,18 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
         const boxes = await wide.eval(`(() => { const r = (sel) => { const b = document.querySelector(sel).getBoundingClientRect(); return { l: b.left, r: b.right, w: b.width, h: b.height }; }; return { list: r('.wpane-list'), map: r('.wpane-map'), seg: document.querySelector('.windows-page .seg').getBoundingClientRect().width }; })()`);
         assert.ok(boxes.list.w > 0 && boxes.map.w > 0 && boxes.list.r <= boxes.map.l + 1, JSON.stringify(boxes));
         assert.strictEqual(boxes.seg, 0, 'the selector is for portrait');
+        // the map is the point of the tab: big enough to drag with a finger, and the Telas row sits under it, whole
+        const map = await wide.eval(`(() => {
+          const r = (e) => e.getBoundingClientRect();
+          const mon = r(document.querySelector('.map .mon'));
+          const side = r(document.querySelector('.win-side'));
+          const wrap = r(document.querySelector('.map-wrap'));
+          const buttons = [...document.querySelectorAll('.screens-extra > *')].map((b) => ({ h: Math.round(r(b).height), w: Math.round(r(b).width), inside: r(b).right <= side.right + 1 && r(b).bottom <= innerHeight }));
+          return { monW: Math.round(mon.width), monH: Math.round(mon.height), mapBottom: wrap.bottom, sideTop: side.top, sideBottom: side.bottom, buttons };
+        })()`);
+        assert.ok(map.monW >= 300 && map.monH >= 160, `the screen on the map is too small: ${JSON.stringify(map)}`);
+        assert.ok(map.mapBottom <= map.sideTop + 1 && map.sideBottom <= 387, `the map and the Telas row overlap or run off the screen: ${JSON.stringify(map)}`);
+        assert.ok(map.buttons.length === 5 && map.buttons.every((b) => b.h >= 48 && b.w >= 48 && b.inside), JSON.stringify(map));
       } finally {
         wide.close();
       }
@@ -395,13 +407,110 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       await only('system', null);
       await page.waitFor(`document.querySelector('.system-page').textContent.includes('PC-TESTE')`, 'the system facts inline');
       assert.strictEqual(await page.eval(`document.querySelectorAll('.overlay:not([hidden])').length`), 0, 'no overlay');
-      // away from the page nothing of the PC is subscribed any more
+      // leaving the page from each pane: Desempenho and Processos must drop their subscription (they had one), Sistema had none
+      for (const name of ['monitor', 'processes', 'system']) {
+        await page.eval(`Deck.perf.showPane('${name}')`);
+        await sleep(700);
+        const before = topicsNow();
+        deck.model.calls.length = 0;
+        await go('apps');
+        await sleep(500);
+        const away = topicsNow();
+        if (name !== 'system') {
+          assert.ok(before && before.includes(name), `${name}: was subscribed before leaving (${before})`);
+          assert.ok(away, `${name}: leaving the page did not change the subscription`);
+        }
+        assert.ok(!away || (!away.includes('monitor') && !away.includes('processes')), `${name} away: ${away}`);
+        await go('pc');
+      }
+      await page.eval(`Deck.perf.showPane('monitor')`);
+    });
+
+    await test('Janelas: leaving the page drops the windows subscription', async () => {
+      await go('windows');
+      await sleep(500);
       deck.model.calls.length = 0;
       await go('apps');
-      await sleep(300);
+      await sleep(500);
       const away = topicsNow();
-      assert.ok(!away || (!away.includes('monitor') && !away.includes('processes')), `away: ${away}`); // no new subscription at all is fine: the System pane already had none
-      await page.eval(`Deck.perf.showPane('monitor')`);
+      assert.ok(away, 'leaving did not change the subscription');
+      assert.ok(!away.includes('windows'), `still subscribed to windows: ${away}`);
+      await go('windows');
+      await sleep(500);
+      assert.ok(topicsNow().includes('windows'), 'coming back subscribes again');
+      await go('apps');
+    });
+
+    await test('PC (portrait): Desempenho cards keep their natural height (no clipping, a usable sparkline), and the System cards do not overlap', async () => {
+      const tall = await browser2(411, 914);
+      try {
+        await tall.waitFor(`document.querySelectorAll('#tabs .tab').length === 6`, 'the tabs');
+        await go('pc', tall);
+        await tall.waitFor(`document.querySelector('.c-cpu .big').textContent.startsWith('23')`, 'the sample drawn');
+        const cards = await tall.eval(`(() => {
+          const pane = document.querySelector('.monitor-page').getBoundingClientRect();
+          const cpu = document.querySelector('.c-cpu');
+          const rect = (e) => e.getBoundingClientRect();
+          const rows = [...cpu.querySelectorAll('.stats > div')].map((d) => ({ h: rect(d).height, inside: rect(d).bottom <= rect(cpu).bottom && rect(d).top >= rect(cpu).top }));
+          return {
+            clipped: [...document.querySelectorAll('.monitor-page .card')].filter((c) => rect(c).width > 0 && c.scrollHeight > c.clientHeight + 1).map((c) => c.className),
+            spark: rect(cpu.querySelector('.spark')).height,
+            rows,
+            cores: rect(cpu.querySelector('.cores')).height,
+            cpuH: rect(cpu).height,
+            paneW: pane.width,
+          };
+        })()`);
+        assert.deepStrictEqual(cards.clipped, [], JSON.stringify(cards));
+        assert.ok(cards.spark >= 60, `the CPU sparkline is squashed: ${JSON.stringify(cards)}`);
+        assert.strictEqual(cards.rows.length, 4, 'Clock, Temperatura, Potência and Processos');
+        assert.ok(cards.rows.every((row) => row.h > 0 && row.inside), `a CPU stat is hidden: ${JSON.stringify(cards)}`);
+        assert.ok(cards.cores > 10, `the per-core bars are squashed: ${JSON.stringify(cards)}`);
+
+        await tall.tap('.pc-page .seg-btn[data-seg="system"]');
+        await tall.waitFor(`document.querySelectorAll('.system-page .card').length >= 6`, 'the system cards');
+        await sleep(300);
+        const overlaps = await tall.eval(`(() => {
+          const cards = [...document.querySelectorAll('.system-page .card')].map((c) => ({ name: c.querySelector('h3').textContent, r: c.getBoundingClientRect() }));
+          const out = [];
+          for (let i = 0; i < cards.length; i += 1) for (let j = i + 1; j < cards.length; j += 1) {
+            const a = cards[i].r; const b = cards[j].r;
+            if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) out.push(cards[i].name + ' x ' + cards[j].name);
+          }
+          const clipped = cards.filter((c, i) => document.querySelectorAll('.system-page .card')[i].scrollHeight > document.querySelectorAll('.system-page .card')[i].clientHeight + 1).map((c) => c.name);
+          return { out, clipped };
+        })()`);
+        assert.deepStrictEqual(overlaps, { out: [], clipped: [] });
+      } finally {
+        tall.close();
+      }
+    });
+
+    await test('PC (landscape): Desempenho shows every card whole, including three drives, and nothing scrolls inside', async () => {
+      const wide = await browser2(836, 387);
+      try {
+        await wide.waitFor(`document.querySelectorAll('#tabs .tab').length === 6`, 'the tabs');
+        await go('pc', wide);
+        await wide.waitFor(`document.querySelectorAll('.c-dsk .drive').length === 3`, 'three drives');
+        await sleep(300);
+        const info = await wide.eval(`(() => {
+          const rect = (e) => e.getBoundingClientRect();
+          const dsk = document.querySelector('.c-dsk');
+          const list = dsk.querySelector('.scroll');
+          return {
+            clipped: [...document.querySelectorAll('.monitor-page .card')].filter((c) => rect(c).width > 0 && (c.scrollHeight > c.clientHeight + 1 || c.scrollWidth > c.clientWidth + 1)).map((c) => c.className),
+            listScrolls: list.scrollHeight > list.clientHeight + 1,
+            drivesInside: [...dsk.querySelectorAll('.drive')].every((d) => rect(d).bottom <= rect(dsk).bottom - 1),
+            seg: rect(document.querySelector('.pc-page .seg-btn')).height,
+          };
+        })()`);
+        assert.deepStrictEqual(info.clipped, [], JSON.stringify(info));
+        assert.strictEqual(info.listScrolls, false, 'the drive list scrolls inside the Disco card');
+        assert.ok(info.drivesInside, 'a drive row runs past the bottom of the card');
+        assert.ok(info.seg >= 48);
+      } finally {
+        wide.close();
+      }
     });
 
     await test('the old page ids are gone, and a game starting opens PC > Desempenho even from another pane', async () => {

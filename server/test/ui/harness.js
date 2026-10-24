@@ -51,7 +51,7 @@ async function fakeDeck() {
     cpu: { usage: 23, freqMHz: 4200, temp: 51, tempSource: 'fake', power: 40, processes: 210, threads: 3100, cores: [10, 20, 30, 40] },
     memory: { usedPct: 48, usedMB: 15000, totalMB: 32000, commitUsedMB: 20000, commitLimitMB: 40000 },
     gpu: { name: 'NVIDIA GeForce RTX 4070', usage: 35, memUsedMB: 4000, memTotalMB: 12000, temp: 60, power: 120, powerLimit: 200, fan: 40, clock: 2100 },
-    disk: { total: { active: 5, readBps: 1000, writeBps: 2000 }, drives: [{ name: 'C:', label: 'Sistema', totalGB: 500, freeGB: 200 }] },
+    disk: { total: { active: 5, readBps: 1000, writeBps: 2000 }, drives: [{ name: 'C:', label: 'Sistema', totalGB: 500, freeGB: 200 }, { name: 'D:', label: 'Laika', totalGB: 730, freeGB: 195 }, { name: 'E:', label: 'Strelka', totalGB: 466, freeGB: 408 }] },
     network: [{ name: 'Ethernet', downBps: 5000, upBps: 1000, speed: '1 Gbps' }],
     fps: model.fps ?? null,
   });
