@@ -18,7 +18,7 @@ const VIEWPORTS = [
   { name: 'paisagem', width: 836, height: 387, landscape: true },
   { name: 'retrato', width: 411, height: 914, landscape: false },
 ];
-const SECTIONS = ['apps', 'shortcuts', 'sound', 'monitor', 'power', 'processes'];
+const SECTIONS = ['apps', 'shortcuts', 'windows', 'sound', 'pc', 'power'];
 const TOUCH = 48;
 const LIVE_TOUCH = 44; // the live strip's buttons and the menu button
 
@@ -91,13 +91,13 @@ const probe = (section, landscape, worst) => `(() => {
     if (Math.round(r.width) < ${LIVE_TOUCH} || Math.round(r.height) < ${LIVE_TOUCH}) out.push('alvo: ' + label(el) + ' mede ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' (minimo ${LIVE_TOUCH})');
   }
 
-  // (e) the FPS pill lives in the live strip (the group check covers it); it must be there outside Desempenho
+  // (e) the FPS pill lives in the live strip (the group check covers it); it must be there outside PC > Desempenho
   const fps = document.querySelector('#fps');
-  if (${JSON.stringify(section)} !== 'monitor' && !(fps && !fps.hidden && shown(fps))) out.push('fps: pilula nao apareceu');
+  if (${JSON.stringify(section)} !== 'pc' &&!(fps && !fps.hidden && shown(fps))) out.push('fps: pilula nao apareceu');
   if (${worst}) {
     for (const id of ['power-pill', 'cam', 'mic', 'player', 'fps']) {
       const el = document.getElementById(id);
-      if (!(el && !el.hidden && shown(el)) && !(id === 'fps' && ${JSON.stringify(section)} === 'monitor')) out.push('pior caso: #' + id + ' nao esta visivel');
+      if (!(el && !el.hidden && shown(el)) && !(id === 'fps' && ${JSON.stringify(section)} === 'pc')) out.push('pior caso: #' + id + ' nao esta visivel');
     }
   }
 
@@ -146,7 +146,7 @@ const player = { session: 's1', status: 'playing', title: 'Faixa de teste', arti
           await page.waitFor(`document.querySelectorAll('#tabs .tab').length >= ${SECTIONS.length}`, 'the tabs');
           // the game is already running when the page opens: the FPS may arrive before the pages exist (that race is handled by game.js)
           await page.waitFor(`document.querySelector('#fps b').textContent === '60'`, 'the fps from the fake game');
-          await page.waitFor("document.querySelector('#tabs .tab[data-section=monitor]').getAttribute('aria-selected') === 'true'", 'the deck to slide to Desempenho');
+          await page.waitFor("document.querySelector('#tabs .tab[data-section=pc]').getAttribute('aria-selected') === 'true'", 'the deck to slide to PC > Desempenho');
           if (worst) {
             await page.waitFor(`!document.getElementById('power-pill').hidden && !document.getElementById('player').hidden`, 'the power pill and the player');
             await page.eval(`document.getElementById('cam').hidden = false`); // the camera is only "live" while the phone sends it
@@ -157,7 +157,7 @@ const player = { session: 's1', status: 'playing', title: 'Faixa de teste', arti
             await page.eval(`document.querySelector('#tabs .tab[data-section="${section}"]').click()`);
             await page.waitFor(`document.querySelector('#tabs .tab[data-section="${section}"]').getAttribute('aria-selected') === 'true'`, `${section} tab selected`);
             await sleep(900); // the slide, and the page's first render
-            if (section !== 'monitor') await page.waitFor("!document.querySelector('#fps').hidden", 'the fps pill', 3000).catch(() => {}); // missing pill is reported by the probe
+            if (section !== 'pc') await page.waitFor("!document.querySelector('#fps').hidden", 'the fps pill', 3000).catch(() => {}); // missing pill is reported by the probe
             record(viewport, pass, section, await page.eval(probe(section, viewport.landscape, worst)));
           }
           record(viewport, pass, 'menu aberto', await page.eval(menuProbe));

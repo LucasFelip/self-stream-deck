@@ -61,7 +61,7 @@ for (const file of scripts) {
 
 const pages = (sandbox.Deck ? sandbox.Deck.pages : []).map((page) => `${page.id}(${page.section})`);
 console.log(`registered pages: ${pages.join(', ')}`);
-const expected = ['sound', 'monitor', 'processes', 'power'];
+const expected = ['windows', 'sound', 'pc', 'power'];
 const missing = expected.filter((id) => !pages.some((p) => p.startsWith(`${id}(`)));
 if (missing.length) { failed = true; console.log(`MISSING pages: ${missing.join(', ')}`); }
 process.exit(failed ? 1 : 0);

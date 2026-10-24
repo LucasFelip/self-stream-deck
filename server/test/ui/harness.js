@@ -33,6 +33,13 @@ async function fakeDeck() {
     down: false, // true: the PC "went away" (the state answers 503)
     layout: { apps: [], shortcuts: [] },
     power: { enabled: true, hibernate: false, uptimeSec: 3 * 3600, lastBoot: '2026-10-22T08:00:00', rebootPending: false, scheduled: null, openApps: [{ name: 'Navegador', count: 2 }, { name: 'Editor', count: 1 }] },
+    // what the Janelas and PC pages ask for: coherent canned answers (a test can change them between steps)
+    windows: [
+      { handle: 101, title: 'Documento - Editor', app: 'Editor', appId: null, iconVersion: 0, state: 0, monitor: 0, x: 100, y: 80, w: 900, h: 600 },
+      { handle: 102, title: 'Navegador', app: 'Navegador', appId: null, iconVersion: 0, state: 2, monitor: 0, x: 0, y: 0, w: 1920, h: 1040 },
+      { handle: 103, title: 'Terminal', app: 'Terminal', appId: null, iconVersion: 0, state: 1, monitor: 0, x: 0, y: 0, w: 0, h: 0 },
+    ],
+    screens: [{ device: 'DISPLAY1', left: 0, top: 0, width: 1920, height: 1080, primary: true, brightness: 60 }],
     state: { running: ['app0'], open: [], scheduled: null, mic: { available: true, muted: false }, volume: { level: 40, muted: false }, playing: null, miniPlayer: true, ui: 1, appsRev: 1 },
   };
   const streams = new Set(); // open event streams that asked for the game topic
@@ -40,11 +47,37 @@ async function fakeDeck() {
   model.pushGame = () => { for (const res of streams) sendGame(res); };
   const shortcuts = [{ id: 'copy', label: 'Copiar', display: 'Ctrl+C' }, { id: 'paste', label: 'Colar', display: 'Ctrl+V' }];
 
+  const sampleReply = () => ({
+    cpu: { usage: 23, freqMHz: 4200, temp: 51, tempSource: 'fake', power: 40, processes: 210, threads: 3100, cores: [10, 20, 30, 40] },
+    memory: { usedPct: 48, usedMB: 15000, totalMB: 32000, commitUsedMB: 20000, commitLimitMB: 40000 },
+    gpu: { name: 'NVIDIA GeForce RTX 4070', usage: 35, memUsedMB: 4000, memTotalMB: 12000, temp: 60, power: 120, powerLimit: 200, fan: 40, clock: 2100 },
+    disk: { total: { active: 5, readBps: 1000, writeBps: 2000 }, drives: [{ name: 'C:', label: 'Sistema', totalGB: 500, freeGB: 200 }] },
+    network: [{ name: 'Ethernet', downBps: 5000, upBps: 1000, speed: '1 Gbps' }],
+    fps: model.fps ?? null,
+  });
+  const processesReply = () => ({
+    cpu: ['Navegador', 'Editor', 'Terminal', 'Chat', 'Musica', 'Jogos'].map((name, i) => ({ name, cpu: 12 - i, memMB: 800 - i * 50, count: i + 1 })),
+    mem: ['Jogos', 'Navegador', 'Editor', 'Chat', 'Terminal', 'Musica'].map((name, i) => ({ name, cpu: i, memMB: 4000 - i * 300, count: 1 })),
+  });
+  const infoReply = () => ({
+    host: 'PC-TESTE',
+    user: 'tester',
+    os: { name: 'Microsoft Windows 11 Pro', version: '10.0', build: '26100', arch: '64-bit', installed: '2025-01-01T00:00:00', lastBoot: '2026-10-22T08:00:00' },
+    cpu: { name: 'CPU de teste', cores: 8, threads: 16, maxMHz: 4500, l2KB: 8192, l3KB: 32768 },
+    memory: { totalGB: 32, modules: [{ slot: 'DIMM1', sizeGB: 16, type: 'DDR5', speed: 6000 }] },
+    gpus: [{ name: 'GPU de teste', vramGB: 12, driver: '1.0' }],
+    board: { maker: 'Fabricante', model: 'Modelo', bios: '1.0', biosDate: '2025-01-01T00:00:00' },
+    storage: [{ model: 'NVMe de teste', sizeGB: 1000, type: 'SSD', bus: 'NVMe' }],
+    network: [{ name: 'Ethernet', ip: '192.168.0.2', speed: '1 Gbps', mac: 'AA:BB:CC:DD:EE:FF' }],
+    monitors: [{ name: 'Tela 1', primary: true, width: 1920, height: 1080 }],
+    drives: [{ name: 'C:', label: 'Sistema', fs: 'NTFS', totalGB: 500, freeGB: 200 }],
+  });
+
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     if (req.method === 'GET' && isStaticPath(url.pathname)) return serveStatic(req, res, url.pathname);
     const body = req.method === 'POST' ? await readJson(req, 64 * 1024).catch(() => ({})) : undefined;
-    model.calls.push({ method: req.method, path: url.pathname, body });
+    model.calls.push({ method: req.method, path: url.pathname, body, topics: url.searchParams.get('topics') });
     const key = `${req.method} ${url.pathname}`;
     if (key === 'GET /api/apps') return sendJson(res, 200, { host: 'PC-TESTE', apps: model.apps });
     if (key === 'GET /api/state') return model.down ? sendJson(res, 503, { error: 'down' }) : sendJson(res, 200, model.state);
@@ -56,15 +89,26 @@ async function fakeDeck() {
       return sendJson(res, 200, model.layout);
     }
     if (key === 'GET /api/monitor/fps') return sendJson(res, 200, model.fps ?? null);
+    if (key === 'GET /api/windows') return sendJson(res, 200, { windows: model.windows });
+    if (key === 'GET /api/screens') return sendJson(res, 200, { monitors: model.screens });
+    if (key === 'GET /api/monitor/sample') return sendJson(res, 200, sampleReply());
+    if (key === 'GET /api/monitor/processes') return sendJson(res, 200, processesReply());
+    if (key === 'GET /api/monitor/info') return sendJson(res, 200, infoReply());
     if (key === 'GET /api/power') return sendJson(res, 200, model.power);
     if (key === 'GET /api/volume') return sendJson(res, 200, model.state.volume);
     if (url.pathname === '/api/events') {
-      // the push stream is silent (the page falls back to its own requests) unless a test sets model.fps: the "game" topic
-      // is then sent at once and on every model.pushGame()
+      // The push stream sends the current value of windows / monitor / processes / power when they are subscribed and nothing
+      // after that (every request records the topics it asked for). The "game" topic is sent at once if model.fps is set and
+      // again on every model.pushGame().
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       res.write(': ok\n\n');
       const topics = (url.searchParams.get('topics') || '').split(',');
       if (topics.includes('power')) res.write(`event: power\ndata: ${JSON.stringify(model.power)}\n\n`);
+      // like the real server: a topic's current value arrives as soon as it is subscribed
+      const push = (name, value) => res.write(`event: ${name}\ndata: ${JSON.stringify(value)}\n\n`);
+      if (topics.includes('windows')) push('windows', { windows: model.windows });
+      if (topics.includes('monitor')) push('monitor', sampleReply());
+      if (topics.includes('processes')) push('processes', processesReply());
       if (topics.includes('game')) {
         streams.add(res);
         res.on('close', () => streams.delete(res));

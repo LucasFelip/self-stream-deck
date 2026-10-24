@@ -33,14 +33,14 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
 
     await test('the tabs are there, one is selected, and the PC name shows in the page', async () => {
       const tabs = await page.eval(`[...document.querySelectorAll('#tabs .tab')].map((t) => t.dataset.section)`);
-      assert.deepStrictEqual(tabs.slice(0, 2), ['apps', 'shortcuts']);
+      assert.deepStrictEqual(tabs, ['apps', 'shortcuts', 'windows', 'sound', 'pc', 'power']);
       assert.strictEqual(await page.eval(`document.querySelectorAll('#tabs .tab[aria-selected="true"]').length`), 1);
       assert.strictEqual(await page.eval(`document.getElementById('host').textContent`), 'PC-TESTE');
     });
 
     await test('the tabs are plain: the section name only, no page counter and no dots inside them, and the strip lives outside the navigation', async () => {
       const labels = await page.eval(`[...document.querySelectorAll('#tabs .tab')].map((t) => t.textContent.trim())`);
-      assert.deepStrictEqual(labels, ['Apps', 'Atalhos', 'Som', 'Desempenho', 'Energia', 'Processos']);
+      assert.deepStrictEqual(labels, ['Apps', 'Atalhos', 'Janelas', 'Som', 'PC', 'Energia']);
       assert.strictEqual(await page.eval(`document.querySelectorAll('.tab-dots').length`), 0);
       assert.strictEqual(await page.eval(`document.querySelectorAll('#tabs[role="tablist"] > .tab[role="tab"]').length`), 6);
       assert.strictEqual(await page.eval(`document.querySelector('nav.nav').contains(document.getElementById('menu')) && !document.querySelector('nav.nav').contains(document.getElementById('mic'))`), true);
@@ -274,6 +274,184 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       }
     });
 
+    // --- Janelas, PC and Atalhos (phase 2B) ---------------------------------------------------------------------------
+    const go = async (target, check = page) => {
+      // a click while the deck redraws its pages (just after loading / coming back online) is undone: click again until it sticks
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        await check.eval(`document.querySelector('#tabs .tab[data-section="${target}"]').click()`);
+        const ok = await check.waitFor(`document.querySelector('#tabs .tab[data-section="${target}"]').getAttribute('aria-selected') === 'true'`, `${target} tab selected`, 1500).then(() => true, () => false);
+        if (ok) break;
+        if (attempt === 3) throw new Error(`the ${target} tab never got selected`);
+      }
+      await sleep(700); // the slide, and the page's first render
+    };
+    const visibleBox = (check, selector) => check.eval(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); const r = e ? e.getBoundingClientRect() : { width: 0, height: 0 }; return r.width > 0 && r.height > 0; })()`);
+    const actionCalled = (handle, action) => deck.model.calls.some((c) => c.path === '/api/windows/action' && c.body.handle === handle && c.body.action === action);
+
+    await test('Janelas: the list shows every window with its two buttons (48 px), and tapping a row or a button sends the right action', async () => {
+      await go('windows');
+      await page.waitFor(`document.querySelectorAll('.wrow').length === 3`, 'the three windows of the fake PC');
+      const rows = await page.eval(`[...document.querySelectorAll('.wrow')].map((r) => ({ app: r.querySelector('.wtitle b').textContent, buttons: r.querySelectorAll('button').length, label: [...r.querySelectorAll('.wbtn')].map((b) => b.getAttribute('aria-label')), min: Math.min(...[...r.querySelectorAll('button')].map((b) => Math.round(b.getBoundingClientRect().height))), wbtn: Math.min(...[...r.querySelectorAll('.wbtn')].map((b) => Math.round(b.getBoundingClientRect().width))) }))`);
+      assert.deepStrictEqual(rows.map((r) => r.app), ['Editor', 'Navegador', 'Terminal']);
+      for (const row of rows) {
+        assert.strictEqual(row.buttons, 3);
+        assert.ok(row.min >= 48 && row.wbtn >= 48, `targets of ${row.app}: ${JSON.stringify(row)}`);
+      }
+      assert.deepStrictEqual(rows.map((r) => r.label), [['Minimizar', 'Maximizar'], ['Minimizar', 'Restaurar'], ['Restaurar', 'Maximizar']]);
+
+      deck.model.calls.length = 0;
+      await page.tap('.wrow[data-handle="101"] .wmain');
+      await sleep(300);
+      assert.ok(actionCalled(101, 'focus'), JSON.stringify(deck.model.calls));
+      deck.model.calls.length = 0;
+      await page.tap('.wrow[data-handle="101"] .wbtn:last-child');
+      await sleep(300);
+      assert.ok(actionCalled(101, 'maximize'), JSON.stringify(deck.model.calls));
+      deck.model.calls.length = 0;
+      await page.tap('.wrow[data-handle="102"] .wbtn:nth-child(2)');
+      await sleep(300);
+      assert.ok(actionCalled(102, 'minimize'), JSON.stringify(deck.model.calls));
+    });
+
+    await test('Janelas (portrait): the Lista | Mapa selector shows one pane at a time and remembers the choice', async () => {
+      // the actions above left a window selected: start from a clean list
+      await page.eval(`document.querySelector('.windows-page').dataset.pane = 'list'`);
+      assert.ok(await visibleBox(page, '.wpane-list'));
+      assert.ok(!(await visibleBox(page, '.wpane-map')), 'the map is hidden while the list shows');
+      const seg = await page.eval(`[...document.querySelectorAll('.windows-page .seg-btn')].map((b) => ({ id: b.dataset.seg, h: Math.round(b.getBoundingClientRect().height), w: Math.round(b.getBoundingClientRect().width), on: b.getAttribute('aria-selected') }))`);
+      assert.deepStrictEqual(seg.map((b) => b.id), ['list', 'map']);
+      assert.ok(seg.every((b) => b.h >= 48 && b.w >= 48), JSON.stringify(seg));
+      assert.deepStrictEqual(seg.map((b) => b.on), ['true', 'false']);
+      await page.tap('.windows-page .seg-btn[data-seg="map"]');
+      await page.waitFor(`document.querySelector('.windows-page').dataset.pane === 'map'`, 'the map pane');
+      assert.ok(await visibleBox(page, '.wpane-map'));
+      assert.ok(!(await visibleBox(page, '.wpane-list')), 'the list is hidden while the map shows');
+      await page.waitFor(`document.querySelectorAll('.map .mon').length === 1 && document.querySelectorAll('.map .mwin').length === 2`, 'the screen and the two visible windows drawn');
+      assert.ok(await visibleBox(page, '.map .mwin'), 'the map was drawn with a real size');
+      // the choice survives leaving and coming back
+      await go('apps');
+      await go('windows');
+      assert.strictEqual(await page.eval(`document.querySelector('.windows-page').dataset.pane`), 'map');
+      await page.tap('.windows-page .seg-btn[data-seg="list"]');
+      await page.waitFor(`document.querySelector('.windows-page').dataset.pane === 'list'`, 'back to the list');
+    });
+
+    await test('Janelas: selecting a window in the list selects it on the map and shows its actions', async () => {
+      await page.eval(`document.querySelector('.mwin.sel')?.classList.remove('sel'); document.querySelector('.win-panel').hidden = true`);
+      await page.tap('.wrow[data-handle="101"] .wmain');
+      await page.waitFor(`document.querySelector('.mwin[data-handle="101"]')?.classList.contains('sel') && !document.querySelector('.win-panel').hidden`, 'the same window selected on the map, with its panel');
+      assert.ok(await page.eval(`document.querySelector('.wrow[data-handle="101"]').classList.contains('sel')`));
+      await page.tap('.windows-page .seg-btn[data-seg="map"]');
+      await page.waitFor(`document.querySelector('.windows-page').dataset.pane === 'map'`, 'the map pane');
+      assert.ok(await visibleBox(page, '.win-panel'), 'the panel is on screen without a second tap');
+      assert.match(await page.eval(`document.querySelector('.win-panel .panel-title b').textContent`), /Documento/);
+      await page.tap('.windows-page .seg-btn[data-seg="list"]');
+      await go('apps');
+    });
+
+    await test('Janelas (landscape): the list and the map are side by side and there is no selector', async () => {
+      const wide = await browser2(836, 387);
+      try {
+        await wide.waitFor(`document.querySelectorAll('#tabs .tab').length === 6`, 'the tabs');
+        await go('windows', wide);
+        await wide.waitFor(`document.querySelectorAll('.wrow').length === 3 && document.querySelectorAll('.map .mwin').length === 2`, 'the list and the map');
+        const boxes = await wide.eval(`(() => { const r = (sel) => { const b = document.querySelector(sel).getBoundingClientRect(); return { l: b.left, r: b.right, w: b.width, h: b.height }; }; return { list: r('.wpane-list'), map: r('.wpane-map'), seg: document.querySelector('.windows-page .seg').getBoundingClientRect().width }; })()`);
+        assert.ok(boxes.list.w > 0 && boxes.map.w > 0 && boxes.list.r <= boxes.map.l + 1, JSON.stringify(boxes));
+        assert.strictEqual(boxes.seg, 0, 'the selector is for portrait');
+      } finally {
+        wide.close();
+      }
+    });
+
+    // what the page subscribed to on its push stream the last time it changed (every pane change reconnects with its own topics)
+    const topicsNow = () => {
+      const opened = deck.model.calls.filter((c) => c.path === '/api/events');
+      return opened.length ? opened[opened.length - 1].topics.split(',') : null;
+    };
+    const infoCalls = () => deck.model.calls.filter((c) => c.method === 'GET' && c.path === '/api/monitor/info').length;
+    await test('PC: the selector switches panes and only the active one subscribes to / asks the PC for data', async () => {
+      deck.model.calls.length = 0;
+      await go('pc'); // Desempenho is the pane it opens on
+      assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.pc-page .seg-btn')].map((b) => b.textContent)`), ['Desempenho', 'Processos', 'Sistema']);
+      assert.ok(await page.eval(`[...document.querySelectorAll('.pc-page .seg-btn')].every((b) => b.getBoundingClientRect().height >= 48 && b.getBoundingClientRect().width >= 48)`));
+      const only = async (name, wanted, fresh = true) => {
+        if (fresh) {
+          deck.model.calls.length = 0;
+          await page.tap(`.pc-page .seg-btn[data-seg="${name}"]`);
+        }
+        await page.waitFor(`Deck.perf.pane === '${name}'`, `${name} pane`);
+        await sleep(700); // the stream reconnects with the new topics
+        const topics = topicsNow();
+        assert.ok(topics, `${name}: the page did not resubscribe`);
+        for (const topic of ['monitor', 'processes']) assert.strictEqual(topics.includes(topic), topic === wanted, `${name}: topics ${topics}`);
+        assert.strictEqual(infoCalls() > 0, name === 'system', `${name}: /api/monitor/info calls ${infoCalls()}`);
+        const shown = await page.eval(`[...document.querySelectorAll('.pc-page > .pc-pane')].filter((p) => p.getBoundingClientRect().width > 0).map((p) => p.className.split(' ')[0])`);
+        assert.strictEqual(shown.length, 1, `${name}: ${shown}`);
+      };
+      await only('monitor', 'monitor', false);
+      await page.waitFor(`document.querySelector('.c-cpu .big').textContent.startsWith('23')`, 'the sample drawn');
+      await only('processes', 'processes');
+      await page.waitFor(`document.querySelectorAll('.processes-page .proc').length === 12`, 'every row the PC sends is shown');
+      await only('system', null);
+      await page.waitFor(`document.querySelector('.system-page').textContent.includes('PC-TESTE')`, 'the system facts inline');
+      assert.strictEqual(await page.eval(`document.querySelectorAll('.overlay:not([hidden])').length`), 0, 'no overlay');
+      // away from the page nothing of the PC is subscribed any more
+      deck.model.calls.length = 0;
+      await go('apps');
+      await sleep(300);
+      const away = topicsNow();
+      assert.ok(!away || (!away.includes('monitor') && !away.includes('processes')), `away: ${away}`); // no new subscription at all is fine: the System pane already had none
+      await page.eval(`Deck.perf.showPane('monitor')`);
+    });
+
+    await test('the old page ids are gone, and a game starting opens PC > Desempenho even from another pane', async () => {
+      assert.strictEqual(await page.eval(`Deck.goTo('monitor')`), false);
+      assert.strictEqual(await page.eval(`Deck.goTo('processes')`), false);
+      assert.strictEqual(await page.eval(`Deck.pager.goToId('monitor')`), false);
+      assert.strictEqual(await page.eval(`document.querySelectorAll('#tabs .tab[data-section="monitor"], #tabs .tab[data-section="processes"]').length`), 0);
+      await page.eval(`Deck.perf.showPane('processes')`);
+      deck.model.fps = { fps: 90, frameMs: 11.1, app: 'Jogo' };
+      deck.model.pushGame();
+      await page.waitFor(`document.querySelector('#tabs .tab[data-section="pc"]').getAttribute('aria-selected') === 'true' && Deck.perf.pane === 'monitor'`, 'PC > Desempenho for the game', 8000);
+      assert.strictEqual(await page.eval(`document.getElementById('fps').hidden`), true, 'the pill hides on Desempenho');
+      // the pill on another page takes you back there
+      await go('apps');
+      await page.eval(`Deck.perf.showPane('system')`);
+      await page.waitFor(`!document.getElementById('fps').hidden`, 'the pill outside Desempenho');
+      await page.tap('#fps');
+      await page.waitFor(`document.querySelector('#tabs .tab[data-section="pc"]').getAttribute('aria-selected') === 'true' && Deck.perf.pane === 'monitor'`, 'the pill opens PC > Desempenho');
+      deck.model.fps = null;
+      deck.model.pushGame();
+      await page.waitFor(`document.getElementById('fps').hidden`, 'the game ending', 9000);
+      await go('apps');
+    });
+
+    await test('the menu has no "Sobre este PC" any more', async () => {
+      await page.tap('#menu');
+      await page.waitFor(`!document.getElementById('menu-pop').hidden`, 'the menu');
+      const items = await page.eval(`[...document.querySelectorAll('#menu-pop button')].map((b) => b.textContent.trim())`);
+      assert.ok(!items.some((item) => /Sobre/.test(item)), JSON.stringify(items));
+      assert.ok(items.some((item) => item.includes('Editar botões')), JSON.stringify(items));
+      await page.eval(`Deck.back()`);
+    });
+
+    await test('Atalhos: the first page uses the whole width (no windows list beside it) and still ends with the volume strip', async () => {
+      await go('shortcuts');
+      const info = await page.eval(`(() => {
+        const page = document.querySelector('.page[data-id="shortcuts-0"]');
+        const grid = page.querySelector('.grid');
+        const apps = document.querySelector('.page[data-id="apps-0"] .grid');
+        const g = grid.getBoundingClientRect();
+        const p = page.getBoundingClientRect();
+        return { split: page.querySelectorAll('.split, .wlist').length, volume: page.contains(document.getElementById('vol')), cols: grid.style.getPropertyValue('--cols'), appsCols: apps.style.getPropertyValue('--cols'), right: Math.round(p.right - g.right), left: Math.round(g.left - p.left) };
+      })()`);
+      assert.strictEqual(info.split, 0);
+      assert.ok(info.volume, 'the volume strip is on the first page');
+      assert.strictEqual(info.cols, info.appsCols, 'the same number of columns as Apps');
+      assert.ok(info.right <= 20 && info.left <= 20, `the grid fills the page: ${JSON.stringify(info)}`);
+      await go('apps');
+    });
+
     await test('the page raised no script errors', () => {
       assert.deepStrictEqual(page.errors, []);
     });
@@ -282,7 +460,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       deck.model.fps = { fps: 72, frameMs: 13.9, app: 'Jogo' };
       const second = await browser.open(`${deck.url}/`);
       // slides to Desempenho once the pages exist (the pill hides there), then shows on any other page
-      await second.waitFor(`document.querySelector('#tabs .tab[data-section="monitor"]')?.getAttribute('aria-selected') === 'true'`, 'the slide to Desempenho');
+      await second.waitFor(`document.querySelector('#tabs .tab[data-section="pc"]')?.getAttribute('aria-selected') === 'true' && Deck.perf.pane === 'monitor'`, 'the slide to PC > Desempenho');
       await second.tap('#tabs .tab[data-section="apps"]');
       await second.waitFor(`!document.getElementById('fps').hidden && document.querySelector('#live-strip #fps b').textContent === '72'`, 'the FPS pill inside the live strip');
       deck.model.fps = null;
