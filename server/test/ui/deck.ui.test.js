@@ -169,11 +169,27 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       await sleep(400);
       assert.strictEqual(await page.eval('window.__gum'), 0, 'opening the sheet asked for the camera');
       assert.strictEqual(await page.eval(`document.querySelector('.cam-placeholder button').hidden`), false, 'the Ver prévia button is there');
+      assert.strictEqual(await page.eval(`getComputedStyle(document.querySelector('.cam-video')).visibility`), 'hidden', 'the empty video (WebView play poster) is hidden while there is no stream');
       await page.tap('.cam-placeholder button');
       await page.waitFor('window.__gum === 1', 'getUserMedia after Ver prévia');
       await page.tap('.cam-send');
       await page.waitFor('window.__gum === 2', 'getUserMedia after Transmitir ao PC');
       await page.eval(`document.querySelector('.camera-page').closest('.overlay').querySelector('.overlay-close').click()`);
+    });
+
+    await test('Câmera do celular: the preview video shows once there is a stream, mirrored for the front camera, and hides again on close', async () => {
+      await page.eval(`(() => { navigator.mediaDevices.getUserMedia = async () => document.createElement('canvas').captureStream(5); })()`);
+      await page.eval(`Deck.camera.openSheet()`);
+      await page.waitFor(`!document.querySelector('.camera-page').closest('.overlay').hidden`, 'the camera sheet');
+      const visibility = () => page.eval(`getComputedStyle(document.querySelector('.cam-video')).visibility`);
+      assert.strictEqual(await visibility(), 'hidden', 'hidden before Ver prévia');
+      await page.tap('.cam-placeholder button');
+      await page.waitFor(`document.querySelector('.cam-video').dataset.live === 'true'`, 'the preview going live');
+      assert.strictEqual(await visibility(), 'visible', 'visible with a stream');
+      assert.strictEqual(await page.eval(`document.querySelector('.cam-video').dataset.mirror`), 'true', 'the front camera is mirrored');
+      await page.eval(`document.querySelector('.camera-page').closest('.overlay').querySelector('.overlay-close').click()`);
+      await page.waitFor(`document.querySelector('.cam-video').dataset.live === 'false'`, 'the preview stopping');
+      assert.strictEqual(await visibility(), 'hidden', 'hidden again after closing');
     });
 
     await test('Deck.back() closes the sheet, then the menu, then the newest overlay, then goes to Apps, and says false on Apps', async () => {

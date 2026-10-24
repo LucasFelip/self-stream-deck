@@ -30,6 +30,7 @@
 
   const preview = h('video', { muted: true, playsinline: true, autoplay: true, class: 'cam-video' });
   preview.muted = true;
+  preview.dataset.live = 'false'; // hidden by CSS until there is a stream
   // what the picture area says while there is no picture: a line of text and, while the camera is off, "Ver prévia"
   const placeholderText = h('span');
   const previewButton = h('button', { type: 'button', class: 'cam-act', text: 'Ver prévia', on: { click: () => startCamera() } });
@@ -102,6 +103,7 @@
     capture.srcObject = stream;
     preview.srcObject = stream;
     preview.dataset.mirror = String(facing === 'user'); // a mirror for the person looking; the PC gets the unmirrored picture
+    preview.dataset.live = 'true';
     await Promise.allSettled([capture.play(), preview.play()]);
     placeholder.hidden = true;
     return true;
@@ -113,6 +115,7 @@
     stream = null;
     capture.srcObject = null;
     preview.srcObject = null;
+    preview.dataset.live = 'false';
     say(WAITING, true);
   }
 
