@@ -144,7 +144,8 @@ async function launchBrowser({ width = 412, height = 915 } = {}) {
   }
   if (!port) { proc.kill(); throw new Error('the browser did not open its debugging port'); }
 
-  async function open(url) {
+  // `script` runs before the page's own scripts (e.g. to fake window.Android)
+  async function open(url, { script } = {}) {
     const target = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })).json();
     const socket = new WebSocket(target.webSocketDebuggerUrl);
     await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
@@ -167,6 +168,8 @@ async function launchBrowser({ width = 412, height = 915 } = {}) {
     await send('Runtime.enable');
     await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: true });
     await send('Emulation.setTouchEmulationEnabled', { enabled: true });
+    if (script) await send('Page.enable');
+    if (script) await send('Page.addScriptToEvaluateOnNewDocument', { source: script });
     await send('Page.navigate', { url });
 
     const page = {

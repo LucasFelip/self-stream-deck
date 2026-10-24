@@ -17,10 +17,10 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
   const browser = await launchBrowser();
   // a second browser at a given size (the first one is a portrait phone)
   const extra = [];
-  const browser2 = async (width, height) => {
+  const browser2 = async (width, height, options) => {
     const other = await launchBrowser({ width, height });
     extra.push(other);
-    return other.open(`${deck.url}/`);
+    return other.open(`${deck.url}/`, options);
   };
   try {
     const page = await browser.open(`${deck.url}/`);
@@ -741,6 +741,243 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.ok(info.right <= 20 && info.left <= 20, `the grid fills the page: ${JSON.stringify(info)}`);
       await go('apps');
     });
+
+    // --- settings menu, overlays and sheets (phase 2C) ----------------------------------------------------------------------
+    const ANDROID = `window.Android = { openSettings() { window.__settingsOpened = (window.__settingsOpened || 0) + 1; }, vibrate() {} };`;
+    const rectOf = (check, selector) => check.eval(`(() => { const r = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return { l: Math.round(r.left), t: Math.round(r.top), r: Math.round(r.right), b: Math.round(r.bottom), w: Math.round(r.width), h: Math.round(r.height) }; })()`);
+    const dragDown = async (check, from, distance, steps = 8) => {
+      await check.touch('touchStart', from.x, from.y);
+      for (let step = 1; step <= steps; step += 1) {
+        await check.touch('touchMove', from.x, from.y + (distance * step) / steps);
+        await sleep(25);
+      }
+      await check.touch('touchEnd', from.x, from.y + distance);
+    };
+
+    await test('menu: a gear (not the dots) named Configurações, the PC name on top and 3 items of 48 px (Editar botões, Câmera do celular, Atualizar)', async () => {
+      assert.strictEqual(await page.eval(`document.getElementById('menu').getAttribute('aria-label')`), 'Configurações');
+      assert.strictEqual(await page.eval(`document.querySelectorAll('#menu svg circle').length`), 1, 'the gear has one centre circle, the old dots had three');
+      await page.tap('#menu');
+      await page.waitFor(`!document.getElementById('menu-pop').hidden`, 'the menu');
+      await sleep(300);
+      assert.strictEqual(await page.eval(`document.getElementById('menu').getAttribute('aria-expanded')`), 'true');
+      const menu = await page.eval(`(() => { const pop = document.getElementById('menu-pop'); const rows = [...pop.querySelectorAll('button')].filter((b) => !b.hidden); return { host: pop.querySelector('.menu-host').textContent, items: rows.map((b) => b.textContent.trim()), heights: rows.map((b) => Math.round(b.getBoundingClientRect().height)) }; })()`);
+      assert.match(menu.host, /PC-TESTE/);
+      assert.deepStrictEqual(menu.items, ['Editar botões', 'Câmera do celular', 'Atualizar']);
+      assert.ok(menu.heights.every((height) => height >= 48), JSON.stringify(menu));
+      await page.eval('Deck.back()');
+    });
+
+    await test('menu (portrait): a bottom sheet over the bar, full width, rounded top with a grabber; dragging it down, a tap outside and Back close it', async () => {
+      await page.tap('#menu');
+      await page.waitFor(`!document.getElementById('menu-pop').hidden`, 'the menu');
+      await sleep(300);
+      const nav = await rectOf(page, 'nav.nav');
+      const sheet = await rectOf(page, '#menu-pop');
+      const width = await page.eval('innerWidth');
+      assert.ok(sheet.l <= 1 && sheet.r >= width - 1 && Math.abs(sheet.b - nav.t) <= 1, `${JSON.stringify({ sheet, nav, width })}`);
+      assert.notStrictEqual(await page.eval(`getComputedStyle(document.getElementById('menu-pop')).borderTopLeftRadius`), '0px');
+      assert.notStrictEqual(await page.eval(`getComputedStyle(document.querySelector('#menu-pop .grip')).display`), 'none');
+      // a short pull comes back, a long one closes
+      const grip = await page.center('#menu-pop .grip');
+      await dragDown(page, grip, 30);
+      await sleep(350);
+      assert.strictEqual(await page.eval(`document.getElementById('menu-pop').hidden`), false, 'a short pull must not close it');
+      assert.strictEqual(await page.eval(`document.getElementById('menu-pop').style.transform`), '');
+      const pagerLeft = await page.eval(`document.getElementById('pager').scrollLeft`);
+      await dragDown(page, await page.center('#menu-pop .grip'), 160);
+      await page.waitFor(`document.getElementById('menu-pop').hidden`, 'the menu closed by dragging');
+      assert.strictEqual(await page.eval(`document.getElementById('pager').scrollLeft`), pagerLeft, 'the drag swiped the page');
+      assert.strictEqual(await page.eval(`document.getElementById('menu-pop').style.transform`), '', 'the sheet is put back for the next time');
+      // tap outside (on the scrim over the keys): closes and does not launch
+      await page.tap('#menu');
+      await page.waitFor(`!document.getElementById('menu-pop').hidden`, 'the menu again');
+      await sleep(300);
+      deck.model.calls.length = 0;
+      const key = await page.eval(`(() => { const r = document.querySelector('.tile[data-key="a:app1"]').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+      await page.touch('touchStart', key.x, key.y);
+      await page.touch('touchEnd', key.x, key.y);
+      await page.waitFor(`document.getElementById('menu-pop').hidden`, 'closed by a tap outside');
+      await sleep(300);
+      assert.ok(!deck.model.calls.some((c) => c.path.startsWith('/api/launch')), 'the tap outside launched an app');
+    });
+
+    await test('menu (Android shell): "Endereço do PC…" shows between the entries and Atualizar, and opens the settings; landscape: a popover beside the rail', async () => {
+      const wide = await browser2(836, 387, { script: ANDROID });
+      try {
+        await wide.waitFor(`document.querySelectorAll('#tabs .tab').length === 6`, 'the tabs');
+        await sleep(500);
+        await wide.tap('#menu');
+        await wide.waitFor(`!document.getElementById('menu-pop').hidden`, 'the menu');
+        await sleep(300);
+        assert.deepStrictEqual(await wide.eval(`[...document.querySelectorAll('#menu-pop button')].filter((b) => !b.hidden).map((b) => b.textContent.trim())`), ['Editar botões', 'Câmera do celular', 'Endereço do PC…', 'Atualizar']);
+        const nav = await rectOf(wide, 'nav.nav');
+        const menu = await rectOf(wide, '#menu-pop');
+        assert.ok(menu.l >= nav.r && 387 - menu.b >= 8 && menu.t >= 8 && menu.r < 836 - 8, JSON.stringify({ nav, menu }));
+        assert.strictEqual(await wide.eval(`getComputedStyle(document.querySelector('#menu-pop .grip')).display`), 'none', 'no grabber in landscape');
+        await wide.tap('#settings');
+        await sleep(200);
+        assert.strictEqual(await wide.eval('window.__settingsOpened'), 1);
+        assert.strictEqual(await wide.eval(`document.getElementById('menu-pop').hidden`), true, 'an item closes the menu');
+      } finally {
+        wide.close();
+      }
+    });
+
+    await test('overlay (portrait): a bottom sheet ~92 % high with a grabber; a short drag of its bar stays, a long one closes; scrolling the content or a tap on the dimmed strip behave', async () => {
+      await go('apps');
+      await page.eval(`Deck.camera.openSheet()`);
+      await page.waitFor(`!document.querySelector('.camera-page').closest('.overlay').hidden`, 'the camera sheet');
+      await sleep(400);
+      const height = await page.eval('innerHeight');
+      const sheet = await rectOf(page, '.overlay:not([hidden])');
+      assert.ok(sheet.t / height >= 0.04 && sheet.t / height <= 0.15 && sheet.h / height >= 0.85 && sheet.h / height <= 0.96 && sheet.b >= height - 1, `the sheet leaves a strip above: ${JSON.stringify({ sheet, height })}`);
+      assert.notStrictEqual(await page.eval(`getComputedStyle(document.querySelector('.overlay:not([hidden])')).borderTopLeftRadius`), '0px');
+      assert.notStrictEqual(await page.eval(`getComputedStyle(document.querySelector('.overlay:not([hidden]) .grabber')).display`), 'none');
+      const close = await rectOf(page, '.overlay:not([hidden]) .overlay-close');
+      assert.ok(close.w >= 48 && close.h >= 48, JSON.stringify(close));
+      const section = await page.eval(`Deck.pager.currentSection()`);
+      const pagerLeft = await page.eval(`document.getElementById('pager').scrollLeft`);
+      const isOpen = () => page.eval(`!document.querySelector('.camera-page').closest('.overlay').hidden`);
+      // scrolling the content (a vertical swipe in the body) never closes it
+      const body = await rectOf(page, '.overlay:not([hidden]) .overlay-body');
+      await page.touch('touchStart', 200, body.t + 400);
+      for (let step = 1; step <= 6; step += 1) { await page.touch('touchMove', 200, body.t + 400 + step * 30); await sleep(25); }
+      await page.touch('touchEnd', 200, body.t + 580);
+      await sleep(300);
+      assert.strictEqual(await isOpen(), true, 'scrolling the content closed the sheet');
+      // the bar: short drag stays, long drag closes
+      const bar = await page.center('.overlay:not([hidden]) .overlay-bar');
+      await dragDown(page, { x: 150, y: bar.y }, 30);
+      await sleep(350);
+      assert.strictEqual(await isOpen(), true, 'a short drag closed the sheet');
+      await dragDown(page, { x: 150, y: bar.y }, 220);
+      await page.waitFor(`document.querySelector('.camera-page').closest('.overlay').hidden`, 'the sheet closed by dragging its bar');
+      assert.strictEqual(await page.eval(`Deck.pager.currentSection()`), section, 'the drag changed the page');
+      assert.strictEqual(await page.eval(`document.getElementById('pager').scrollLeft`), pagerLeft, 'the drag swiped the pager');
+      assert.strictEqual(await page.eval(`document.querySelector('.camera-page').closest('.overlay').style.transform`), '', 'the sheet is put back for the next time');
+      // opens again in place; the dimmed strip closes it and is never a tap on the deck underneath
+      await page.eval(`Deck.camera.openSheet()`);
+      await sleep(400);
+      assert.strictEqual((await rectOf(page, '.overlay:not([hidden])')).t, sheet.t);
+      deck.model.calls.length = 0;
+      await page.touch('touchStart', 200, 12);
+      await page.touch('touchEnd', 200, 12);
+      await page.waitFor(`document.querySelector('.camera-page').closest('.overlay').hidden`, 'the sheet closed by the dimmed strip');
+      assert.strictEqual(deck.model.calls.filter((c) => c.method === 'POST').length, 0, 'the tap on the strip reached the deck');
+    });
+
+    await test('overlay (landscape): the full panel, a 48 px Fechar, no grabber and no dimmed strip', async () => {
+      const wide = await browser2(836, 387);
+      try {
+        await wide.waitFor(`document.querySelectorAll('#tabs .tab').length === 6`, 'the tabs');
+        await sleep(500);
+        await wide.eval(`Deck.camera.openSheet()`);
+        await sleep(300);
+        const panel = await rectOf(wide, '.overlay:not([hidden])');
+        assert.deepStrictEqual([panel.l, panel.t, panel.w, panel.h], [0, 0, 836, 387]);
+        const close = await rectOf(wide, '.overlay:not([hidden]) .overlay-close');
+        const bar = await rectOf(wide, '.overlay:not([hidden]) .overlay-bar');
+        assert.ok(close.w >= 48 && close.h >= 48 && bar.h >= close.h, JSON.stringify({ close, bar }));
+        assert.strictEqual(await wide.eval(`getComputedStyle(document.querySelector('.overlay:not([hidden]) .grabber')).display`), 'none');
+        assert.strictEqual(await wide.eval(`getComputedStyle(document.querySelector('.overlay-scrim')).display`), 'none');
+        await wide.tap('.overlay:not([hidden]) .overlay-close');
+        await wide.waitFor(`document.querySelector('.camera-page').closest('.overlay').hidden`, 'Fechar');
+      } finally {
+        wide.close();
+      }
+    });
+
+    await test('the confirmation sheet sits at the bottom in portrait (full width, rounded top) and is centred in landscape; the backdrop still closes it', async () => {
+      await go('power');
+      await page.waitFor(`document.querySelector('.power-status')?.textContent.includes('Desativada')`, 'the power state');
+      const openSuspend = () => page.eval(`[...document.querySelectorAll('.power-page .actions-grid > .tile')].find((t) => t.textContent.includes('Suspender')).click()`);
+      await openSuspend();
+      await page.waitFor(`document.querySelector('#modal-root .sheet')`, 'the sheet');
+      await sleep(350);
+      const width = await page.eval('innerWidth');
+      const height = await page.eval('innerHeight');
+      const sheet = await rectOf(page, '#modal-root .sheet');
+      assert.ok(sheet.l <= 1 && sheet.r >= width - 1 && sheet.b >= height - 1, `bottom aligned: ${JSON.stringify({ sheet, width, height })}`);
+      assert.notStrictEqual(await page.eval(`getComputedStyle(document.querySelector('#modal-root .sheet')).borderTopLeftRadius`), '0px');
+      assert.ok(await page.eval(`document.querySelector('#modal-root .hold') !== null`), 'the hold-to-confirm button is still there');
+      await page.touch('touchStart', 200, 20); // on the backdrop, above the sheet
+      await page.touch('touchEnd', 200, 20);
+      await page.waitFor(`document.getElementById('modal-root').childElementCount === 0`, 'the backdrop closed the sheet');
+      await go('apps');
+
+      const wide = await browser2(836, 387);
+      try {
+        await wide.waitFor(`document.querySelectorAll('#tabs .tab').length === 6`, 'the tabs');
+        await go('power', wide);
+        await wide.waitFor(`document.querySelector('.power-status')?.textContent.includes('Desativada')`, 'the power state');
+        await wide.eval(`[...document.querySelectorAll('.power-page .actions-grid > .tile')].find((t) => t.textContent.includes('Suspender')).click()`);
+        await wide.waitFor(`document.querySelector('#modal-root .sheet')`, 'the sheet');
+        await sleep(300);
+        const centred = await rectOf(wide, '#modal-root .sheet');
+        assert.ok(centred.w < 836 - 20 && Math.abs(centred.t - (387 - centred.b)) <= 4 && Math.abs(centred.l - (836 - centred.r)) <= 4, `centred: ${JSON.stringify(centred)}`);
+      } finally {
+        wide.close();
+      }
+    });
+
+    await test('Janelas (landscape): the selected window panel has buttons of at least 48 px (six with two screens) and the map keeps its size', async () => {
+      const savedScreens = JSON.stringify(deck.model.screens);
+      deck.model.screens.push({ device: 'DISPLAY2', left: 1920, top: 0, width: 1920, height: 1080, primary: false, brightness: 60 });
+      const wide = await browser2(836, 387);
+      try {
+        await wide.waitFor(`document.querySelectorAll('#tabs .tab').length === 6`, 'the tabs');
+        await go('windows', wide);
+        await wide.waitFor(`document.querySelectorAll('.map .mwin').length === 2`, 'the windows on the map');
+        await sleep(400);
+        const before = await rectOf(wide, '.map');
+        const row = await rectOf(wide, '.wpane-map > .win-side');
+        await wide.tap('.mwin[data-handle="101"]');
+        await wide.waitFor(`!document.querySelector('.win-panel').hidden`, 'the panel');
+        await sleep(500);
+        const sizes = await wide.eval(`[...document.querySelectorAll('.win-panel .bigbtn')].map((b) => ({ n: b.getAttribute('aria-label'), w: Math.round(b.getBoundingClientRect().width), h: Math.round(b.getBoundingClientRect().height) }))`);
+        assert.deepStrictEqual(sizes.map((b) => b.n), ['Minimizar', 'Maximizar', 'Esquerda', 'Direita', 'Outra tela', 'Fechar']);
+        assert.ok(sizes.length === 6 && sizes.every((b) => b.w >= 48 && b.h >= 48), JSON.stringify(sizes));
+        assert.deepStrictEqual(await rectOf(wide, '.map'), before, 'selecting resized the map');
+        assert.strictEqual((await rectOf(wide, '.wpane-map > .win-side')).h, row.h, 'the bottom row changed height');
+      } finally {
+        deck.model.screens = JSON.parse(savedScreens);
+        wide.close();
+      }
+    });
+
+    // In portrait the page scrolls inside; scrolled to the end, the last thing must end above the navigation bar (not hide behind it)
+    for (const [width, height] of [[411, 914], [360, 740]]) {
+      await test(`portrait ${width}x${height}: scrolled to the end, every page ends above the bar and its last element can be reached`, async () => {
+        const tall = await browser2(width, height);
+        try {
+          await tall.waitFor(`document.querySelectorAll('#tabs .tab').length === 6`, 'the tabs');
+          const checks = [['windows', `document.querySelector('.windows-page .seg-btn[data-seg="map"]').click()`], ['windows', `document.querySelector('.windows-page .seg-btn[data-seg="list"]').click()`], ['sound', ''], ['pc', `Deck.perf.showPane('monitor')`], ['pc', `Deck.perf.showPane('processes')`], ['pc', `Deck.perf.showPane('system')`], ['power', '']];
+          for (const [section, action] of checks) {
+            await go(section, tall);
+            if (action) { await tall.eval(action); await sleep(600); }
+            const result = await tall.eval(`(() => {
+              const nav = document.querySelector('nav.nav').getBoundingClientRect();
+              const page = document.querySelector('.page[data-section="${section}"]');
+              const scrollers = [page, ...page.querySelectorAll('*')].filter((e) => e.scrollHeight > e.clientHeight + 1 && ['auto', 'scroll'].includes(getComputedStyle(e).overflowY) && e.getBoundingClientRect().height > 0);
+              for (const e of scrollers) e.scrollTop = e.scrollHeight;
+              let lowest = 0; let name = '';
+              for (const e of page.querySelectorAll('*')) {
+                const r = e.getBoundingClientRect();
+                if (r.width <= 0 || r.height <= 0 || getComputedStyle(e).visibility === 'hidden' || e.closest('[hidden], .page-dots') || e.closest('svg')) continue;
+                if (r.bottom > lowest) { lowest = r.bottom; name = e.className || e.tagName; }
+              }
+              return { navTop: Math.round(nav.top), lowest: Math.round(lowest), name: String(name).slice(0, 40), scrollers: scrollers.length };
+            })()`);
+            // the two panes that always overflow in portrait really scroll (otherwise this check would prove nothing)
+            if (action.includes('data-seg="map"') || action.includes("'system'")) assert.ok(result.scrollers >= 1, `${section} (${action}) should scroll inside: ${JSON.stringify(result)}`);
+            assert.ok(result.lowest <= result.navTop + 1, `${section} (${action || 'plain'}): the last element ends at ${result.lowest} but the bar starts at ${result.navTop} (${result.name})`);
+          }
+        } finally {
+          tall.close();
+        }
+      });
+    }
 
     await test('the page raised no script errors', () => {
       assert.deepStrictEqual(page.errors, []);
