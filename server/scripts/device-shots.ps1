@@ -17,6 +17,12 @@
   tall, its centre at SafeTop + strip (44) + page padding (12) + 24 dp; its buttons split the page width (16 dp padding,
   6 dp gap). Nothing in the lists, the map or the power buttons is ever touched. The selectors are put back afterwards.
 
+  Panels (unless -NoPanels): in each orientation it OPENS the volume panel (the #vol-btn, first button of the live strip) and the
+  settings menu (the gear), captures them (land_volume_open.png, land_menu_open.png, port_...) and closes each with KEYCODE_BACK.
+  Both taps are calculated from the CSS (strip 44 dp high, button 44 dp wide) and land on empty strip / the buttons themselves,
+  never on a key. NOTHING inside the volume panel (mute, slider, previous/play/next change the PC's audio) and NOTHING in the
+  menu (Editar botoes, Camera, Atualizar: it POSTs to the PC) is ever touched. Check the first capture of each kind before trusting it.
+
   The rotation is always handed back to the phone (automatic) at the end, even on failure. It never touches anything on
   the Energia page: it only navigates there (it is a real PC).
   The PNG comes from screencap on the phone + adb pull. Never redirect `exec-out screencap` through PowerShell: it corrupts the file.
@@ -33,7 +39,9 @@ param(
   [double]$TopInsetDp = 0,     # where the app window starts, if not at the very top
   [double]$BottomInsetDp = 0,  # what sits under the app window (gesture bar), if anything
   [double]$SafeTopDp = 30,     # portrait: the camera cut-out inset above the live strip (measured on the A31 from a capture)
-  [switch]$NoPanes             # skip the extra portrait captures of the segmented selectors
+  [double]$SafeLeftDp = 30,    # landscape: the camera cut-out inset on the left of the rail (measured on the A31 from a capture)
+  [switch]$NoPanes,            # skip the extra portrait captures of the segmented selectors
+  [switch]$NoPanels            # skip the volume panel / settings menu captures
 )
 
 $ErrorActionPreference = 'Stop'
@@ -46,6 +54,14 @@ if ($devices.Count -eq 0) { Write-Host 'No phone connected (adb devices is empty
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 $savedRotation = (& $Adb shell settings get system accelerometer_rotation | Out-String).Trim()
 if ($savedRotation -notmatch '^[01]$') { $savedRotation = '1' }
+
+# Opens one panel with a single tap (the volume button or the gear: both only OPEN something), captures it, and closes it with Back.
+function PanelShot($name, $xDp, $yDp) {
+  & $Adb shell input tap ([int]($xDp * $px)) ([int]($yDp * $px))
+  Shot $name
+  & $Adb shell input keyevent KEYCODE_BACK
+  Start-Sleep -Milliseconds 700
+}
 
 function Shot($name) {
   Start-Sleep -Milliseconds 900 # the page slide and first render
@@ -74,6 +90,14 @@ try {
         & $Adb shell input tap $x $y
         Shot "land_$($Tabs[$i])"
       }
+      if (-not $NoPanels) {
+        # back on Apps, then the volume button: top-left of the content (rail + cut-out + 10 dp padding + half of 44), middle of the 44 dp strip
+        & $Adb shell input tap $x ([int](($TopInsetDp + $StatusRowDp + 0.5 * $TouchDp) * $px))
+        Start-Sleep -Milliseconds 700
+        PanelShot 'land_volume_open' (72 + $SafeLeftDp + 10 + 22) ($TopInsetDp + 22)
+        # the gear: bottom of the rail, one 48 dp item above the bottom edge of the window
+        PanelShot 'land_menu_open' 56 ($short / $px - $BottomInsetDp - $TouchDp / 2)
+      }
     } else {
       # the bar spans the width in six equal slots; its middle is half a bar above the bottom of the window
       $y = [int](($long - (($BottomInsetDp + $BarDp / 2) * $px)))
@@ -98,6 +122,14 @@ try {
         & $Adb shell input tap (SegX 3 2) $segY
         Shot 'port_pc_system'
         & $Adb shell input tap (SegX 3 0) $segY
+      }
+
+      if (-not $NoPanels) {
+        # back on Apps; the volume button sits after the status light (18 dp + half of 44) and the gear at the right end (4 dp + half of 44), both on the 44 dp strip under the cut-out
+        & $Adb shell input tap ([int]($short * 0.5 / $Tabs.Count)) $y
+        Start-Sleep -Milliseconds 700
+        PanelShot 'port_volume_open' (18 + 22) ($SafeTopDp + 22)
+        PanelShot 'port_menu_open' ($short / $px - 4 - 22) ($SafeTopDp + 22)
       }
     }
   }

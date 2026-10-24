@@ -24,7 +24,7 @@ topo para não ser preciso ficar deslizando até achar a certa:
 | Aba | Páginas |
 |---|---|
 | **Apps** | Aplicativos |
-| **Atalhos** | Atalhos de teclado, volume e lista de janelas |
+| **Atalhos** | Atalhos de teclado (a grade inteira; o volume fica no botão da faixa de ativos) |
 | **Som** | Mídia e áudio numa tela só |
 | **Desempenho** | Desempenho ("Sobre este PC" fica no menu ⋯) |
 | **Energia** | Energia |
@@ -39,14 +39,14 @@ Um módulo novo escolhe a aba com `Deck.addPage({ section: 'pc', ... })`.
 | Página | O que faz |
 |---|---|
 | **Aplicativos** | Apps fixados na barra de tarefas. Ponto verde = tem janela aberta (tocar traz para a frente); ponto cinza = processo rodando. |
-| **Atalhos** | Atalhos de teclado (configuráveis) + faixa de volume (mudo, slider, mídia global) à esquerda, e à direita a **lista de janelas abertas**: toque na linha para trazer a janela para a frente; os dois botões da linha minimizam e maximizam/restauram. O botão **Mapa** abre a folha de Janelas e telas. |
+| **Atalhos** | Atalhos de teclado (configuráveis) na grade inteira. O **volume** não fica mais aqui: é o botão de alto-falante (com o percentual) no começo da faixa de ativos, sempre visível; ele abre um painel com mudo, slider e anterior/play/próxima (global). Fecha tocando de novo, fora ou no Voltar. |
 | **Janelas e telas** (folha aberta pelo botão Mapa) | Um **mapa em escala das suas telas** com cada janela desenhada onde ela está. **Arraste** uma janela para movê-la, inclusive de uma tela para a outra; arraste até a borda esquerda/direita de uma tela para **encaixar** (metade da tela) ou até o topo para **maximizar**. Toque numa janela para selecioná-la (e trazê-la para a frente); toque no vazio para desmarcar. **No topo** fica a lista de todas as janelas (inclusive minimizadas e escondidas) e **à direita**, em botões grandes com texto, as ações da selecionada: minimizar, maximizar/restaurar, esquerda, direita, outra tela e fechar (dois toques). Sem seleção, esse espaço mostra os controles das telas: desligar telas e projeção (estender/duplicar; "só tela 1/2" exigem segurar). O **brilho** de cada monitor (DDC/CI) fica logo abaixo dele no mapa. |
 | **Som · mídia** (à esquerda) | O que está tocando (Spotify, YouTube ou qualquer coisa no navegador, VLC…): capa, título, artista, barra de tempo com busca, anterior/play/próxima. Vários players viram abas. |
 | **Som · áudio** (à direita) | Saída e entrada padrão (trocar dispositivo, volume, mudo — inclusive o microfone) e mixer de volume por aplicativo. |
 | **Desempenho** | CPU (total e por núcleo, clock, temperatura e potência), memória, GPU, disco e rede, ao vivo. Com um jogo desenhando quadros, o cartão da GPU mostra o FPS e o tempo de quadro (lido do RTSS, que acompanha o MSI Afterburner). |
 | **Sobre este PC** (menu ⋯) | Hardware e Windows: processador, memória (módulos), vídeo, placa-mãe/BIOS, armazenamento, rede, monitores, uptime. |
 | **Processos** | Maiores usos de CPU e de memória. |
-| **Energia** | Bloquear, suspender, hibernar, sair da conta, reiniciar, desligar, reiniciar para a BIOS e para o menu avançado, com atraso, contagem regressiva e cancelamento. |
+| **Energia** | Teclas (4x2 deitado, 2x4 em pé): bloquear, suspender, hibernar, sair da conta, reiniciar, desligar, reiniciar para a BIOS e para o menu avançado, com atraso, contagem regressiva e cancelamento. |
 
 ### Energia: como funciona a segurança
 
@@ -64,7 +64,7 @@ mostra isso. Para remover essas ações da API: `"powerControls": false` no `con
 
 ### Cabeçalho
 
-Discreto de propósito: o ícone do PC com uma luz de status (o texto só aparece se algo estiver errado), as abas, e à direita **microfone** (alterna o mudo do microfone padrão; fica vermelho e riscado quando mutado), **play/pause** do que estiver tocando (toque = play/pause, segurar = abrir o Som; some quando nada toca; ao mudar de faixa aparece um aviso rápido com o título) e o menu **⋯** (nome do PC, Sobre este PC, Atualizar e, no app, Endereço do PC). Durante um desligamento agendado aparece a contagem regressiva.
+Discreto de propósito: o ícone do PC com uma luz de status (o texto só aparece se algo estiver errado), as abas, e à direita **microfone** (alterna o mudo do microfone padrão; fica vermelho e riscado quando mutado), **play/pause** do que estiver tocando (toque = play/pause, segurar = abrir o Som; some quando nada toca; ao mudar de faixa aparece um aviso rápido com o título) e o menu **⚙** Configurações (nome do PC, Editar botões, Câmera do celular, Endereço do PC no app e Atualizar; em retrato abre como folha inferior). Durante um desligamento agendado aparece a contagem regressiva.
 
 ## Rodando o servidor
 
@@ -164,7 +164,7 @@ Atalhos: teclas em `server/src/keys.js` (`ctrl`, `shift`, `alt`, `win`, letras, 
 (o botão de destino fica destacado enquanto você arrasta). Soltar em um espaço vazio manda o botão para o fim; soltar em qualquer outro lugar não muda nada. A ordem é salva ao soltar.
 Segurar sem mover não faz nada, e o toque que termina o arraste não abre o app. Vale para apps, atalhos, macros e a tecla da câmera.
 
-Menu **⋯ → Editar botões** (ou `config.json`). Três abas:
+Menu **⚙ → Editar botões** (ou `config.json`). Três abas:
 
 - **Atalhos:** criar, renomear e excluir atalhos de teclado (modificadores Ctrl/Shift/Alt/Win + uma tecla). **Testar** salva e aperta uma vez.
 - **Macros:** uma macro é uma lista de passos executados em ordem com um toque (a tecla mostra "n passos"; fica marcada enquanto roda). Passos disponíveis:
@@ -180,7 +180,7 @@ pelo celular; se não quiser isso, ponha `"editor": false` no `config.json`.
 ## Câmera do celular (webcam do PC)
 
 O celular vira a webcam do PC. O jeito mais rápido é a tecla **Câmera** na tela de Apps: um toque liga ou desliga a transmissão (fica
-vermelha enquanto transmite). As opções abrem pelo ícone vermelho do cabeçalho ou pelo menu **⋯ → Câmera do celular → Transmitir ao PC**. O app pede a permissão da câmera na primeira vez
+vermelha enquanto transmite). As opções abrem pelo ícone vermelho do cabeçalho ou pelo menu **⚙ → Câmera do celular → Transmitir ao PC**. O app pede a permissão da câmera na primeira vez
 ("Durante o uso do app"). O deck manda os quadros em JPEG para o servidor (`POST /api/camera/frame`) e o servidor os republica como
 um stream MJPEG (`GET /api/camera/stream`). Enquanto transmite, um ícone vermelho de câmera aparece no cabeçalho para voltar à tela.
 
