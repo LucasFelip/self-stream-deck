@@ -1,9 +1,9 @@
 'use strict';
 
 /**
- * A game being played. The moment its frame rate shows up the deck slides to Desempenho, so the person sees it; anywhere
- * else a small pill in the live strip keeps the number in view (tap it to go to Desempenho). It listens to the light "game" topic,
- * so it works from every page and not only while Desempenho is open (that page tells us when it is the one on screen).
+ * A game being played. The moment its frame rate shows up the deck slides to PC > Desempenho, so the person sees it; anywhere
+ * else a small pill in the live strip keeps the number in view (tap it to go to PC > Desempenho). It listens to the light "game" topic,
+ * so it works from every page and not only while Desempenho is open (the PC page tells us when that pane is the one on screen).
  */
 (() => {
   const { $, api } = Deck;
@@ -12,7 +12,13 @@
 
   const pill = $('fps');
   const number = pill.querySelector('b');
-  pill.addEventListener('click', () => Deck.goTo('monitor'));
+  // the PC page, on its Desempenho pane
+  const openPerformance = () => {
+    if (!Deck.goTo('pc')) return false;
+    Deck.perf?.showPane('monitor');
+    return true;
+  };
+  pill.addEventListener('click', openPerformance);
 
   let playing = false;
   let onMonitor = false;
@@ -29,7 +35,7 @@
   function trySlide() {
     if (!wantSlide) return;
     if (busy() || onMonitor) wantSlide = false;
-    else if (Deck.goTo('monitor')) {
+    else if (openPerformance()) {
       wantSlide = false;
       onMonitor = true; // on its way: the pill would only flash while the page slides
     }
@@ -64,7 +70,7 @@
   Deck.game = {
     // the pager calls this each time it (re)builds the pages
     pagesReady: trySlide,
-    // Desempenho calls this when it becomes (or stops being) the visible page
+    // the PC page calls this when Desempenho becomes (or stops being) what is on screen: that page visible and that pane active
     monitorOpen(open) {
       onMonitor = open;
       render();

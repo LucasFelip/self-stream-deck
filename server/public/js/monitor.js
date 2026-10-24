@@ -1,10 +1,10 @@
 'use strict';
 
 /**
- * Monitoring pages:
+ * The "PC" destination: one page, three panes behind a segmented selector (Deck.perf.showPane):
  *   Desempenho - live CPU (per core), memory, GPU, disk and network
+ *   Processos  - top processes by CPU and by memory (read only)
  *   Sistema    - what the machine is: OS, CPU, RAM modules, GPU, board, storage, network, monitors
- *   Processos  - top processes by CPU and by memory
  */
 (() => {
   const { h, api, fmt } = Deck;
@@ -70,7 +70,7 @@
     return { el: h('div', { class: 'card' }, h('div', { class: 'head' }, h('h3', { text: title }), subEl), ...children), sub: subEl };
   };
 
-  let latest = null; // last sample, shared by the pages
+  let latest = null; // last sample, shared by the panes
   let info = null;
 
   // --- Desempenho -----------------------------------------------------------------------------
@@ -281,10 +281,15 @@
     renderProcesses(memList, mem, (item) => fmt.gb(item.memMB), (item) => (item.memMB / topMem) * 100);
   }
 
-  // --- lifecycle ------------------------------------------------------------------------------
+  // --- the PC page ----------------------------------------------------------------------------
+  // One destination, three panes behind a segmented selector. Only the active pane of the visible page does any work:
+  // samples for Desempenho, the process list for Processos, the one-off facts and the uptime clock for Sistema.
+
+  const PANES = { monitor: monitorEl, processes: processesEl, system: systemEl };
+  for (const pane of Object.values(PANES)) pane.classList.add('pc-pane');
 
   const timers = { clock: null };
-  const watchers = { sample: null, processes: null }; // live updates (or the fallback poller) while a page is the visible one
+  const watchers = { sample: null, processes: null }; // live updates (or the fallback poller) while a pane is the visible one
 
   async function loadInfo() {
     if (info) return;
@@ -296,16 +301,19 @@
     }
   }
 
-  Deck.addPage({
-    id: 'monitor',
-    section: 'monitor',
-    title: 'Desempenho',
-    el: monitorEl,
-    show() {
+  const stopAll = () => {
+    for (const key of Object.keys(watchers)) {
+      if (watchers[key]) watchers[key].stop();
+      watchers[key] = null;
+    }
+    clearInterval(timers.clock);
+    timers.clock = null;
+  };
+
+  const starters = {
+    monitor() {
       // the monitor helper starts on demand (a few seconds the first time) and stops again when idle
-      Deck.game?.monitorOpen(true);
       if (!latest) cpuCard.sub.textContent = 'iniciando sensores…';
-      if (watchers.sample) watchers.sample.stop();
       // every sample is new (the numbers always move): no slowing down when "unchanged"
       watchers.sample = Deck.live.watch('monitor', {
         apply: (sample) => { latest = sample; updatePerformance(sample); },
@@ -314,33 +322,7 @@
         idleAfter: Infinity,
       });
     },
-    hide() {
-      Deck.game?.monitorOpen(false);
-      if (watchers.sample) watchers.sample.stop();
-      watchers.sample = null;
-    },
-  });
-
-  // Hardware and OS facts are rarely needed: a sheet opened from the menu instead of a page on the swipe path
-  const systemSheet = Deck.overlay({
-    title: 'Sobre este PC',
-    el: systemEl,
-    onOpen() {
-      loadInfo();
-      clearInterval(timers.clock);
-      timers.clock = setInterval(paintUptime, 1000);
-    },
-    onClose() { clearInterval(timers.clock); },
-  });
-  Deck.menuItems.push({ label: 'Sobre este PC', onClick: () => systemSheet.open() });
-
-  Deck.addPage({
-    id: 'processes',
-    section: 'processes',
-    title: 'Processos',
-    el: processesEl,
-    show() {
-      if (watchers.processes) watchers.processes.stop();
+    processes() {
       watchers.processes = Deck.live.watch('processes', {
         apply: updateProcesses,
         poll: () => api('/api/monitor/processes'),
@@ -348,9 +330,49 @@
         idleAfter: Infinity,
       });
     },
-    hide() {
-      if (watchers.processes) watchers.processes.stop();
-      watchers.processes = null;
+    system() {
+      loadInfo();
+      paintUptime();
+      timers.clock = setInterval(paintUptime, 1000);
     },
+  };
+
+  let pane = 'monitor';
+  let onScreen = false; // the PC page is the visible one
+
+  // (re)starts exactly what the visible pane needs, and tells game.js whether Desempenho is what the person is looking at
+  function activate() {
+    stopAll();
+    Deck.game?.monitorOpen(onScreen && pane === 'monitor');
+    if (onScreen) starters[pane]();
+  }
+
+  const selector = Deck.segmented(
+    [{ id: 'monitor', label: 'Desempenho' }, { id: 'processes', label: 'Processos' }, { id: 'system', label: 'Sistema' }],
+    (name) => showPane(name),
+    'PC',
+  );
+  selector.set(pane);
+  const pcEl = h('section', { class: 'pc-page' }, selector.el, ...Object.values(PANES));
+
+  function showPane(name) {
+    if (!PANES[name]) return false;
+    pane = name;
+    selector.set(name);
+    for (const [key, element] of Object.entries(PANES)) element.hidden = key !== name;
+    activate();
+    return true;
+  }
+  showPane(pane);
+
+  Deck.perf = { showPane, get pane() { return pane; } };
+
+  Deck.addPage({
+    id: 'pc',
+    section: 'pc',
+    title: 'PC',
+    el: pcEl,
+    show() { onScreen = true; activate(); },
+    hide() { onScreen = false; activate(); },
   });
 })();
