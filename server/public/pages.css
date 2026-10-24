@@ -291,7 +291,7 @@ button.chip:active { background: var(--border); }
 .power-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .power-main { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 
-.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.64rem; font-weight: 600; background: var(--surface-2); color: var(--muted); }
+.badge { display: inline-block; white-space: nowrap; padding: 2px 8px; border-radius: 999px; font-size: 0.64rem; font-weight: 600; background: var(--surface-2); color: var(--muted); }
 .badge.warn { background: rgba(224, 162, 67, 0.15); color: var(--warn); }
 .badge.ok { background: rgba(76, 195, 138, 0.14); color: var(--ok); }
 
