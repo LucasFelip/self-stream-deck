@@ -25,7 +25,9 @@
     }
     const paint = () => {
       const left = Math.max(0, Math.round(scheduled.inSec - (Date.now() - state.receivedAt) / 1000));
-      pill.textContent = `${PILL_LABELS[scheduled.action] || scheduled.action} em ${Deck.fmt.clock(left)}`;
+      // portrait: no "em", the strip is crowded (see style.css) and "Desliga 1:00:00" reads the same
+      const joiner = window.matchMedia('(orientation: portrait)').matches ? ' ' : ' em ';
+      pill.textContent = `${PILL_LABELS[scheduled.action] || scheduled.action}${joiner}${Deck.fmt.clock(left)}`;
     };
     pill.hidden = false;
     paint();

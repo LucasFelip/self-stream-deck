@@ -92,21 +92,80 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.strictEqual(await page.eval(`document.getElementById('mic').dataset.muted`), 'true');
     });
 
-    await test('the volume strip shows the level and sends a new one when the slider moves', async () => {
-      await page.tap('#tabs .tab[data-section="shortcuts"]');
-      await page.waitFor(`document.getElementById('vol').value === '40'`, 'the volume level from the PC');
-      assert.strictEqual(await page.eval(`document.getElementById('vol-value').textContent`), '40%');
+    // --- volume: the button in the live strip and the panel it opens (phase 2C) ---
+    const volState = () => page.eval(`JSON.stringify({ open: !document.getElementById('volume-panel').hidden, expanded: document.getElementById('vol-btn').getAttribute('aria-expanded'), scrim: !document.getElementById('scrim').hidden })`).then(JSON.parse);
+
+    await test('#vol-btn is the first button of the live strip: 44 px, labelled, shows the PC level, panel closed', async () => {
+      await page.waitFor(`document.getElementById('vol-pct').textContent === '40%'`, 'the level on the button');
+      const info = await page.eval(`(() => { const b = document.getElementById('vol-btn'); const r = b.getBoundingClientRect(); return { first: document.getElementById('live-strip').firstElementChild === b, label: b.getAttribute('aria-label'), w: Math.round(r.width), h: Math.round(r.height), muted: b.dataset.muted, panel: document.getElementById('volume').closest('#volume-panel') !== null, hidden: document.getElementById('volume-panel').hidden }; })()`);
+      assert.deepStrictEqual(info, { first: true, label: 'Volume', w: info.w, h: info.h, muted: 'false', panel: true, hidden: true });
+      assert.ok(info.w >= 44 && info.h >= 44, JSON.stringify(info));
+      assert.deepStrictEqual(await volState(), { open: false, expanded: 'false', scrim: false });
+    });
+
+    await test('the button opens the panel (slider, mute, media keys); dragging the slider sends the level and does not close the panel or swipe the page', async () => {
+      await page.tap('#vol-btn');
+      await page.waitFor(`!document.getElementById('volume-panel').hidden`, 'the volume panel');
+      assert.deepStrictEqual(await volState(), { open: true, expanded: 'true', scrim: true });
+      const shown = await page.eval(`(() => { const p = document.getElementById('volume-panel').getBoundingClientRect(); const ok = (id) => { const r = document.querySelector(id).getBoundingClientRect(); return r.width >= 44 && r.height >= 44 && r.left >= p.left - 1 && r.right <= p.right + 1 && r.top >= p.top - 1 && r.bottom <= p.bottom + 1; }; return { value: document.getElementById('vol-value').textContent, level: document.getElementById('vol').value, all: ['#mute', '#vol', '[data-media=prev]', '[data-media=playpause]', '[data-media=next]'].map(ok) }; })()`);
+      assert.deepStrictEqual(shown, { value: '40%', level: '40', all: [true, true, true, true, true] });
+      // a real touch drag along the slider (the thumb starts near 40 %)
+      const scrollBefore = await page.eval(`document.getElementById('pager').scrollLeft`);
+      const box = await page.eval(`(() => { const r = document.getElementById('vol').getBoundingClientRect(); return { l: r.left, w: r.width, y: r.top + r.height / 2 }; })()`);
       deck.model.calls.length = 0;
-      await page.eval(`(() => { const s = document.getElementById('vol'); s.value = 75; s.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+      await page.touch('touchStart', box.l + box.w * 0.4, box.y);
+      for (let step = 1; step <= 8; step += 1) {
+        await page.touch('touchMove', box.l + box.w * (0.4 + step * 0.05), box.y + (step % 2 ? 6 : -6));
+        await sleep(40);
+      }
+      await page.touch('touchEnd', box.l + box.w * 0.8, box.y);
+      await sleep(400);
+      const sent = deck.model.calls.filter((c) => c.method === 'POST' && c.path === '/api/volume').map((c) => c.body.level);
+      assert.ok(sent.length >= 1 && sent[sent.length - 1] >= 70, `the drag sent ${JSON.stringify(sent)}`);
+      assert.strictEqual((await volState()).open, true, 'dragging the slider closed the panel');
+      assert.strictEqual(await page.eval(`document.getElementById('pager').scrollLeft`), scrollBefore, 'the drag swiped the page');
+      assert.match(await page.eval(`document.getElementById('vol-pct').textContent`), /^[7-9]\d%$/);
+    });
+
+    await test('mute in the panel paints the button red with "mudo"; the media keys send the global keys', async () => {
+      deck.model.calls.length = 0;
+      await page.tap('#mute');
+      await page.waitFor(`document.getElementById('vol-btn').dataset.muted === 'true'`, 'the muted button');
+      assert.strictEqual(await page.eval(`document.getElementById('vol-pct').textContent`), 'mudo');
+      assert.ok(deck.model.calls.some((c) => c.path === '/api/volume' && c.body.muted === 'toggle'));
+      await page.tap('#mute');
+      await page.waitFor(`document.getElementById('vol-btn').dataset.muted === 'false'`, 'unmuted');
+      await page.tap('[data-media=playpause]');
+      await sleep(200);
+      assert.ok(deck.model.calls.some((c) => c.path === '/api/mediakey/playpause'));
+    });
+
+    await test('the button again closes the panel; a tap outside closes it without touching the key below', async () => {
+      await page.tap('#vol-btn');
+      await page.waitFor(`document.getElementById('volume-panel').hidden`, 'closed by the button');
+      assert.deepStrictEqual(await volState(), { open: false, expanded: 'false', scrim: false });
+      await page.tap('#vol-btn');
+      await page.waitFor(`!document.getElementById('volume-panel').hidden`, 'open again');
+      await sleep(300); // the panel slides up in portrait: a tap during the slide would land on it
+      await page.tap('#tabs .tab[data-section="apps"]'); // over the scrim: the panel closes, the tab itself is not pressed
+      await page.waitFor(`document.getElementById('volume-panel').hidden`, 'closed by a tap outside');
+      await page.tap('#vol-btn');
+      await page.waitFor(`!document.getElementById('volume-panel').hidden`, 'open once more');
       await sleep(300);
-      assert.ok(deck.model.calls.some((c) => c.path === '/api/volume' && c.body.level === 75), JSON.stringify(deck.model.calls));
+      const key = await page.eval(`(() => { const r = document.querySelector('.tile[data-key="a:app1"]').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+      deck.model.calls.length = 0;
+      await page.touch('touchStart', key.x, key.y);
+      await page.touch('touchEnd', key.x, key.y);
+      await page.waitFor(`document.getElementById('volume-panel').hidden`, 'closed by a tap on a key');
+      await sleep(300);
+      assert.ok(!deck.model.calls.some((c) => c.path.startsWith('/api/launch')), 'the dismissing tap launched an app');
     });
 
     await test('a running app shows its dot, and a scheduled shutdown shows the pill', async () => {
       assert.ok(await page.eval(`document.querySelector('.tile[data-app-id="app0"]').classList.contains('running')`));
       deck.model.state.scheduled = { action: 'shutdown', inSec: 600 };
       await page.waitFor(`!document.getElementById('power-pill').hidden`, 'the power pill');
-      assert.match(await page.eval(`document.getElementById('power-pill').textContent`), /^Desliga em /);
+      assert.match(await page.eval(`document.getElementById('power-pill').textContent`), /^Desliga (em )?\d/);
       deck.model.state.scheduled = null;
       await page.waitFor(`document.getElementById('power-pill').hidden`, 'the pill to go away');
     });
@@ -202,21 +261,20 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.strictEqual(await visibility(), 'hidden', 'hidden again after closing');
     });
 
-    await test('Deck.back() closes the sheet, then the menu, then the newest overlay, then goes to Apps, and says false on Apps', async () => {
+    await test('Deck.back() closes the sheet, then the volume panel, then the menu, then the newest overlay, then goes to Apps, and says false on Apps', async () => {
       await page.eval(`document.querySelector('#tabs .tab[data-section="power"]').click()`);
       await page.waitFor(`document.querySelector('#tabs .tab[data-section="power"]').getAttribute('aria-selected') === 'true'`, 'the Energia tab');
-      // all three at once: a confirmation sheet (the real one: Suspender), the menu and the camera overlay
+      // all four at once: a confirmation sheet (the real one: Suspender), the volume panel, the menu and the camera overlay
       await page.waitFor(`document.querySelector('.power-page .badge')`, 'the power state');
       await page.eval(`[...document.querySelectorAll('.power-page .act')].find((t) => t.textContent.includes('Suspender')).click()`);
-      await page.eval(`Deck.camera.openSheet(); document.getElementById('menu-pop').hidden = false`);
-      const state = () => page.eval(`JSON.stringify({ sheets: document.getElementById('modal-root').childElementCount, menu: !document.getElementById('menu-pop').hidden, overlay: !document.querySelector('.camera-page').closest('.overlay').hidden, section: Deck.pager.currentSection() })`).then(JSON.parse);
-      assert.deepStrictEqual(await state(), { sheets: 1, menu: true, overlay: true, section: 'power' });
-      assert.strictEqual(await page.eval('Deck.back()'), true);
-      assert.deepStrictEqual(await state(), { sheets: 0, menu: true, overlay: true, section: 'power' });
-      assert.strictEqual(await page.eval('Deck.back()'), true);
-      assert.deepStrictEqual(await state(), { sheets: 0, menu: false, overlay: true, section: 'power' });
-      assert.strictEqual(await page.eval('Deck.back()'), true);
-      assert.deepStrictEqual(await state(), { sheets: 0, menu: false, overlay: false, section: 'power' });
+      await page.eval(`Deck.camera.openSheet(); document.getElementById('menu-pop').hidden = false; document.getElementById('volume-panel').hidden = false`);
+      const state = () => page.eval(`JSON.stringify({ sheets: document.getElementById('modal-root').childElementCount, volume: !document.getElementById('volume-panel').hidden, menu: !document.getElementById('menu-pop').hidden, overlay: !document.querySelector('.camera-page').closest('.overlay').hidden, section: Deck.pager.currentSection() })`).then(JSON.parse);
+      const want = (sheets, volume, menu, overlay) => ({ sheets, volume, menu, overlay, section: 'power' });
+      assert.deepStrictEqual(await state(), want(1, true, true, true));
+      for (const next of [want(0, true, true, true), want(0, false, true, true), want(0, false, false, true), want(0, false, false, false)]) {
+        assert.strictEqual(await page.eval('Deck.back()'), true);
+        assert.deepStrictEqual(await state(), next);
+      }
       assert.strictEqual(await page.eval('Deck.back()'), true, 'with nothing open, Back leaves the page');
       await page.waitFor(`Deck.pager.currentSection() === 'apps'`, 'Apps after Back');
       assert.strictEqual(await page.eval('Deck.back()'), false, 'on Apps with nothing open there is nothing to undo');
@@ -630,7 +688,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       await page.eval(`Deck.back()`);
     });
 
-    await test('Atalhos: the first page uses the whole width (no windows list beside it) and still ends with the volume strip', async () => {
+    await test('Atalhos: the first page uses the whole grid (every row of keys), has no volume strip at the end, and Apps has the same grid', async () => {
       await go('shortcuts');
       const info = await page.eval(`(() => {
         const page = document.querySelector('.page[data-id="shortcuts-0"]');
@@ -638,11 +696,17 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
         const apps = document.querySelector('.page[data-id="apps-0"] .grid');
         const g = grid.getBoundingClientRect();
         const p = page.getBoundingClientRect();
-        return { split: page.querySelectorAll('.split, .wlist').length, volume: page.contains(document.getElementById('vol')), cols: grid.style.getPropertyValue('--cols'), appsCols: apps.style.getPropertyValue('--cols'), right: Math.round(p.right - g.right), left: Math.round(g.left - p.left) };
+        const cells = [...grid.children];
+        const rows = new Set(cells.map((c) => Math.round(c.getBoundingClientRect().top))).size;
+        return { split: page.querySelectorAll('.split, .wlist').length, volume: Boolean(page.querySelector('#volume, #vol, .volume-bar')), inPanel: document.getElementById('volume').closest('#volume-panel') !== null, cols: grid.style.getPropertyValue('--cols'), rows: grid.style.getPropertyValue('--rows'), appsCols: apps.style.getPropertyValue('--cols'), appsRows: apps.style.getPropertyValue('--rows'), cells: cells.length, visibleRows: rows, right: Math.round(p.right - g.right), left: Math.round(g.left - p.left) };
       })()`);
       assert.strictEqual(info.split, 0);
-      assert.ok(info.volume, 'the volume strip is on the first page');
+      assert.strictEqual(info.volume, false, 'the volume strip is gone from the shortcuts page');
+      assert.ok(info.inPanel, 'the volume strip lives in the panel');
       assert.strictEqual(info.cols, info.appsCols, 'the same number of columns as Apps');
+      assert.strictEqual(info.rows, info.appsRows, 'the same number of rows as Apps: the last row is keys, not the volume bar');
+      assert.strictEqual(info.cells, Number(info.cols) * Number(info.rows), 'tiles and slots fill the whole grid');
+      assert.strictEqual(info.visibleRows, Number(info.rows), JSON.stringify(info));
       assert.ok(info.right <= 20 && info.left <= 20, `the grid fills the page: ${JSON.stringify(info)}`);
       await go('apps');
     });

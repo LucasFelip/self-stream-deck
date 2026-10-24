@@ -19,18 +19,15 @@
     </div>
     <div id="tabs" class="tabs" role="tablist" aria-label="Seções"></div>
     <div class="nav-end">
-      <button id="menu" class="icon-btn quiet" type="button" aria-label="Menu" aria-haspopup="true"></button>
-      <div id="menu-pop" class="menu" role="menu" hidden>
-        <div class="menu-host"><span class="muted">Computador</span><b id="host">PC</b></div>
-        <button id="refresh" type="button" role="menuitem">Atualizar</button>
-        <button id="settings" type="button" role="menuitem" hidden>Endereço do PC…</button>
-      </div>
+      <button id="menu" class="icon-btn quiet" type="button" aria-label="Configurações" aria-haspopup="true" aria-expanded="false"></button>
     </div>
   </nav>
 
   <div class="main">
-    <!-- What is on right now: hidden as a whole while none of its buttons is shown (header.js watches them) -->
-    <div id="live-strip" class="live-strip" hidden>
+    <!-- Volume (always) and whatever is on right now (power pill, camera, microphone, player, FPS) -->
+    <div id="live-strip" class="live-strip">
+      <!-- volume: always there (it is used all the time). Opens the volume panel (#volume-panel); icon + short percentage, red and crossed out when muted. -->
+      <button id="vol-btn" class="icon-btn quiet vol-btn" type="button" aria-label="Volume" aria-haspopup="dialog" aria-expanded="false"><span class="vol-btn-ico"></span><span id="vol-pct" class="vol-pct">–</span></button>
       <!-- frame rate of a running game, shown on every page but PC > Desempenho; tapping it opens that -->
       <button id="fps" class="fps-float" type="button" aria-label="Abrir Desempenho" hidden><b></b><small>FPS</small></button>
       <!-- shown while a shutdown/restart is scheduled; tapping it opens the Power page -->
@@ -57,8 +54,21 @@
     <div id="page-dots" class="page-dots" aria-hidden="true" hidden></div>
   </div>
 
-  <!-- The volume strip lives here until app.js places it in the last row of the first shortcuts page. -->
-  <div id="volume-holder" hidden>
+  <!-- Taps outside an open panel (volume, menu) land here and only close it, so they never reach the keys underneath. header.js shows/hides it. -->
+  <div id="scrim" class="scrim" hidden></div>
+
+  <!-- Settings menu (the gear in the navigation). Outside the nav so it stacks above the scrim: a popover beside the rail in
+       landscape, a bottom sheet over the bar in portrait. -->
+  <div id="menu-pop" class="menu" role="menu" hidden>
+    <div class="grip" aria-hidden="true"><i></i></div>
+    <div class="menu-host"><span class="muted">Computador</span><b id="host">PC</b></div>
+    <button id="settings" type="button" role="menuitem" hidden>Endereço do PC…</button>
+    <button id="refresh" type="button" role="menuitem">Atualizar</button>
+  </div>
+
+  <!-- Volume panel: the strip (mute, slider, media keys) lives here, opened by #vol-btn. Popover under the live strip in landscape,
+       a short bottom sheet over the bar in portrait. -->
+  <div id="volume-panel" class="vol-panel" role="dialog" aria-label="Volume" hidden>
     <div id="volume" class="volume-bar" data-muted="false" data-ready="false">
       <button id="mute" class="icon-btn" type="button" aria-label="Silenciar">
         <svg viewBox="0 0 24 24" aria-hidden="true">

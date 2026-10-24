@@ -10,8 +10,6 @@
   const pager = $('pager');
   const tabs = $('tabs');
   const dots = $('page-dots');
-  const volumeHolder = $('volume-holder');
-  const volumeBox = $('volume');
 
   const PAGE_PADDING_X = 16;
   const PAGE_PADDING_Y = 12;
@@ -26,18 +24,9 @@
   // Read from the pager, not the root: the rail / bar already covers its side, so .main zeroes that inset.
   const safe = (name) => parseFloat(getComputedStyle(pager).getPropertyValue(name)) || 0;
 
-  // Landscape: the live strip takes no height while nothing is on, and gives it back to the pager. The grid is planned as if
-  // the strip were there, so showing / hiding it never changes cols x rows (no rebuild, no blink); the CSS grid just
-  // stretches the tiles a little taller while the strip is away.
-  const strip = $('live-strip');
-  const stripReserve = () => {
-    const style = getComputedStyle(strip);
-    return style.display === 'none' ? parseFloat(style.getPropertyValue('--strip-h')) || 0 : 0;
-  };
-
   function measure() {
     const width = pager.clientWidth - 2 * PAGE_PADDING_X - safe('--safe-left') - safe('--safe-right');
-    const height = pager.clientHeight - stripReserve() - 2 * PAGE_PADDING_Y - safe('--safe-bottom');
+    const height = pager.clientHeight - 2 * PAGE_PADDING_Y - safe('--safe-bottom');
     const rows = Math.max(1, Math.floor((height + GAP) / (MIN_TILE_H + GAP)));
     const tileH = (height - (rows - 1) * GAP) / rows;
     const cols = Math.max(2, Math.round((width + GAP) / (tileH * TILE_ASPECT + GAP)));
@@ -67,38 +56,28 @@
 
     const pages = [];
     for (const [key, section] of Object.entries(Deck.tiles.sections)) {
-      // The volume strip takes the last row of the first shortcuts page, so shortcuts and sound share one page.
-      const footer = key === 'shortcuts' ? volumeBox : null;
-      const firstPageCapacity = footer ? cols * (rows - 1) : perPage;
-
-      if (section.items.length === 0 && !footer) {
-        if (key === 'apps') {
+      // Atalhos has the whole grid (the volume lives in its own panel, opened from the live strip)
+      if (section.items.length === 0) {
+        if (key === 'apps' || key === 'shortcuts') {
           const page = buildPage(`${key}-0`, section.title, '', key);
-          page.innerHTML = '<p class="empty">Nenhum app encontrado na barra de tarefas.</p>';
+          page.innerHTML = `<p class="empty">${key === 'apps' ? 'Nenhum app encontrado na barra de tarefas.' : 'Nenhum atalho configurado.'}</p>`;
           pages.push(page);
         }
         continue;
       }
 
-      const overflow = Math.max(0, section.items.length - firstPageCapacity);
-      const count = 1 + Math.ceil(overflow / perPage);
+      const count = Math.ceil(section.items.length / perPage);
       for (let index = 0; index < count; index += 1) {
-        const start = index === 0 ? 0 : firstPageCapacity + (index - 1) * perPage;
-        const capacity = index === 0 ? firstPageCapacity : perPage;
-        const hasFooter = footer && index === 0;
-
-        const title = hasFooter ? 'Atalhos e som' : section.title;
-        const page = buildPage(`${key}-${index}`, title, count > 1 ? `${index + 1}/${count}` : '', key);
+        const page = buildPage(`${key}-${index}`, section.title, count > 1 ? `${index + 1}/${count}` : '', key);
         const grid = document.createElement('div');
         grid.className = 'grid';
         grid.style.setProperty('--cols', cols);
         grid.style.setProperty('--rows', rows);
 
-        const tiles = section.items.slice(start, start + capacity).map(Deck.tiles.makeTile);
+        const tiles = section.items.slice(index * perPage, (index + 1) * perPage).map(Deck.tiles.makeTile);
         // unused positions stay visible as faint slots, so every page keeps the same grid
-        const slots = Array.from({ length: capacity - tiles.length }, () => Object.assign(document.createElement('div'), { className: 'slot' }));
+        const slots = Array.from({ length: perPage - tiles.length }, () => Object.assign(document.createElement('div'), { className: 'slot' }));
         grid.append(...tiles, ...slots);
-        if (hasFooter) grid.append(footer);
         page.append(grid);
         pages.push(page);
       }
@@ -221,7 +200,6 @@
 
     // snapping is paused while the pages change, otherwise the browser re-snaps to the old snap target
     pager.style.scrollSnapType = 'none';
-    volumeHolder.append(volumeBox); // keep the volume strip (and its state) out of the pages being thrown away
     pager.replaceChildren(...buildPages(), ...modulePages());
 
     const keep = allPages().findIndex((page) => pageId(page) === (pendingId || currentId));
@@ -242,8 +220,8 @@
   }, { passive: true });
 
   let resizeTimer;
-  // The pager also resizes when the live strip shows or hides (landscape): if the grid (cols x rows) is the same, the pages
-  // are not rebuilt, so nothing blinks; the CSS grid already stretches the tiles, only the icon size is updated.
+  // If the pager resizes but the grid (cols x rows) stays the same, the pages are not rebuilt, so nothing blinks; the CSS grid
+  // already stretches the tiles, only the icon size is updated.
   new ResizeObserver(() => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {

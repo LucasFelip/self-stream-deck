@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * The live controls (microphone, mini player) and the menu. Deliberately small: icons only. Also hides the live strip
- * (which also holds the power pill, camera and FPS pill) while none of its buttons is shown.
+ * The live controls (microphone, mini player) and the settings menu (the gear). Deliberately small: icons only. The live strip also holds the
+ * volume button, the power pill, the camera and the FPS pill. Also owns the scrim that closes the open panels (volume, menu).
  * The track title appears as a brief notice when the song changes.
  */
 (() => {
@@ -16,9 +16,10 @@
   let micShown = null;
   let playerShown = null;
 
-  menuButton.replaceChildren(Deck.icon('more', 18));
-  for (const item of Deck.menuItems) {
-    menu.insertBefore(h('button', { type: 'button', role: 'menuitem', text: item.label, on: { click: item.onClick } }), $('refresh'));
+  menuButton.replaceChildren(Deck.icon('settings', 20));
+  // the modules push their entries in load order (camera, then editor); the menu wants the editor first, so walk them backwards
+  for (const item of [...Deck.menuItems].reverse()) {
+    menu.insertBefore(h('button', { type: 'button', role: 'menuitem', text: item.label, on: { click: item.onClick } }), $('settings'));
   }
 
   function apply() {
@@ -92,20 +93,20 @@
 
   menuButton.addEventListener('click', () => { menu.hidden = !menu.hidden; });
   menu.addEventListener('click', () => { menu.hidden = true; });
-  document.addEventListener('pointerdown', (event) => {
-    if (!menu.hidden && !event.target.closest('#menu-pop, #menu')) menu.hidden = true;
-  }, { capture: true, passive: true });
 
-  // The live strip (style.css) is hidden as a whole while none of its buttons is shown, so the pager gets its height back.
-  // The buttons are shown and hidden by several modules (camera, game, pc, this one): watch them instead of asking each.
-  const strip = $('live-strip');
-  function syncStrip() {
-    const empty = [...strip.children].every((el) => el.hidden);
-    if (strip.hidden !== empty) strip.hidden = empty; // only on a change: the observer must not feed itself
-  }
-  const watcher = new MutationObserver(syncStrip);
-  for (const el of strip.children) watcher.observe(el, { attributes: true, attributeFilter: ['hidden'] });
-  syncStrip();
+  // A panel that floats over the deck (the volume panel, this menu) gets a transparent scrim under it: a tap outside only closes the
+  // panel and never reaches the key below. Watching `hidden` keeps it right however the panel was closed (button, Back, an item).
+  const scrim = $('scrim');
+  const panels = [$('volume-panel'), menu];
+  const syncPanels = () => {
+    scrim.hidden = panels.every((panel) => panel.hidden);
+    menuButton.setAttribute('aria-expanded', String(!menu.hidden));
+  };
+  const panelWatcher = new MutationObserver(syncPanels);
+  for (const panel of panels) panelWatcher.observe(panel, { attributes: true, attributeFilter: ['hidden'] });
+  scrim.addEventListener('click', () => { for (const panel of panels) panel.hidden = true; });
+  Deck.dragToClose(menu.querySelector('.grip'), menu, () => { menu.hidden = true; });
+  Deck.dragToClose(menu.querySelector('.menu-host'), menu, () => { menu.hidden = true; });
 
   Deck.header = { apply };
 })();

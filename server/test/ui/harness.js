@@ -117,7 +117,12 @@ async function fakeDeck() {
       return undefined;
     }
     if (key === 'POST /api/mic') return sendJson(res, 200, { available: true, muted: true });
-    if (key === 'POST /api/volume') return sendJson(res, 200, { level: body.level ?? model.state.volume.level, muted: false });
+    if (key === 'POST /api/volume') {
+      // like the PC: a level sets the volume (and unmutes), muted: "toggle" flips the mute
+      const now = model.state.volume;
+      model.state.volume = { level: body.level ?? now.level, muted: body.muted === 'toggle' ? !now.muted : (body.muted ?? (body.level === undefined ? now.muted : false)) };
+      return sendJson(res, 200, model.state.volume);
+    }
     if (req.method === 'POST') return sendJson(res, 200, { ok: true });
     return sendJson(res, 404, { error: 'not in the fake deck' });
   });

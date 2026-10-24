@@ -50,6 +50,7 @@ window.Deck = (() => {
     swap: '<path d="M4 8h13l-3-3M20 16H7l3 3"/>',
     snapLeft: '<rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M4.6 5.6h7.4v12.8H4.6z" fill="currentColor" stroke="none" opacity=".55"/>',
     snapRight: '<rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M12 5.6h7.4v12.8H12z" fill="currentColor" stroke="none" opacity=".55"/>',
+    settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
     more: '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6L7 7M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/>',
     up: '<path d="M6 15l6-6 6 6"/>',
@@ -250,31 +251,83 @@ window.Deck = (() => {
     return { el, set };
   }
 
-  // entries the ⋯ menu shows besides its own: { label, onClick }
+  // entries the settings (gear) menu shows besides its own: { label, onClick }
   const menuItems = [];
 
-  // A full-screen panel over the deck (the camera, the button editor): one tap in the menu or on a button opens it,
-  // one tap on its close button returns. onOpen/onClose are where a panel starts and stops its polling.
+  const isPortrait = () => window.matchMedia('(orientation: portrait)').matches;
+
+  /**
+   * Drag-down-to-close for a portrait bottom sheet. Only `handle` (the grabber / title bar) starts it, never the content, so
+   * scrolling inside the sheet cannot close it. The handle has touch-action: none (style.css), so the gesture is ours and never
+   * a page swipe. Follows the finger, then closes past a threshold (or flicks back). `close` runs after the short slide-out.
+   */
+  function dragToClose(handle, panel, close) {
+    const THRESHOLD = 90; // px of drag that counts as "close"
+    let startY = null;
+    let dy = 0;
+    let moved = false;
+    handle.addEventListener('pointerdown', (event) => {
+      if (!isPortrait()) return;
+      startY = event.clientY;
+      dy = 0;
+      moved = false;
+    });
+    handle.addEventListener('pointermove', (event) => {
+      if (startY === null) return;
+      dy = Math.max(0, event.clientY - startY);
+      if (!moved && dy < 6) return;
+      if (!moved) {
+        moved = true;
+        panel.style.transition = 'none';
+        try { handle.setPointerCapture(event.pointerId); } catch { /* the pointer may be gone already */ }
+      }
+      panel.style.transform = `translateY(${dy}px)`;
+    });
+    const end = () => {
+      if (startY === null) return;
+      startY = null;
+      if (!moved) return;
+      panel.style.transition = 'transform 0.16s ease';
+      if (dy >= THRESHOLD) {
+        panel.style.transform = 'translateY(100%)';
+        setTimeout(() => { close(); panel.style.transition = ''; panel.style.transform = ''; }, 170);
+      } else {
+        panel.style.transform = '';
+        setTimeout(() => { panel.style.transition = ''; }, 170);
+      }
+    };
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+  }
+
+  // A panel over the deck (the camera, the button editor): one tap in the menu or on a button opens it, one tap on its close
+  // button returns. Landscape: a full panel. Portrait: a bottom sheet (~92 % high, grabber on top) that also closes by dragging
+  // its bar down or tapping the dimmed strip above it. onOpen/onClose are where a panel starts and stops its polling.
   // the overlays that are open, oldest first: Deck.back() closes the newest
   const openOverlays = [];
 
   function overlay({ title, el, onOpen, onClose }) {
     const closeButton = h('button', { type: 'button', class: 'overlay-close', 'aria-label': 'Fechar' }, icon('close', 22), h('span', { text: 'Fechar' }));
+    const bar = h('div', { class: 'overlay-bar' }, h('i', { class: 'grabber', 'aria-hidden': 'true' }), h('b', { text: title }), closeButton);
     const root = h('div', { class: 'overlay', hidden: true, role: 'dialog', 'aria-label': title },
-      h('div', { class: 'overlay-bar' }, h('b', { text: title }), closeButton),
+      bar,
       h('div', { class: 'overlay-body' }, el));
-    document.body.append(root);
+    // portrait only (style.css): the dimmed strip above the sheet; a tap there closes it instead of reaching the deck below
+    const scrim = h('div', { class: 'overlay-scrim', hidden: true, on: { click: () => control.close() } });
+    document.body.append(scrim, root);
 
     const control = {
       open() {
         if (!root.hidden) return;
         root.hidden = false;
+        scrim.hidden = false;
         openOverlays.push(control);
         if (onOpen) onOpen();
       },
       close() {
         if (root.hidden) return;
         root.hidden = true;
+        scrim.hidden = true;
         const at = openOverlays.indexOf(control);
         if (at !== -1) openOverlays.splice(at, 1);
         if (onClose) onClose();
@@ -282,13 +335,14 @@ window.Deck = (() => {
       get isOpen() { return !root.hidden; },
     };
     closeButton.addEventListener('click', control.close);
+    dragToClose(bar, root, control.close);
     return control;
   }
 
   /**
    * The Android Back button (MainActivity calls this) and any "go back" gesture. Undoes one thing per call, newest first:
-   * the sheet in #modal-root, the open menu, the newest overlay; with nothing open, any page but Apps goes to Apps.
-   * Returns true if it did something, false if already on Apps with nothing open (the shell then ignores the press:
+   * the sheet in #modal-root, the volume panel, the open menu, the newest overlay; with nothing open, any page but Apps goes
+   * to Apps. Returns true if it did something, false if already on Apps with nothing open (the shell then ignores the press:
    * a stray Back must not drop the deck).
    */
   function back() {
@@ -297,10 +351,12 @@ window.Deck = (() => {
       sheet.remove();
       return true;
     }
-    const menu = $('menu-pop');
-    if (menu && !menu.hidden) {
-      menu.hidden = true;
-      return true;
+    for (const id of ['volume-panel', 'menu-pop']) {
+      const panel = $(id);
+      if (panel && !panel.hidden) {
+        panel.hidden = true;
+        return true;
+      }
     }
     const top = openOverlays[openOverlays.length - 1];
     if (top) {
@@ -311,5 +367,5 @@ window.Deck = (() => {
     return false;
   }
 
-  return { $, h, icon, api, toast, vibrate, fmt, slider, holdButton, pages, addPage, segmented, menuItems, overlay, back, state: { online: false } };
+  return { $, h, icon, api, toast, vibrate, fmt, slider, holdButton, pages, addPage, segmented, menuItems, overlay, dragToClose, back, state: { online: false } };
 })();

@@ -98,7 +98,7 @@ body {
 .tab[aria-selected="true"] { background: var(--surface); color: var(--text); }
 .tab[aria-selected="true"] .ico { color: var(--accent); }
 
-.nav-end { position: relative; flex: none; }
+.nav-end { flex: none; }
 .nav-end .icon-btn { width: var(--touch); height: var(--touch); }
 
 .icon-btn {
@@ -121,10 +121,16 @@ body {
 
 .main { position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; padding-top: var(--safe-top); }
 
-/* Live controls (power pill, camera, microphone, player, FPS): right aligned, one thin row above the pages. header.js sets
-   [hidden] on the whole strip while none of its buttons is shown, so the pager gets the height back. */
+/* Live controls: one thin row above the pages, always there. The volume button holds the left end (its place never moves);
+   the power pill, camera, microphone, player and FPS pill sit at the right end, each shown only while it matters. */
 .live-strip { display: flex; align-items: center; justify-content: flex-end; flex: none; gap: 4px; min-width: 0; height: var(--strip-h); padding: 0 calc(10px + var(--safe-right)) 0 10px; }
 .live-strip .pill { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* volume: icon over a short percentage, 44 px square like the others; red while muted */
+.live-strip > .vol-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; margin-right: auto; color: var(--text); }
+.vol-btn-ico { display: inline-grid; }
+.vol-pct { font-size: 0.6rem; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vol-btn[aria-expanded="true"] { background: var(--surface-2); }
+.vol-btn[data-muted="true"] { color: var(--err); background: rgba(229, 100, 107, 0.12); }
 /* every control in the strip is a 44 px touch target; the pills keep their 28 px look, drawn by ::before inside the taller button */
 .live-strip > .icon-btn { width: 44px; height: 44px; }
 .live-strip .pill, .live-strip .fps-float { position: relative; isolation: isolate; height: 44px; border: 0; background: transparent; }
@@ -141,7 +147,6 @@ body {
 @media (orientation: landscape) {
   body { flex-direction: row; }
   .main { --safe-left: 0px; }
-  .live-strip[hidden] { display: none; }
   .nav {
     flex-direction: column;
     width: calc(var(--rail-w) + var(--safe-left));
@@ -152,8 +157,10 @@ body {
   .tabs { flex-direction: column; padding: 0 1px; }
   .tab { width: 100%; }
   .nav-end { display: flex; justify-content: center; height: var(--touch); margin-top: auto; }
-  /* opens beside the rail, from the bottom */
-  .nav .menu { top: auto; right: auto; bottom: 8px; left: calc(100% + 6px); }
+  /* the menu opens beside the rail, from the bottom, 8 px from the screen edge */
+  .menu { left: calc(var(--rail-w) + var(--safe-left) + 6px); bottom: calc(8px + var(--safe-bottom)); }
+  /* the volume panel hangs under the strip, beside the rail */
+  .vol-panel { top: calc(var(--safe-top) + var(--strip-h) + 4px); left: calc(var(--rail-w) + var(--safe-left) + 10px); width: min(420px, calc(100vw - var(--rail-w) - var(--safe-left) - 20px)); border-radius: 14px; }
 }
 
 @media (orientation: portrait) {
@@ -171,12 +178,19 @@ body {
   .nav-status { left: calc(10px + var(--safe-left)); }
   .glyph { display: none; }
   .nav-end { right: calc(4px + var(--safe-right)); }
-  .nav .menu { right: 4px; } /* 8 px from the screen edge */
+  .scrim { background: rgba(4, 5, 8, 0.45); }
+  /* the menu and the volume panel are bottom sheets over the bar: full width, rounded top, a grabber to drag them down */
+  .menu, .vol-panel { left: 0; right: 0; bottom: calc(var(--bar-h) + var(--safe-bottom)); border-bottom: 0; border-radius: 18px 18px 0 0; animation: sheet-up 0.18s ease; }
+  .menu { max-height: calc(100vh - var(--bar-h) - var(--safe-top) - var(--safe-bottom) - 56px); padding: 0 calc(12px + var(--safe-right)) 12px calc(12px + var(--safe-left)); }
+  .vol-panel { padding: 16px calc(16px + var(--safe-right)) 16px calc(16px + var(--safe-left)); }
+  .menu > .grip { display: flex; justify-content: center; padding: 10px 0 6px; touch-action: none; }
+  .grip i { width: 40px; height: 4px; border-radius: 2px; background: var(--muted); opacity: 0.5; }
+  .menu-host { touch-action: none; }
   .nav-end .icon-btn { width: var(--strip-h); height: var(--strip-h); }
   /* with everything on at once (power pill, camera, mic, player, FPS) 411 px is tight: the buttons stay 44 px, the pill gives up
      padding and, as a last resort, shrinks with an ellipsis (the strip leaves room for the status light and the menu) */
-  .live-strip { gap: 2px; padding: 0 calc(52px + var(--safe-right)) 0 calc(24px + var(--safe-left)); }
-  .live-strip .pill { padding: 0 8px; }
+  .live-strip { gap: 2px; padding: 0 calc(48px + var(--safe-right)) 0 calc(18px + var(--safe-left)); }
+  .live-strip .pill { padding: 0 6px; }
 }
 
 /* the live buttons are quiet until they matter */
@@ -187,15 +201,13 @@ body {
 #player[data-status="playing"] { color: var(--text); }
 
 .menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
+  position: fixed;
   z-index: 30;
   display: flex;
   flex-direction: column;
-  min-width: 190px;
+  min-width: 220px;
   /* never taller than the screen (8 px of air from the edges): scrolls inside instead of running off */
-  max-height: calc(100vh - var(--safe-top) - var(--safe-bottom) - 64px);
+  max-height: calc(100vh - var(--safe-top) - var(--safe-bottom) - 16px);
   overflow-y: auto;
   padding: 6px;
   border: 1px solid var(--border);
@@ -204,22 +216,30 @@ body {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
 }
 .menu[hidden] { display: none; }
+.grip { display: none; } /* portrait only: the sheet's handle */
 .menu-host { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px 8px; font-size: 0.7rem; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
 .menu-host b { font-size: 0.82rem; }
-.menu button { padding: 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font-family: inherit; font-size: 0.8rem; text-align: left; touch-action: manipulation; }
+.menu button { display: flex; align-items: center; flex: none; min-height: 48px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font-family: inherit; font-size: 0.8rem; text-align: left; touch-action: manipulation; }
 .menu button:active { background: var(--surface-2); }
 .menu button[hidden] { display: none; }
 
-/* --- overlay: a full-screen panel over the deck (screen map, system info) ------------------------ */
+/* a tap outside an open panel (volume, menu) lands on this and only closes it (header.js) */
+.scrim { position: fixed; inset: 0; z-index: 29; background: transparent; touch-action: none; }
+.scrim[hidden] { display: none; }
+
+@keyframes sheet-up { from { transform: translateY(100%); } }
+
+/* --- overlay: a panel over the deck (camera, button editor). Landscape: full screen. Portrait: a bottom sheet, see the end of the file ---- */
 
 .overlay { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left); background: var(--bg); }
 .overlay[hidden] { display: none; }
-.overlay-bar { display: flex; align-items: center; justify-content: space-between; flex: none; height: 48px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+.overlay-bar { position: relative; display: flex; align-items: center; justify-content: space-between; flex: none; height: 56px; padding: 0 16px; border-bottom: 1px solid var(--border); }
 .overlay-bar b { font-size: 0.9rem; }
-.overlay-close { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); color: var(--text); font-family: inherit; font-size: 0.8rem; font-weight: 600; touch-action: manipulation; }
+.overlay-close { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 48px; min-width: 48px; padding: 0 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); color: var(--text); font-family: inherit; font-size: 0.8rem; font-weight: 600; touch-action: manipulation; }
 .overlay-close:active { background: var(--border); }
 .overlay-body { flex: 1; min-height: 0; padding: 12px 16px; }
 .overlay-body > section { height: 100%; }
+.grabber, .overlay-scrim { display: none; }
 /* --- pager -------------------------------------------------------------- */
 
 .pager {
@@ -351,25 +371,16 @@ body[data-state="offline"] .offline { display: flex; }
   color: var(--muted);
 }
 
-/* --- volume strip: the last row of the first shortcuts page -------------- */
+/* --- volume panel: the strip inside #volume-panel (opened by #vol-btn) ---------------------------- */
 
-.volume-bar {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  align-content: center;
-  gap: 4px 12px;
-  min-height: 0;
-  padding: 0 12px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--surface);
-  transition: opacity 0.2s ease;
-}
+.vol-panel { position: fixed; z-index: 30; padding: 12px; border: 1px solid var(--border); background: var(--surface); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); outline: none; }
+.vol-panel[hidden] { display: none; }
+
+/* row 1: mute, slider, value; row 2: previous, play/pause, next, one third each */
+.volume-bar { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 10px 12px; transition: opacity 0.2s ease; }
 .volume-bar[data-ready="false"] { opacity: 0.5; pointer-events: none; }
 
-.volume-bar .icon-btn { width: 44px; height: 44px; border-radius: 12px; background: var(--surface-2); color: var(--text); }
+.volume-bar .icon-btn { width: 48px; height: 48px; border-radius: 12px; background: var(--surface-2); color: var(--text); }
 .volume-bar .icon-btn svg { width: 22px; height: 22px; }
 .volume-bar .icon-btn:active { background: var(--border); }
 
@@ -387,14 +398,14 @@ body[data-state="offline"] .offline { display: flex; }
 .volume-bar[data-muted="true"] #vol,
 .volume-bar[data-muted="true"] #vol-value { opacity: 0.4; }
 
-.media { display: flex; gap: 8px; margin-left: auto; }
+.media { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.volume-bar .media .icon-btn { width: auto; }
 
 #vol {
   -webkit-appearance: none;
   appearance: none;
-  flex: 1 1 140px;
   min-width: 0;
-  height: 44px;
+  height: 48px;
   margin: 0;
   background: transparent;
   cursor: pointer;
@@ -445,6 +456,7 @@ body[data-state="offline"] .offline { display: flex; }
 .toast {
   position: fixed;
   left: 50%;
+  z-index: 60; /* above the panels and sheets */
   bottom: calc(18px + var(--safe-bottom));
   max-width: calc(100% - 32px - var(--safe-left) - var(--safe-right));
   padding: 8px 14px;
@@ -476,3 +488,12 @@ body[data-state="offline"] .offline { display: flex; }
 
 /* portrait: the toast clears the navigation bar */
 @media (orientation: portrait) { .toast { bottom: calc(var(--bar-h) + 14px + var(--safe-bottom)); } }
+
+/* portrait: the overlays (camera, button editor) are bottom sheets: ~92 % high with a strip of the deck left above, a grabber, rounded top;
+   dragging the bar down closes them (Deck.dragToClose), and so does a tap on the dimmed strip */
+@media (orientation: portrait) {
+  .overlay { top: max(calc(var(--safe-top) + 12px), 8vh); padding-top: 0; border: 1px solid var(--border); border-bottom: 0; border-radius: 18px 18px 0 0; animation: sheet-up 0.2s ease; }
+  .overlay-bar { padding-top: 10px; touch-action: none; }
+  .grabber { position: absolute; top: 6px; left: 50%; display: block; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: var(--muted); opacity: 0.5; }
+  .overlay-scrim:not([hidden]) { position: fixed; inset: 0; z-index: 39; display: block; background: rgba(4, 5, 8, 0.7); touch-action: none; }
+}
