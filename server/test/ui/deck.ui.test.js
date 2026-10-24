@@ -375,6 +375,92 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       }
     });
 
+    // Touching a window on the map: it is selected, its panel shows, and NOTHING redraws the map (a resize in the middle of the
+    // gesture used to empty it). Same in both orientations.
+    const mapTouch = async (check, label) => {
+      await check.waitFor(`document.querySelectorAll('.map .mwin').length === 2`, `${label}: the windows on the map`);
+      await sleep(400);
+      const snap = () => check.eval(`(() => { const r = (e) => { const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)]; }; return { mon: r(document.querySelector('.map .mon')), map: r(document.querySelector('.map')), wrap: r(document.querySelector('.map-wrap')), wins: document.querySelectorAll('.map .mwin').length, sel: document.querySelectorAll('.map .mwin.sel').length, panel: !document.querySelector('.win-panel').hidden }; })()`);
+      const before = await snap();
+      assert.strictEqual(before.sel, 0, label);
+      await check.tap('.mwin[data-handle="101"]');
+      await check.waitFor(`document.querySelector('.mwin[data-handle="101"]')?.classList.contains('sel')`, `${label}: the window selected`);
+      await sleep(1500); // a rebuild caused by the panel replacing the Telas row would show up by now
+      const after = await snap();
+      assert.strictEqual(after.wins, 2, `${label}: the windows vanished from the map ${JSON.stringify(after)}`);
+      assert.deepStrictEqual([after.mon, after.map, after.wrap], [before.mon, before.map, before.wrap], `${label}: selecting resized the map`);
+      assert.ok(after.sel === 1 && after.panel, `${label}: ${JSON.stringify(after)}`);
+      // the empty part of the map clears the selection and the windows stay
+      const empty = await check.eval(`(() => { const b = document.querySelector('.map-wrap').getBoundingClientRect(); return { x: Math.round(b.left + 4), y: Math.round(b.top + 4) }; })()`);
+      await check.touch('touchStart', empty.x, empty.y);
+      await check.touch('touchEnd', empty.x, empty.y);
+      await check.waitFor(`document.querySelectorAll('.map .mwin.sel').length === 0 && document.querySelector('.win-panel').hidden`, `${label}: the selection cleared`);
+      await sleep(800);
+      const cleared = await snap();
+      assert.strictEqual(cleared.wins, 2, `${label}: ${JSON.stringify(cleared)}`);
+      assert.deepStrictEqual([cleared.mon, cleared.map], [before.mon, before.map], `${label}: clearing resized the map`);
+    };
+
+    await test('Janelas (landscape): touching a window on the map selects it without resizing the map or emptying it; touching the empty map clears it', async () => {
+      const wide = await browser2(836, 387);
+      try {
+        await wide.waitFor(`document.querySelectorAll('#tabs .tab').length === 6`, 'the tabs');
+        await go('windows', wide);
+        await mapTouch(wide, 'landscape');
+      } finally {
+        wide.close();
+      }
+    });
+
+    await test('Janelas (portrait): touching a window on the map selects it without resizing or emptying the map', async () => {
+      const tall = await browser2(410, 914);
+      try {
+        await tall.waitFor(`document.querySelectorAll('#tabs .tab').length === 6`, 'the tabs');
+        await go('windows', tall);
+        await tall.tap('.windows-page .seg-btn[data-seg="map"]');
+        await tall.waitFor(`document.querySelector('.windows-page').dataset.pane === 'map'`, 'the map pane');
+        await mapTouch(tall, 'portrait');
+      } finally {
+        tall.close();
+      }
+    });
+
+    await test('Janelas: dragging a window on the map moves it, ends the gesture and the map draws again; a resize during the drag does not strand it', async () => {
+      const wide = await browser2(836, 387);
+      const saved = JSON.stringify(deck.model.windows);
+      try {
+        await wide.waitFor(`document.querySelectorAll('#tabs .tab').length === 6`, 'the tabs');
+        await go('windows', wide);
+        await wide.waitFor(`document.querySelectorAll('.map .mwin').length === 2`, 'the windows on the map');
+        await sleep(400);
+        const left = () => wide.eval(`document.querySelector('.mwin[data-handle="101"]').style.left`);
+        const startLeft = await left();
+        const from = await wide.center('.mwin[data-handle="101"]');
+        const monBox = await wide.eval(`(() => { const b = document.querySelector('.map .mon').getBoundingClientRect(); return { x: b.left + b.width * 0.5, y: b.top + b.height * 0.5 }; })()`);
+        deck.model.calls.length = 0;
+        await wide.touch('touchStart', from.x, from.y);
+        for (let step = 1; step <= 8; step += 1) {
+          await wide.touch('touchMove', from.x + ((monBox.x - from.x) * step) / 8, from.y + ((monBox.y + 20 - from.y) * step) / 8);
+          await sleep(30);
+        }
+        // the page is resized in the middle of the drag (the map would be rebuilt): the window under the finger must survive
+        await wide.setViewport(836, 380);
+        await sleep(400);
+        await wide.touch('touchEnd', monBox.x, monBox.y + 20);
+        await wide.waitFor(`!document.querySelector('.mwin.dragging')`, 'the drag to end');
+        await sleep(300);
+        assert.ok(deck.model.calls.some((c) => c.path === '/api/windows/place' && c.body.handle === 101), `the move was sent: ${JSON.stringify(deck.model.calls.map((c) => c.path))}`);
+        assert.strictEqual(await wide.eval(`document.querySelectorAll('.map .mwin').length`), 2, 'the windows are still on the map');
+        // drawing is not blocked: a change on the PC shows on the map
+        deck.model.windows[0] = { ...deck.model.windows[0], x: 900, y: 300 };
+        await wide.waitFor(`document.querySelector('.mwin[data-handle="101"]').style.left !== ${JSON.stringify(await left())}`, 'the map following the PC after the drag');
+        assert.notStrictEqual(await left(), startLeft);
+      } finally {
+        deck.model.windows = JSON.parse(saved);
+        wide.close();
+      }
+    });
+
     // what the page subscribed to on its push stream the last time it changed (every pane change reconnects with its own topics)
     const topicsNow = () => {
       const opened = deck.model.calls.filter((c) => c.path === '/api/events');
