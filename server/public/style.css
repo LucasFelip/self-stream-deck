@@ -9,6 +9,11 @@
   --ok: #4cc38a;
   --err: #e5646b;
   --icon: 44px; /* set by app.js from the real tile size */
+  /* the camera cut-out / system bars the window may draw under (viewport-fit=cover); 0 in browsers without any */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
   color-scheme: dark;
 }
 
@@ -41,8 +46,8 @@ header {
   align-items: center;
   gap: 12px;
   flex: none;
-  height: 48px;
-  padding: 0 16px;
+  height: calc(48px + var(--safe-top));
+  padding: var(--safe-top) calc(16px + var(--safe-right)) 0 calc(16px + var(--safe-left));
   border-bottom: 1px solid var(--border);
 }
 
@@ -123,7 +128,7 @@ header {
    flexible column so they can shrink; inactive tabs show only their icon and the active one can ellipsize its label.
    With every optional button on at once (live camera + mic + player + power pill + FPS) 411 px is still not enough. */
 @media (max-width: 640px) {
-  header { grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px; padding: 0 10px; }
+  header { grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px; padding: var(--safe-top) calc(10px + var(--safe-right)) 0 calc(10px + var(--safe-left)); }
   .glyph { display: none; }
   .tabs { min-width: 0; justify-content: center; }
   .tab { flex: 0 1 auto; min-width: 0; padding: 0 7px; gap: 5px; }
@@ -164,7 +169,7 @@ header {
 
 /* --- overlay: a full-screen panel over the deck (screen map, system info) ------------------------ */
 
-.overlay { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; background: var(--bg); }
+.overlay { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left); background: var(--bg); }
 .overlay[hidden] { display: none; }
 .overlay-bar { display: flex; align-items: center; justify-content: space-between; flex: none; height: 48px; padding: 0 16px; border-bottom: 1px solid var(--border); }
 .overlay-bar b { font-size: 0.9rem; }
@@ -189,7 +194,7 @@ header {
 body[data-state="offline"] .pager { opacity: 0.35; pointer-events: none; }
 
 /* offline notice: a real row under the header, so the pager shrinks instead of being covered */
-.offline { display: none; align-items: center; justify-content: space-between; gap: 12px; flex: none; min-height: 40px; padding: 4px 16px; border-bottom: 1px solid var(--border); background: rgba(229, 100, 107, 0.12); color: var(--err); font-size: 0.8rem; font-weight: 600; }
+.offline { display: none; align-items: center; justify-content: space-between; gap: 12px; flex: none; min-height: 40px; padding: 4px calc(16px + var(--safe-right)) 4px calc(16px + var(--safe-left)); border-bottom: 1px solid var(--border); background: rgba(229, 100, 107, 0.12); color: var(--err); font-size: 0.8rem; font-weight: 600; }
 body[data-state="offline"] .offline { display: flex; }
 .offline button { height: 32px; padding: 0 14px; border: 1px solid var(--err); border-radius: 10px; background: transparent; color: var(--err); font: inherit; font-size: 0.78rem; font-weight: 600; touch-action: manipulation; }
 .offline button:active { background: rgba(229, 100, 107, 0.2); }
@@ -198,7 +203,7 @@ body[data-state="offline"] .offline { display: flex; }
 .page {
   flex: 0 0 100%;
   min-width: 0;
-  padding: 12px 16px;
+  padding: 12px calc(16px + var(--safe-right)) calc(12px + var(--safe-bottom)) calc(16px + var(--safe-left));
   scroll-snap-align: start;
   scroll-snap-stop: always;
 }
@@ -419,8 +424,8 @@ body[data-state="offline"] .offline { display: flex; }
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 18px;
-  max-width: calc(100% - 32px);
+  bottom: calc(18px + var(--safe-bottom));
+  max-width: calc(100% - 32px - var(--safe-left) - var(--safe-right));
   padding: 8px 14px;
   border: 1px solid var(--border);
   border-radius: 999px;

@@ -21,9 +21,12 @@
 
   // Fit a fixed grid to the real screen: as many rows as the height allows, then as many roughly
   // square columns as the width allows. Also returns how big the icons can be inside those tiles.
+  // the camera cut-out / bars the pages keep clear of (style.css, --safe-*): the grid is fitted to what is left
+  const safe = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
+
   function measure() {
-    const width = pager.clientWidth - 2 * PAGE_PADDING_X;
-    const height = pager.clientHeight - 2 * PAGE_PADDING_Y;
+    const width = pager.clientWidth - 2 * PAGE_PADDING_X - safe('--safe-left') - safe('--safe-right');
+    const height = pager.clientHeight - 2 * PAGE_PADDING_Y - safe('--safe-bottom');
     const rows = Math.max(1, Math.floor((height + GAP) / (MIN_TILE_H + GAP)));
     const tileH = (height - (rows - 1) * GAP) / rows;
     const cols = Math.max(2, Math.round((width + GAP) / (tileH * TILE_ASPECT + GAP)));

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Same theme, but the page may draw under the camera cut-out on the short edges (the notch of a phone in landscape).
+         The page keeps its content clear of it with env(safe-area-inset-*) (viewport-fit=cover is already in index.html). -->
+    <style name="DeckTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+</resources>

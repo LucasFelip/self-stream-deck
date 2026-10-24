@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Full-screen deck. API < 28 has no display-cutout setting (see values-v28 for the one that uses the notch area). -->
+    <style name="DeckTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen" />
+</resources>

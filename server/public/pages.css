@@ -347,7 +347,7 @@ button.chip:active { background: var(--border); }
   z-index: 20;
   display: grid;
   place-items: center;
-  padding: 12px;
+  padding: calc(12px + var(--safe-top)) calc(12px + var(--safe-right)) calc(12px + var(--safe-bottom)) calc(12px + var(--safe-left));
   background: rgba(4, 5, 8, 0.78);
   animation: fade 0.15s ease;
 }
