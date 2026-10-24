@@ -571,6 +571,7 @@ button.chip:active { background: var(--border); }
   .camera-page::-webkit-scrollbar, .editor-page::-webkit-scrollbar { display: none; }
   .camera-page > *, .editor-page > * { flex: none; }
   /* Câmera: the picture on top (4:3), the controls under it */
+  .act small { -webkit-line-clamp: 2; line-clamp: 2; } /* o texto nao encosta na borda de baixo do botao */
   .cam-view { aspect-ratio: 4 / 3; max-height: 46vh; width: 100%; }
   .cam-side { overflow: visible; }
   /* Editor: list, then form, one column; the list scrolls inside a limited height */
