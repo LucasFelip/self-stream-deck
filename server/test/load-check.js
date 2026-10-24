@@ -34,6 +34,8 @@ const sandbox = {
   ResizeObserver: class { observe() {} disconnect() {} },
   CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init && init.detail; } },
   performance: { now: () => Date.now() },
+  getComputedStyle: () => dummy(),
+  innerWidth: 360, innerHeight: 640,
   localStorage: dummy(),
   navigator: dummy(),
   document: dummy(),
