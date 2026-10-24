@@ -140,7 +140,7 @@
     cpuStats.clock.set(orDash(cpu.freqMHz, (v) => `${(v / 1000).toFixed(2)} GHz`));
     cpuStats.temp.set(orDash(cpu.temp, (v) => `${Math.round(v)} °C`));
     cpuStats.power.set(orDash(cpu.power, (v) => `${v.toFixed(0)} W`));
-    cpuStats.tasks.set(`${cpu.processes} · ${cpu.threads} threads`);
+    cpuStats.tasks.set(`${cpu.processes} · ${cpu.threads} thr`);
     cpu.cores.forEach((usage, i) => {
       const cell = coreBars[i];
       if (cell) cell.firstChild.style.height = `${Math.min(100, usage)}%`;

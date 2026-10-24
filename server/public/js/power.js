@@ -17,7 +17,7 @@
   const ACTIONS = [
     { id: 'lock', icon: 'lock', label: 'Bloquear', tone: 'soft', short: 'Vai para a tela de login. Os apps continuam abertos.', immediate: true },
     {
-      id: 'sleep', icon: 'sleep', label: 'Suspender', tone: 'soft', short: 'Baixo consumo, volta em segundos. Apps continuam abertos.',
+      id: 'sleep', icon: 'sleep', label: 'Suspender', tone: 'soft', short: 'Baixo consumo, volta em segundos.',
       title: 'Suspender o PC?', effects: 'O PC entra em suspensão com tudo aberto na memória.',
       reconnect: 'O painel perde a conexão até o PC acordar (mouse, teclado ou botão de ligar).',
     },
