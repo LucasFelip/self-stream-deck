@@ -21,6 +21,7 @@
   const lists = { shortcuts: [], macros: [], apps: [] }; // working copies, saved with the button
   const selected = { shortcuts: 0, macros: 0 };
   let dirty = false;
+  let target = null; // set by edit mode: { key } of a tapped key, or { create } for a "+" slot
 
   const post = (path, json) => api(path, { method: 'POST', json });
   const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -332,7 +333,31 @@
 
   // --- the sheet ----------------------------------------------------------------------------------
 
+  // Opened from edit mode: select the tapped key (its tab and row), or start a new item for the empty slot that was tapped.
+  function applyTarget(want) {
+    if (!want) return;
+    if (want.create) {
+      tab = want.create === 'apps' ? 'macros' : 'shortcuts';
+      const list = lists[tab];
+      list.push(tab === 'shortcuts' ? { label: '', keys: '' } : { label: '', page: 'apps', steps: [STEP_TYPES[0][2]()] });
+      selected[tab] = list.length - 1;
+      markDirty();
+      return;
+    }
+    const kind = String(want.key || '').charAt(0);
+    const id = String(want.key || '').slice(2);
+    if (kind === 's' || kind === 'm') {
+      tab = kind === 's' ? 'shortcuts' : 'macros';
+      const at = lists[tab].findIndex((item) => item.id === id);
+      if (at !== -1) selected[tab] = at;
+    } else {
+      tab = 'apps';
+    }
+  }
+
   async function load() {
+    const want = target;
+    target = null;
     try {
       data = await api('/api/editor');
       lists.shortcuts = clone(data.shortcuts);
@@ -341,7 +366,9 @@
       dirty = false;
       selected.shortcuts = 0;
       selected.macros = 0;
+      applyTarget(want);
       render();
+      if (want && want.create) form.querySelector('input')?.focus();
     } catch (err) {
       form.replaceChildren(h('p', { class: 'muted ed-hint', text: err.status === 403 ? 'O editor está desligado no config.json ("editor": false).' : `Não foi possível carregar: ${err.message}` }));
     }
@@ -351,7 +378,15 @@
     title: 'Editar botões',
     el,
     onOpen: load,
-    onClose() { clearTimeout(armTimer); },
+    onClose() { clearTimeout(armTimer); target = null; },
   });
-  Deck.menuItems.push({ label: 'Editar botões', onClick: () => sheet.open() });
+  // the menu entry turns on edit mode on the deck itself (js/edit.js); this sheet then opens from a tapped key or a "+" slot
+  Deck.menuItems.push({ label: 'Editar botões', onClick: () => Deck.edit.enter() });
+  Deck.editor = {
+    open(where) {
+      if (sheet.isOpen) return;
+      target = where || null;
+      sheet.open();
+    },
+  };
 })();

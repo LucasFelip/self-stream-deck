@@ -181,6 +181,7 @@
       currentId = pageId(page);
       if (pendingId === currentId) pendingId = null;
       notifyPages(previous, currentId);
+      if (Deck.edit && !pendingId) Deck.edit.sectionChanged(sectionOf(page)); // edit mode ends when you leave Apps / Atalhos
     }
     if (!page) return;
 
@@ -201,6 +202,7 @@
     // snapping is paused while the pages change, otherwise the browser re-snaps to the old snap target
     pager.style.scrollSnapType = 'none';
     pager.replaceChildren(...buildPages(), ...modulePages());
+    if (Deck.edit) Deck.edit.decorate(); // empty slots are "+" buttons while editing
 
     const keep = allPages().findIndex((page) => pageId(page) === (pendingId || currentId));
     goTo(keep === -1 ? 0 : keep, false);

@@ -134,6 +134,7 @@
 
     tile.addEventListener('click', () => {
       if (Deck.arrange.justDropped) return; // the touch that ended a drag is not a tap
+      if (Deck.edit && Deck.edit.active) { Deck.edit.tap(item); return; } // edit mode: a tap edits the key, it never launches it
       tile.classList.add('launched');
       setTimeout(() => tile.classList.remove('launched'), 250);
       // a macro can take seconds: its key stays marked busy until it ends

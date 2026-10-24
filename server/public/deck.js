@@ -343,7 +343,7 @@ window.Deck = (() => {
 
   /**
    * The Android Back button (MainActivity calls this) and any "go back" gesture. Undoes one thing per call, newest first:
-   * the sheet in #modal-root, the volume panel, the open menu, the newest overlay; with nothing open, any page but Apps goes
+   * the sheet in #modal-root, the volume panel, the open menu, the newest overlay, edit mode; with nothing open, any page but Apps goes
    * to Apps. Returns true if it did something, false if already on Apps with nothing open (the shell then ignores the press:
    * a stray Back must not drop the deck).
    */
@@ -363,6 +363,10 @@ window.Deck = (() => {
     const top = openOverlays[openOverlays.length - 1];
     if (top) {
       top.close();
+      return true;
+    }
+    if (Deck.edit && Deck.edit.active) {
+      Deck.edit.exit();
       return true;
     }
     if (Deck.pager && Deck.pager.currentSection() !== 'apps') return Deck.goTo('apps-0');
