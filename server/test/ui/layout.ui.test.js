@@ -164,6 +164,33 @@ const player = { session: 's1', status: 'playing', title: 'Faixa de teste', arti
           page.close();
         }
 
+        // the strip showing / hiding (landscape: the pager changes height) must not rebuild the pages, because that blinks; a rotation must
+        if (viewport.landscape) {
+          deck.model.fps = null;
+          deck.model.state.scheduled = null;
+          deck.model.state.playing = null;
+          deck.model.state.mic = { available: true, muted: false };
+          const stable = await browser.open(`${deck.url}/`);
+          await stable.waitFor(`document.querySelectorAll('#tabs .tab').length >= ${SECTIONS.length} && document.querySelector('.tile') && !document.getElementById('mic').hidden`, 'the tiles and the mic');
+          await sleep(600);
+          await stable.eval(`window.__tile = document.querySelector('.tile'); window.__pagerH = document.getElementById('pager').getBoundingClientRect().height; window.__cols = document.querySelector('.grid').style.getPropertyValue('--cols'); true`);
+          await stable.eval(`document.getElementById('mic').hidden = true`);
+          await sleep(500); // the observer waits 120 ms
+          const toggled = await stable.eval(`({ same: window.__tile === document.querySelector('.tile') && window.__tile.isConnected, grew: document.getElementById('pager').getBoundingClientRect().height - window.__pagerH })`);
+          const hide = [];
+          if (!(toggled.grew > 20)) hide.push(`faixa: o pager deveria ganhar a altura da faixa ao ocultar o mic (${JSON.stringify(toggled)})`);
+          if (!toggled.same) hide.push('faixa: ocultar o mic recriou os tiles (a grade piscaria)');
+          await stable.eval(`document.getElementById('mic').hidden = false`);
+          await sleep(500);
+          if (!(await stable.eval(`window.__tile === document.querySelector('.tile') && window.__tile.isConnected`))) hide.push('faixa: mostrar o mic recriou os tiles (a grade piscaria)');
+          await stable.setViewport(411, 914);
+          await sleep(600);
+          if (await stable.eval(`window.__tile === document.querySelector('.tile') && window.__tile.isConnected`)) hide.push('rotacao: mudou cols x rows mas os tiles nao foram refeitos');
+          if (await stable.eval(`document.querySelector('.grid').style.getPropertyValue('--cols')`) === await stable.eval('window.__cols')) hide.push('rotacao: a grade continuou com as mesmas colunas');
+          record(viewport, 'faixa x pager', 'apps', hide);
+          stable.close();
+        }
+
         // nothing on: the strip must not cost landscape any height; in portrait it stays as the row of the status light and the menu
         deck.model.fps = null;
         deck.model.state.scheduled = null;

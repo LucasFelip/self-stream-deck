@@ -26,9 +26,18 @@
   // Read from the pager, not the root: the rail / bar already covers its side, so .main zeroes that inset.
   const safe = (name) => parseFloat(getComputedStyle(pager).getPropertyValue(name)) || 0;
 
+  // Landscape: the live strip takes no height while nothing is on, and gives it back to the pager. The grid is planned as if
+  // the strip were there, so showing / hiding it never changes cols x rows (no rebuild, no blink); the CSS grid just
+  // stretches the tiles a little taller while the strip is away.
+  const strip = $('live-strip');
+  const stripReserve = () => {
+    const style = getComputedStyle(strip);
+    return style.display === 'none' ? parseFloat(style.getPropertyValue('--strip-h')) || 0 : 0;
+  };
+
   function measure() {
     const width = pager.clientWidth - 2 * PAGE_PADDING_X - safe('--safe-left') - safe('--safe-right');
-    const height = pager.clientHeight - 2 * PAGE_PADDING_Y - safe('--safe-bottom');
+    const height = pager.clientHeight - stripReserve() - 2 * PAGE_PADDING_Y - safe('--safe-bottom');
     const rows = Math.max(1, Math.floor((height + GAP) / (MIN_TILE_H + GAP)));
     const tileH = (height - (rows - 1) * GAP) / rows;
     const cols = Math.max(2, Math.round((width + GAP) / (tileH * TILE_ASPECT + GAP)));
@@ -47,10 +56,14 @@
     return page;
   }
 
+  // the grid the pages were last built for: the pages only depend on cols and rows (the icon size is a CSS variable)
+  let built = null;
+
   function buildPages() {
     const { cols, rows, icon } = measure();
     const perPage = cols * rows;
     pager.style.setProperty('--icon', `${icon}px`);
+    built = { cols, rows };
 
     const pages = [];
     for (const [key, section] of Object.entries(Deck.tiles.sections)) {
@@ -243,9 +256,20 @@
   }, { passive: true });
 
   let resizeTimer;
+  // The pager also resizes when the live strip shows or hides (landscape): if the grid (cols x rows) is the same, the pages
+  // are not rebuilt, so nothing blinks; the CSS grid already stretches the tiles, only the icon size is updated.
   new ResizeObserver(() => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(render, 120);
+    resizeTimer = setTimeout(() => {
+      if (pager.clientWidth && built) {
+        const { cols, rows, icon } = measure();
+        if (cols === built.cols && rows === built.rows) {
+          pager.style.setProperty('--icon', `${icon}px`);
+          return;
+        }
+      }
+      render();
+    }, 120);
   }).observe(pager);
 
   Deck.pager = {

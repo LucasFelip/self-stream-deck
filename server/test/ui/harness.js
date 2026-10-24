@@ -147,6 +147,8 @@ async function launchBrowser({ width = 412, height = 915 } = {}) {
         }
         return last;
       },
+      /** resizes the emulated screen (a rotation) */
+      setViewport: (w, hgt) => send('Emulation.setDeviceMetricsOverride', { width: w, height: hgt, deviceScaleFactor: 1, mobile: true }),
       touch: (type, x, y) => send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] }),
       async tap(selector) {
         const { x, y } = await page.center(selector);
