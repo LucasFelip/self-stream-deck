@@ -106,6 +106,17 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
     await test('the page raised no script errors', () => {
       assert.deepStrictEqual(page.errors, []);
     });
+
+    await test('a game already running at load: the FPS arrives before the pages exist and the pill still ends up in the header', async () => {
+      deck.model.fps = { fps: 72, frameMs: 13.9, app: 'Jogo' };
+      const second = await browser.open(`${deck.url}/`);
+      // slides to Desempenho once the pages exist (the pill hides there), then shows on any other page
+      await second.waitFor(`document.querySelector('#tabs .tab[data-section="monitor"]')?.getAttribute('aria-selected') === 'true'`, 'the slide to Desempenho');
+      await second.tap('#tabs .tab[data-section="apps"]');
+      await second.waitFor(`!document.getElementById('fps').hidden && document.querySelector('.actions #fps b').textContent === '72'`, 'the FPS pill inside .actions');
+      deck.model.fps = null;
+      second.close();
+    });
   } finally {
     browser.close();
     deck.close();

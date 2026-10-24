@@ -139,9 +139,17 @@
     pager.scrollTo({ left: index * pager.clientWidth, behavior: smooth ? 'smooth' : 'instant' });
   }
 
+  // A jump asked for by id that has not arrived yet: a rebuild of the pages (render) in the middle of the slide must
+  // aim at it, not at the page we were on, or it would cancel the slide.
+  let pendingId = null;
+
+  /** Returns false when there is no such page (yet), so a caller can try again later. */
   function goToId(id) {
     const index = allPages().findIndex((page) => page.dataset.id === id);
-    if (index !== -1) goTo(index);
+    if (index === -1) return false;
+    pendingId = id;
+    goTo(index);
+    return true;
   }
 
   function openSection(sectionId) {
@@ -187,6 +195,7 @@
     if (page && currentId !== pageId(page)) {
       const previous = currentId;
       currentId = pageId(page);
+      if (pendingId === currentId) pendingId = null;
       notifyPages(previous, currentId);
     }
     if (!page) return;
@@ -215,12 +224,16 @@
     volumeHolder.append(volumeBox); // keep the volume strip (and its state) out of the pages being thrown away
     pager.replaceChildren(...buildPages(), ...modulePages());
 
-    const keep = allPages().findIndex((page) => pageId(page) === currentId);
+    const keep = allPages().findIndex((page) => pageId(page) === (pendingId || currentId));
     goTo(keep === -1 ? 0 : keep, false);
     renderTabs();
     Deck.pc.paint();
+    Deck.game.pagesReady();
     requestAnimationFrame(() => { pager.style.scrollSnapType = ''; });
   }
+
+  // the person takes over: whatever slide was pending is forgotten
+  pager.addEventListener('touchstart', () => { pendingId = null; }, { passive: true });
 
   let scrollFrame;
   pager.addEventListener('scroll', () => {

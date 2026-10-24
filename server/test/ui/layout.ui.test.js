@@ -1,8 +1,7 @@
 'use strict';
 
 // "Nothing overlaps": at a landscape (836x387) and a portrait (411x914) viewport, on every destination, the bar elements
-// must not run past the viewport or sit on top of each other, the floating FPS pill must not cover any button or card of
-// the page underneath, and the body must not scroll sideways. A game is faked so the pill is on screen.
+// must not run past the viewport or sit on top of each other, the FPS pill (in the header's actions) must show outside Desempenho, and the body must not scroll sideways. A game is faked (already running at load) so the pill is on screen.
 //
 // Today some of these fail on purpose (FPS over the Mapa button; the header in portrait, where the .host grid column
 // shrinks to 1px so its glyph and status overflow onto the first tab). So that `npm run check` stays green during Phase 0
@@ -42,7 +41,7 @@ const probe = (section) => `(() => {
   const groups = [
     ['host', [...pick('.host .glyph'), ...pick('#status'), ...pick('.host .host-name')]],
     ['abas', pick('#tabs .tab')],
-    ['acoes', pick('.actions .icon-btn, .actions .pill')],
+    ['acoes', pick('.actions .icon-btn, .actions .pill, .actions .fps-float')],
   ];
   const label = (el) => name(el) + (el.classList.contains('tab') && el.textContent.trim() ? ' "' + el.textContent.trim().slice(0, 12) + '"' : '');
   const hostEl = document.querySelector('.host');
@@ -56,19 +55,9 @@ const probe = (section) => `(() => {
     }
   }
 
-  // (b) the FPS pill against the visible page's buttons and cards
-  const pill = document.querySelector('.fps-float');
-  if (pill && !pill.hidden && shown(pill)) {
-    const p = box(pill);
-    const pages = [...document.querySelectorAll('.page')].filter((pg) => { const r = box(pg); return r.left > -10 && r.left < innerWidth - 10; });
-    for (const pg of pages) for (const el of pg.querySelectorAll('button, .tile, .card, [class*="card"], input')) {
-      if (shown(el) && hit(p, box(el))) out.push('fps: pilula cobre ' + name(el) + (el.textContent.trim() ? ' "' + el.textContent.trim().slice(0, 20) + '"' : ''));
-    }
-    const near = [...document.querySelectorAll('header button, header .pill')].filter((el) => shown(el) && hit(p, box(el)));
-    for (const el of near) out.push('fps: pilula cobre ' + name(el) + ' da barra');
-  } else if (${JSON.stringify(section)} !== 'monitor') {
-    out.push('fps: pilula nao apareceu');
-  }
+  // (b) the FPS pill lives in the header's actions (so the group check above covers it); it must be there outside Desempenho
+  const pill = document.querySelector('#fps');
+  if (${JSON.stringify(section)} !== 'monitor' && !(pill && !pill.hidden && shown(pill))) out.push('fps: pilula nao apareceu');
 
   // (c) no sideways scroll
   if (document.body.scrollWidth > document.body.clientWidth) out.push('body: scrollWidth ' + document.body.scrollWidth + ' > clientWidth ' + document.body.clientWidth);
@@ -84,17 +73,13 @@ const probe = (section) => `(() => {
   const deck = await fakeDeck();
   try {
     for (const viewport of VIEWPORTS) {
-      deck.model.fps = null;
+      deck.model.fps = { fps: 60, frameMs: 16.6, app: 'Jogo' };
       const browser = await launchBrowser({ width: viewport.width, height: viewport.height });
       try {
         const page = await browser.open(`${deck.url}/`);
         await page.waitFor(`document.querySelectorAll('#tabs .tab').length >= ${SECTIONS.length}`, 'the tabs');
-        // the game starts only once the pages exist (at startup game.js can ask to slide before there is a Desempenho page)
-        await page.waitFor(`document.querySelector('.page[data-id="monitor"]') && document.querySelectorAll('.tile[data-key]').length >= 6`, 'all pages');
-        await sleep(800);
-        deck.model.fps = { fps: 60, frameMs: 16.6, app: 'Jogo' };
-        deck.model.pushGame();
-        await page.waitFor(`document.querySelector('.fps-float') && document.querySelector('.fps-float b').textContent === '60'`, 'the fps from the fake game');
+        // the game is already running when the page opens: the FPS may arrive before the pages exist (that race is handled by game.js)
+        await page.waitFor(`document.querySelector('#fps b').textContent === '60'`, 'the fps from the fake game');
         await page.waitFor("document.querySelector('#tabs .tab[data-section=monitor]').getAttribute('aria-selected') === 'true'", 'the deck to slide to Desempenho');
         await sleep(500);
         for (const section of SECTIONS) {
@@ -102,7 +87,7 @@ const probe = (section) => `(() => {
           await page.eval(`document.querySelector('#tabs .tab[data-section="${section}"]').click()`);
           await page.waitFor(`document.querySelector('#tabs .tab[data-section="${section}"]').getAttribute('aria-selected') === 'true'`, `${section} tab selected`);
           await sleep(900); // the slide, and the page's first render
-          if (section !== 'monitor') await page.waitFor("!document.querySelector('.fps-float').hidden", 'the fps pill', 3000).catch(() => {}); // missing pill is reported by the probe
+          if (section !== 'monitor') await page.waitFor("!document.querySelector('#fps').hidden", 'the fps pill', 3000).catch(() => {}); // missing pill is reported by the probe
           const found = await page.eval(probe(section));
           for (const message of found) violations.push(`${viewport.name} ${viewport.width}x${viewport.height} / ${section}: ${message}`);
           console.log(`${found.length ? 'viol  ' : 'ok    '} ${viewport.name} / ${section}`);
