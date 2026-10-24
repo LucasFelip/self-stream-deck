@@ -269,6 +269,7 @@
   document.addEventListener('pointercancel', dropLostDrag, true);
 
   async function finishDrag(up) {
+    if (!drag) return; // the gesture was already ended (the map was rebuilt under the finger)
     const { el, moved } = drag;
     const win = windows.find((item) => item.handle === drag.win.handle) || drag.win; // the current object, not a stale one
     drag.finishing = true;

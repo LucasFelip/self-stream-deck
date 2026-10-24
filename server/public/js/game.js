@@ -2,7 +2,7 @@
 
 /**
  * A game being played. The moment its frame rate shows up the deck slides to PC > Desempenho, so the person sees it; anywhere
- * else a small pill in the live strip keeps the number in view (tap it to go to PC > Desempenho). It listens to the light "game" topic,
+ * else a small floating counter in the corner (#fps, no touch) keeps the number in view. It listens to the light "game" topic,
  * so it works from every page and not only while Desempenho is open (the PC page tells us when that pane is the one on screen).
  */
 (() => {
@@ -18,7 +18,6 @@
     Deck.perf?.showPane('monitor');
     return true;
   };
-  pill.addEventListener('click', openPerformance);
 
   let playing = false;
   let onMonitor = false;

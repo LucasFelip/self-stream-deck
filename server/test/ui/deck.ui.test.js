@@ -38,12 +38,12 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.strictEqual(await page.eval(`document.getElementById('host').textContent`), 'PC-TESTE');
     });
 
-    await test('the tabs are plain: the section name only, no page counter and no dots inside them, and the strip lives outside the navigation', async () => {
+    await test('the tabs are plain: the section name only, no page counter and no dots inside them', async () => {
       const labels = await page.eval(`[...document.querySelectorAll('#tabs .tab')].map((t) => t.textContent.trim())`);
       assert.deepStrictEqual(labels, ['Apps', 'Atalhos', 'Janelas', 'Som', 'PC', 'Energia']);
       assert.strictEqual(await page.eval(`document.querySelectorAll('.tab-dots').length`), 0);
       assert.strictEqual(await page.eval(`document.querySelectorAll('#tabs[role="tablist"] > .tab[role="tab"]').length`), 6);
-      assert.strictEqual(await page.eval(`document.querySelector('nav.nav').contains(document.getElementById('menu')) && !document.querySelector('nav.nav').contains(document.getElementById('mic'))`), true);
+      assert.strictEqual(await page.eval(`document.querySelector('nav.nav').contains(document.getElementById('menu'))`), true);
       // only in the menu (which sits in the navigation but stays closed)
       assert.ok(!/PC-TESTE/.test(await page.eval(`[...document.querySelector('nav.nav').children].filter((el) => !el.contains(document.getElementById('menu-pop'))).map((el) => el.textContent).join('')`)), 'the PC name is not in the navigation');
     });
@@ -83,31 +83,23 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.ok(deck.model.calls.some((c) => c.path === '/api/launch/app1'), JSON.stringify(deck.model.calls));
     });
 
-    await test('the header shows the microphone and tapping it toggles it on the PC', async () => {
-      await page.waitFor(`!document.getElementById('mic').hidden`, 'the microphone button');
-      deck.model.calls.length = 0;
-      await page.tap('#mic');
-      await sleep(300);
-      assert.ok(deck.model.calls.some((c) => c.method === 'POST' && c.path === '/api/mic' && c.body.muted === 'toggle'));
-      assert.strictEqual(await page.eval(`document.getElementById('mic').dataset.muted`), 'true');
+    await test('there is no live strip nor microphone button (the microphone lives in Som > Entrada)', async () => {
+      assert.strictEqual(await page.eval(`document.getElementById('mic') || document.getElementById('live-strip')`), null);
     });
 
-    await test('a running app shows its dot, and a scheduled shutdown shows the pill', async () => {
+    await test('a running app shows its dot; the power pill and the camera button are gone from the screen', async () => {
       assert.ok(await page.eval(`document.querySelector('.tile[data-app-id="app0"]').classList.contains('running')`));
-      deck.model.state.scheduled = { action: 'shutdown', inSec: 600 };
-      await page.waitFor(`!document.getElementById('power-pill').hidden`, 'the power pill');
-      assert.match(await page.eval(`document.getElementById('power-pill').textContent`), /^Desliga (em )?\d/);
-      deck.model.state.scheduled = null;
-      await page.waitFor(`document.getElementById('power-pill').hidden`, 'the pill to go away');
+      assert.strictEqual(await page.eval(`Boolean(document.getElementById('power-pill') || document.getElementById('cam') || document.getElementById('live-strip'))`), false);
     });
 
-    await test('losing the PC shows the offline indicator, and it comes back by itself', async () => {
-      assert.strictEqual(await page.eval(`document.getElementById('status').dataset.state`), 'online');
+    await test('losing the PC shows the offline notice, and it comes back by itself', async () => {
+      assert.strictEqual(await page.eval(`document.body.dataset.state`), 'online');
+      assert.strictEqual(await page.eval(`document.getElementById('status')`), null, 'no status light any more');
       deck.model.down = true;
-      await page.waitFor(`document.getElementById('status').dataset.state === 'offline'`, 'the offline indicator', 9000);
-      assert.strictEqual(await page.eval(`document.getElementById('status').textContent`), 'sem conexão');
+      await page.waitFor(`document.body.dataset.state === 'offline' && getComputedStyle(document.getElementById('offline')).display !== 'none'`, 'the offline notice', 9000);
+      assert.strictEqual(await page.eval(`document.getElementById('offline-text').textContent`), 'PC desconectado');
       deck.model.down = false;
-      await page.waitFor(`document.getElementById('status').dataset.state === 'online'`, 'the online indicator', 9000);
+      await page.waitFor(`document.body.dataset.state === 'online'`, 'the online indicator', 9000);
     });
 
     // the offline notice, in both orientations: real text and a button that asks the PC again
@@ -115,7 +107,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       await test(`offline shows the notice with text and a retry button (${label}), and the button checks again`, async () => {
         const offlinePage = await browser2(width, height);
         try {
-          await offlinePage.waitFor(`document.getElementById('status').dataset.state === 'online'`, 'online first');
+          await offlinePage.waitFor(`document.body.dataset.state === 'online'`, 'online first');
           assert.strictEqual(await offlinePage.eval(`getComputedStyle(document.getElementById('offline')).display`), 'none');
           deck.model.down = true;
           await offlinePage.waitFor(`document.body.dataset.state === 'offline'`, 'the offline state', 9000);
@@ -247,7 +239,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       const big = await browser2(412, 915);
       try {
         await big.waitFor(`document.querySelectorAll('.tile[data-key^="a:big"]').length >= 20`, 'many apps');
-        await big.waitFor(`document.getElementById('status').dataset.state === 'online'`, 'online');
+        await big.waitFor(`document.body.dataset.state === 'online'`, 'online');
         await sleep(500);
         const dotsOn = () => big.eval(`[...document.querySelectorAll('#page-dots i')].map((i) => i.classList.contains('on'))`);
         const label = (section) => big.eval(`document.querySelector('#tabs .tab[data-section="${section}"]').textContent.trim()`);
@@ -464,9 +456,12 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
           await sleep(30);
         }
         // the page is resized in the middle of the drag (the map would be rebuilt): the window under the finger must survive
-        await wide.setViewport(836, 380);
+        await wide.setViewport(826, 387);
         await sleep(400);
-        await wide.touch('touchEnd', monBox.x, monBox.y + 20);
+        // the map was laid out again: finish over the middle of the monitor as it is now
+        const endBox = await wide.eval(`(() => { const b = document.querySelector('.map .mon').getBoundingClientRect(); return { x: b.left + b.width * 0.5, y: b.top + b.height * 0.5 }; })()`);
+        await wide.touch('touchMove', endBox.x, endBox.y + 20);
+        await wide.touch('touchEnd', endBox.x, endBox.y + 20);
         await wide.waitFor(`!document.querySelector('.mwin.dragging')`, 'the drag to end');
         await sleep(300);
         assert.ok(deck.model.calls.some((c) => c.path === '/api/windows/place' && c.body.handle === 101), `the move was sent: ${JSON.stringify(deck.model.calls.map((c) => c.path))}`);
@@ -629,12 +624,13 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       deck.model.pushGame();
       await page.waitFor(`document.querySelector('#tabs .tab[data-section="pc"]').getAttribute('aria-selected') === 'true' && Deck.perf.pane === 'monitor'`, 'PC > Desempenho for the game', 8000);
       assert.strictEqual(await page.eval(`document.getElementById('fps').hidden`), true, 'the pill hides on Desempenho');
-      // the pill on another page takes you back there
+      // the counter shows on another page
       await go('apps');
       await page.eval(`Deck.perf.showPane('system')`);
       await page.waitFor(`!document.getElementById('fps').hidden`, 'the pill outside Desempenho');
-      await page.tap('#fps');
-      await page.waitFor(`document.querySelector('#tabs .tab[data-section="pc"]').getAttribute('aria-selected') === 'true' && Deck.perf.pane === 'monitor'`, 'the pill opens PC > Desempenho');
+      // a floating counter: fixed in a corner, inside the screen, takes no touch, clear of the gear and of the navigation
+      const fps = await page.eval(`(() => { const e = document.getElementById('fps'); const r = e.getBoundingClientRect(); const m = document.getElementById('menu').getBoundingClientRect(); const n = document.querySelector('nav.nav').getBoundingClientRect(); const hit = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top; return { pos: getComputedStyle(e).position, events: getComputedStyle(e).pointerEvents, inside: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, overMenu: hit(r, m), overNav: hit(r, n), small: r.height <= 28 }; })()`);
+      assert.deepStrictEqual(fps, { pos: 'fixed', events: 'none', inside: true, overMenu: false, overNav: false, small: true });
       deck.model.fps = null;
       deck.model.pushGame();
       await page.waitFor(`document.getElementById('fps').hidden`, 'the game ending', 9000);
@@ -650,9 +646,8 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       await page.eval(`Deck.back()`);
     });
 
-    await test('the volume button and panel are gone; the live strip keeps its 44 px and shows no volume; the Som page still has the output mute and slider', async () => {
+    await test('the volume button and panel are gone; there is no volume; the Som page still has the output mute and slider', async () => {
       assert.strictEqual(await page.eval(`Boolean(document.getElementById('vol-btn') || document.getElementById('volume-panel'))`), false);
-      assert.strictEqual(await page.eval(`Math.round(document.getElementById('live-strip').getBoundingClientRect().height)`), 44);
       assert.strictEqual(await page.eval(`typeof Deck.volume.refresh === 'function' && typeof Deck.volume.render === 'function'`), true);
       await go('sound');
       assert.strictEqual(await page.eval(`Boolean(document.querySelector('.audio-page .vol-row .icon-btn') && document.querySelector('.audio-page .vol-row .range'))`), true, 'Som has a mute button and a slider');
@@ -1074,7 +1069,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
     });
 
     for (const [width, height] of [[836, 387], [740, 360], [411, 914], [360, 740]]) {
-      await test(`edit mode ${width}x${height}: "Concluir" is at least 48 px, overlaps neither the live strip, the bar nor the keys, and ends the mode`, async () => {
+      await test(`edit mode ${width}x${height}: "Concluir" is at least 48 px, overlaps neither the bar nor the keys, and ends the mode`, async () => {
         const edit = await browser2(width, height);
         try {
           await edit.waitFor(`document.querySelectorAll('.tile[data-key]').length >= 6`, 'the apps grid');
@@ -1085,7 +1080,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
             const r = (sel) => { const e = document.querySelector(sel).getBoundingClientRect(); return { l: e.left, t: e.top, r: e.right, b: e.bottom, w: e.width, h: e.height }; };
             const hit = (a, b) => a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b - 0.5 && a.b > b.t + 0.5;
             const done = r('#edit-done');
-            const others = { strip: r('#live-strip'), nav: r('nav.nav'), pager: r('#pager'), menu: r('#menu') };
+            const others = { nav: r('nav.nav'), pager: r('#pager'), menu: r('#menu') };
             const tiles = [...document.querySelectorAll('.tile')].filter((t) => t.getBoundingClientRect().width > 0 && t.getBoundingClientRect().left >= 0 && t.getBoundingClientRect().right <= innerWidth);
             return { done, overlaps: Object.keys(others).filter((k) => hit(done, others[k])), tileHit: tiles.some((t) => { const e = t.getBoundingClientRect(); return hit(done, { l: e.left, t: e.top, r: e.right, b: e.bottom }); }), inside: done.l >= 0 && done.r <= innerWidth && done.t >= 0 && done.b <= innerHeight, hint: r('.edit-hint') };
           })()`);
@@ -1227,13 +1222,13 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.deepStrictEqual(page.errors, []);
     });
 
-    await test('a game already running at load: the FPS arrives before the pages exist and the pill still ends up in the live strip', async () => {
+    await test('a game already running at load: the FPS arrives before the pages exist and the counter still shows', async () => {
       deck.model.fps = { fps: 72, frameMs: 13.9, app: 'Jogo' };
       const second = await browser.open(`${deck.url}/`);
       // slides to Desempenho once the pages exist (the pill hides there), then shows on any other page
       await second.waitFor(`document.querySelector('#tabs .tab[data-section="pc"]')?.getAttribute('aria-selected') === 'true' && Deck.perf.pane === 'monitor'`, 'the slide to PC > Desempenho');
       await second.tap('#tabs .tab[data-section="apps"]');
-      await second.waitFor(`!document.getElementById('fps').hidden && document.querySelector('#live-strip #fps b').textContent === '72'`, 'the FPS pill inside the live strip');
+      await second.waitFor(`!document.getElementById('fps').hidden && document.querySelector('#fps b').textContent === '72'`, 'the FPS counter');
       deck.model.fps = null;
       second.close();
     });

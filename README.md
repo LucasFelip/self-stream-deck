@@ -64,7 +64,7 @@ mostra isso. Para remover essas ações da API: `"powerControls": false` no `con
 
 ### Cabeçalho
 
-Discreto de propósito: o ícone do PC com uma luz de status (o texto só aparece se algo estiver errado), as abas, e à direita **microfone** (alterna o mudo do microfone padrão; fica vermelho e riscado quando mutado) e o menu **⚙** Configurações (nome do PC, Editar botões, Câmera do celular, Escurecer após… (apaga a tela depois de 1, 2 ou 5 min sem toque; o primeiro toque só acorda), Endereço do PC no app e Atualizar; em retrato abre como folha inferior). Durante um desligamento agendado aparece a contagem regressiva.
+Discreto de propósito: as abas e o menu **⚙** Configurações (nome do PC, Editar botões, Câmera do celular, Escurecer após… (apaga a tela depois de 1, 2 ou 5 min sem toque; o primeiro toque só acorda), Endereço do PC no app e Atualizar; em retrato abre como folha inferior). Durante um desligamento agendado aparece a contagem regressiva.
 
 ## Rodando o servidor
 

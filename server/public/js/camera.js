@@ -4,7 +4,7 @@
  * "Câmera do celular": the phone's camera as a webcam for the PC. The page asks the phone for its camera, draws
  * frames into a canvas and posts them as JPEGs to the server (POST /api/camera/frame). The server republishes them as
  * an MJPEG stream that OBS shows in a Browser Source and offers to other apps as its Virtual Camera.
- * It opens as a full-screen sheet from the menu; while it transmits, a red camera icon in the live strip brings it back.
+ * It opens as a full-screen sheet from the menu; while it transmits, the camera key on Apps shows it and stops it.
  */
 (() => {
   const { h, icon, api, toast } = Deck;
@@ -65,9 +65,6 @@
     directRow, obsRow, statusLine);
   const el = h('section', { class: 'camera-page' }, view, side);
 
-  const headerButton = Deck.$('cam');
-  headerButton.replaceChildren(icon('camera', 18));
-
   function paintQuality() {
     Object.entries(QUALITIES).forEach(([key], index) => qualityChips[index].setAttribute('aria-pressed', String(key === quality)));
   }
@@ -75,7 +72,6 @@
   function paintSend() {
     sendButton.dataset.on = String(sending);
     sendButton.replaceChildren(icon(sending ? 'pause' : 'play', 24), h('span', { text: sending ? 'Parar transmissão' : 'Transmitir ao PC' }));
-    headerButton.hidden = !sending;
     if (Deck.camera && Deck.camera.onChange) Deck.camera.onChange();
   }
 
@@ -292,7 +288,6 @@
   };
 
   say(WAITING, true);
-  headerButton.addEventListener('click', () => sheet.open());
   Deck.menuItems.push({ label: 'Câmera do celular', onClick: () => sheet.open() });
   paintSend();
   paintStatus(null);

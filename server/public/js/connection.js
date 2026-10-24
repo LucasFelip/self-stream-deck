@@ -1,20 +1,17 @@
 'use strict';
 
 /**
- * The connection indicator and the way the UI recovers on its own after the PC sleeps or Wi-Fi drops: the first successful
+ * The connection state (body[data-state] and the #offline notice) and the way the UI recovers on its own after the PC sleeps or Wi-Fi drops: the first successful
  * answer after an outage reloads everything. The PC pushes its state when it changes (live.js); a 3-second tick is only the
  * fallback and the watchdog. Also keeps the phone awake and pauses the visible page's polling with the screen.
  */
 (() => {
   const { $ } = Deck;
-  const status = $('status');
 
   const offlineText = $('offline-text');
   const retryButton = $('offline-retry');
 
-  function setStatus(state, label, detail = 'PC desconectado') {
-    status.dataset.state = state;
-    status.textContent = label;
+  function setStatus(state, detail = 'PC desconectado') {
     offlineText.textContent = detail;
     document.body.dataset.state = state;
     Deck.state.online = state === 'online';
@@ -30,7 +27,7 @@
     if (online) return;
     online = true;
     missedTicks = 0;
-    setStatus('online', 'online');
+    setStatus('online');
     await Promise.allSettled([Deck.tiles.loadApps(), Deck.tiles.loadShortcuts()]);
     Deck.pager.render();
   }
@@ -56,7 +53,7 @@
       await Deck.pc.load();
     } catch (err) {
       online = false;
-      setStatus('offline', err.status === 401 ? 'não autorizado' : 'sem conexão', err.status === 401 ? 'Não autorizado' : 'PC desconectado');
+      setStatus('offline', err.status === 401 ? 'Não autorizado' : 'PC desconectado');
       // Lost for ~12 s: if the app knows another way to the PC (USB or Wi-Fi), let it switch to it
       missedTicks += 1;
       if (missedTicks % 4 === 0 && err.status !== 401 && window.Android && typeof window.Android.reconnect === 'function') window.Android.reconnect();

@@ -6,7 +6,7 @@
   Open the Self Stream Deck app on the phone first. For each orientation the script locks the rotation, visits every
   destination and saves <orientation>_<destination>.png in -OutDir (land_apps.png, port_pc.png, ...).
 
-  Landscape: taps the items of the navigation rail on the left (72 dp wide; a 24 dp status row, then six 48 dp items).
+  Landscape: taps the items of the navigation rail on the left (72 dp wide; six 48 dp items from the top).
   Portrait: taps the six equal slots of the bottom bar (56 dp high). Positions are computed in dp from the CSS constants
   (style.css: --rail-w, --bar-h, --touch) times the phone's density (wm density / 160) and screen size (wm size), so
   nothing is calibrated per phone. If the app's window does not start at the top of the screen, pass -TopInsetDp; with a
@@ -14,7 +14,7 @@
 
   Portrait extras (unless -NoPanes): the segmented selectors are the only content controls it touches. Windows: Lista | Mapa
   (port_windows_map.png); PC: Processos and Sistema (port_pc_processes.png, port_pc_system.png). The selector is 48 dp
-  tall, its centre at SafeTop + strip (44) + page padding (12) + 24 dp; its buttons split the page width (16 dp padding,
+  tall, its centre at SafeTop + gear row (44) + page padding (12) + 24 dp; its buttons split the page width (16 dp padding,
   6 dp gap). Nothing in the lists, the map or the power buttons is ever touched. The selectors are put back afterwards.
 
   Panels (unless -NoPanels): in each orientation it OPENS the settings menu (the gear), captures it (land_menu_open.png, port_menu_open.png) and closes each with KEYCODE_BACK.
@@ -31,12 +31,12 @@ param(
   [string[]]$Orientations = @('land', 'port'),
   [string[]]$Tabs = @('apps', 'shortcuts', 'windows', 'sound', 'pc', 'power'),
   # layout constants of the navigation, in dp (keep in step with style.css)
-  [double]$StatusRowDp = 24,   # landscape: the status light row above the first rail item
+  [double]$StatusRowDp = 0,    # landscape: nothing above the first rail item any more (the status light is gone)
   [double]$TouchDp = 48,       # --touch: one rail item
   [double]$BarDp = 56,         # --bar-h
   [double]$TopInsetDp = 0,     # where the app window starts, if not at the very top
   [double]$BottomInsetDp = 0,  # what sits under the app window (gesture bar), if anything
-  [double]$SafeTopDp = 30,     # portrait: the camera cut-out inset above the live strip (measured on the A31 from a capture)
+  [double]$SafeTopDp = 30,     # portrait: the camera cut-out inset above the gear row (measured on the A31 from a capture)
   [double]$SafeLeftDp = 30,    # landscape: the camera cut-out inset on the left of the rail (measured on the A31 from a capture)
   [switch]$NoPanes,            # skip the extra portrait captures of the segmented selectors
   [switch]$NoPanels            # skip the settings menu capture
@@ -122,7 +122,7 @@ try {
       }
 
       if (-not $NoPanels) {
-        # back on Apps; the gear sits at the right end (4 dp + half of 44), both on the 44 dp strip under the cut-out
+        # back on Apps; the gear sits at the right end (4 dp + half of 44), on the 44 dp row under the cut-out
         & $Adb shell input tap ([int]($short * 0.5 / $Tabs.Count)) $y
         Start-Sleep -Milliseconds 700
         PanelShot 'port_menu_open' ($short / $px - 4 - 22) ($SafeTopDp + 22)

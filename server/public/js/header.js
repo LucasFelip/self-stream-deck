@@ -1,18 +1,14 @@
 'use strict';
 
 /**
- * The live controls (microphone) and the settings menu (the gear). Deliberately small: icons only. The live strip also holds the
- * power pill, the camera and the FPS pill. Also owns the scrim that closes the open menu.
- * The track title appears as a brief notice when the song changes.
+ * The settings menu (the gear) and a short notice when the song changes. Also owns the scrim that closes the open menu.
  */
 (() => {
-  const { $, h, api, toast: showToast, vibrate } = Deck;
+  const { $, h, toast: showToast } = Deck;
 
-  const micButton = $('mic');
   const menuButton = $('menu');
   const menu = $('menu-pop');
   let lastTrack = null;
-  let micShown = null;
 
   menuButton.replaceChildren(Deck.icon('settings', 20));
   // the modules push their entries in load order (camera, then editor); the menu wants the editor first, so walk them backwards
@@ -21,15 +17,7 @@
   }
 
   function apply() {
-    const { mic, playing, miniPlayer } = Deck.pc.state;
-
-    micButton.hidden = !(mic && mic.available);
-    if (mic && mic.available && micShown !== mic.muted) {
-      micShown = mic.muted;
-      micButton.dataset.muted = String(mic.muted);
-      micButton.setAttribute('aria-label', mic.muted ? 'Ativar microfone' : 'Silenciar microfone');
-      micButton.replaceChildren(Deck.icon(mic.muted ? 'micOff' : 'mic', 18));
-    }
+    const { playing, miniPlayer } = Deck.pc.state;
 
     const showPlayer = Boolean(miniPlayer && playing && playing.canToggle);
     if (showPlayer) {
@@ -43,18 +31,6 @@
       lastTrack = null;
     }
   }
-
-  micButton.addEventListener('click', async () => {
-    vibrate(30);
-    try {
-      const mic = await api('/api/mic', { method: 'POST', json: { muted: 'toggle' } });
-      Deck.pc.patch({ mic });
-      apply();
-      showToast(mic.muted ? 'Microfone silenciado' : 'Microfone ativo');
-    } catch (err) {
-      showToast(`Erro: ${err.message}`, true);
-    }
-  });
 
   menuButton.addEventListener('click', () => {
     menu.hidden = !menu.hidden;

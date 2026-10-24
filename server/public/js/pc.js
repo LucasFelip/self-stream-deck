@@ -1,42 +1,17 @@
 'use strict';
 
 /**
- * What the PC says about itself for the navigation, the live strip and the keys: which apps run or have a window, the scheduled shutdown
- * (the pill), the microphone, what is playing. It arrives pushed (connection.js) or by request, and paint() puts it on screen.
+ * What the PC says about itself for the navigation and the keys: which apps run or have a window, the scheduled shutdown
+ * (the Energia page shows it), what is playing. It arrives pushed (connection.js) or by request, and paint() puts it on screen.
  */
 (() => {
   const { $, api } = Deck;
   const pager = $('pager');
-  const pill = $('power-pill');
 
   let state = { running: [], open: [], scheduled: null, receivedAt: Date.now() };
   let appsRev = null;
 
-  const PILL_LABELS = { shutdown: 'Desliga', restart: 'Reinicia', firmware: 'Reinicia BIOS', advanced: 'Reinicia av.' };
-  let pillTimer;
-
-  function renderPill() {
-    const { scheduled } = state;
-    if (!scheduled) {
-      pill.hidden = true;
-      clearInterval(pillTimer);
-      pillTimer = null;
-      return;
-    }
-    const paint = () => {
-      const left = Math.max(0, Math.round(scheduled.inSec - (Date.now() - state.receivedAt) / 1000));
-      // portrait: no "em", the strip is crowded (see style.css) and "Desliga 1:00:00" reads the same
-      const joiner = window.matchMedia('(orientation: portrait)').matches ? ' ' : ' em ';
-      pill.textContent = `${PILL_LABELS[scheduled.action] || scheduled.action}${joiner}${Deck.fmt.clock(left)}`;
-    };
-    pill.hidden = false;
-    paint();
-    clearInterval(pillTimer);
-    pillTimer = setInterval(paint, 1000);
-  }
-  pill.addEventListener('click', () => Deck.pager.goToId('power'));
-
-  // the dots on the app keys, the camera key, the power pill and the live strip
+  // the dots on the app keys, the camera key
   function paint() {
     Deck.tiles.paintCamera();
     const running = new Set(state.running);
@@ -45,7 +20,6 @@
       tile.classList.toggle('running', running.has(tile.dataset.appId));
       tile.classList.toggle('open', open.has(tile.dataset.appId));
     });
-    renderPill();
     Deck.header.apply();
   }
 
