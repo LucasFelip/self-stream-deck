@@ -129,8 +129,15 @@ public class MainActivity extends Activity {
     @Override
     @SuppressWarnings("deprecation")
     public void onBackPressed() {
-        // A stray back press must not drop the deck; only leave the setup screen if an address is saved.
-        if (showingSetup && !buildCandidates().isEmpty()) showDeck();
+        // The app never closes on Back: a stray press must not drop the deck. On the setup screen it returns to the deck
+        // (if an address is saved); on the deck it asks the page to step back (close a sheet, the menu, an overlay, or go to
+        // Apps). The page answers "true"/"false"; either way there is nothing more to do here, and an old page without
+        // Deck.back() just raises an error that evaluateJavascript hands to the callback.
+        if (showingSetup) {
+            if (!buildCandidates().isEmpty()) showDeck();
+            return;
+        }
+        if (web != null) web.evaluateJavascript("Deck.back()", value -> { });
     }
 
     @SuppressWarnings("deprecation")

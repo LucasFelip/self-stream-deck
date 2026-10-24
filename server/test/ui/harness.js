@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const { sendJson, serveStatic, isStaticPath, readJson } = require('../../src/http');
 
 const BROWSERS = [
@@ -177,6 +177,11 @@ async function launchBrowser({ width = 412, height = 915 } = {}) {
   return {
     open,
     close() {
+      // On Windows the process we started can be only a launcher: the real browser (and its helpers) is found by its profile folder
+      if (process.platform === 'win32') {
+        const script = `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*${path.basename(profile)}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
+        spawnSync('powershell', ['-NoProfile', '-Command', script], { stdio: 'ignore' });
+      }
       proc.kill();
       try { fs.rmSync(profile, { recursive: true, force: true }); } catch { /* the browser may still hold files for a moment */ }
     },

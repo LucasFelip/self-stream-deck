@@ -254,6 +254,8 @@
     render,
     goToId,
     // the show/hide hook of the page on screen, if it has one (connection.js pauses it with the screen)
+    // the section (apps, shortcuts, sound...) of the page on screen, for Deck.back()
+    currentSection: () => { const page = allPages()[currentIndex()]; return page ? sectionOf(page) : null; },
     activeHook: () => hooks().find((def) => def.id === currentId),
   };
   Deck.goTo = goToId; // modules can ask to jump to a page

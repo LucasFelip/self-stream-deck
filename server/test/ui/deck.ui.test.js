@@ -136,8 +136,12 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
     }
 
     await test('Energia: no open-windows chips or note, Hibernar hidden while hibernation is off, and the grid has no hole', async () => {
-      await sleep(700); // the deck redraws its pages right after coming back online; a tap during that would be undone
-      await page.tap('#tabs .tab[data-section="power"]');
+      // the deck redraws its pages right after coming back online and a tap during that is undone: tap again until it sticks
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        await sleep(500);
+        await page.tap('#tabs .tab[data-section="power"]');
+        if (await page.waitFor(`document.querySelector('#tabs .tab[data-section="power"]').getAttribute('aria-selected') === 'true'`, 'the Energia tab', 1500).then(() => true, () => false)) break;
+      }
       await page.waitFor(`document.querySelector('.power-page .badge')`, 'the power state');
       const power = await page.eval(`(() => {
         const page = document.querySelector('.power-page');
@@ -170,6 +174,26 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       await page.tap('.cam-send');
       await page.waitFor('window.__gum === 2', 'getUserMedia after Transmitir ao PC');
       await page.eval(`document.querySelector('.camera-page').closest('.overlay').querySelector('.overlay-close').click()`);
+    });
+
+    await test('Deck.back() closes the sheet, then the menu, then the newest overlay, then goes to Apps, and says false on Apps', async () => {
+      await page.eval(`document.querySelector('#tabs .tab[data-section="power"]').click()`);
+      await page.waitFor(`document.querySelector('#tabs .tab[data-section="power"]').getAttribute('aria-selected') === 'true'`, 'the Energia tab');
+      // all three at once: a confirmation sheet (the real one: Suspender), the menu and the camera overlay
+      await page.waitFor(`document.querySelector('.power-page .badge')`, 'the power state');
+      await page.eval(`[...document.querySelectorAll('.power-page .act')].find((t) => t.textContent.includes('Suspender')).click()`);
+      await page.eval(`Deck.camera.openSheet(); document.getElementById('menu-pop').hidden = false`);
+      const state = () => page.eval(`JSON.stringify({ sheets: document.getElementById('modal-root').childElementCount, menu: !document.getElementById('menu-pop').hidden, overlay: !document.querySelector('.camera-page').closest('.overlay').hidden, section: Deck.pager.currentSection() })`).then(JSON.parse);
+      assert.deepStrictEqual(await state(), { sheets: 1, menu: true, overlay: true, section: 'power' });
+      assert.strictEqual(await page.eval('Deck.back()'), true);
+      assert.deepStrictEqual(await state(), { sheets: 0, menu: true, overlay: true, section: 'power' });
+      assert.strictEqual(await page.eval('Deck.back()'), true);
+      assert.deepStrictEqual(await state(), { sheets: 0, menu: false, overlay: true, section: 'power' });
+      assert.strictEqual(await page.eval('Deck.back()'), true);
+      assert.deepStrictEqual(await state(), { sheets: 0, menu: false, overlay: false, section: 'power' });
+      assert.strictEqual(await page.eval('Deck.back()'), true, 'with nothing open, Back leaves the page');
+      await page.waitFor(`Deck.pager.currentSection() === 'apps'`, 'Apps after Back');
+      assert.strictEqual(await page.eval('Deck.back()'), false, 'on Apps with nothing open there is nothing to undo');
     });
 
     await test('the page raised no script errors', () => {

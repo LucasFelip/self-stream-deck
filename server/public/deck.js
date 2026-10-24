@@ -240,6 +240,9 @@ window.Deck = (() => {
 
   // A full-screen panel over the deck (the screen map, the system info): one tap in the menu or on a button opens it,
   // one tap on its close button returns. onOpen/onClose are where a panel starts and stops its polling.
+  // the overlays that are open, oldest first: Deck.back() closes the newest
+  const openOverlays = [];
+
   function overlay({ title, el, onOpen, onClose }) {
     const closeButton = h('button', { type: 'button', class: 'overlay-close', 'aria-label': 'Fechar' }, icon('close', 22), h('span', { text: 'Fechar' }));
     const root = h('div', { class: 'overlay', hidden: true, role: 'dialog', 'aria-label': title },
@@ -251,11 +254,14 @@ window.Deck = (() => {
       open() {
         if (!root.hidden) return;
         root.hidden = false;
+        openOverlays.push(control);
         if (onOpen) onOpen();
       },
       close() {
         if (root.hidden) return;
         root.hidden = true;
+        const at = openOverlays.indexOf(control);
+        if (at !== -1) openOverlays.splice(at, 1);
         if (onClose) onClose();
       },
       get isOpen() { return !root.hidden; },
@@ -264,5 +270,31 @@ window.Deck = (() => {
     return control;
   }
 
-  return { $, h, icon, api, toast, vibrate, fmt, slider, holdButton, pages, addPage, lifecycle, menuItems, overlay, state: { online: false } };
+  /**
+   * The Android Back button (MainActivity calls this) and any "go back" gesture. Undoes one thing per call, newest first:
+   * the sheet in #modal-root, the open menu, the newest overlay; with nothing open, any page but Apps goes to Apps.
+   * Returns true if it did something, false if already on Apps with nothing open (the shell then ignores the press:
+   * a stray Back must not drop the deck).
+   */
+  function back() {
+    const sheet = $('modal-root').lastElementChild;
+    if (sheet) {
+      sheet.remove();
+      return true;
+    }
+    const menu = $('menu-pop');
+    if (menu && !menu.hidden) {
+      menu.hidden = true;
+      return true;
+    }
+    const top = openOverlays[openOverlays.length - 1];
+    if (top) {
+      top.close();
+      return true;
+    }
+    if (Deck.pager && Deck.pager.currentSection() !== 'apps') return Deck.goTo('apps-0');
+    return false;
+  }
+
+  return { $, h, icon, api, toast, vibrate, fmt, slider, holdButton, pages, addPage, lifecycle, menuItems, overlay, back, state: { online: false } };
 })();
