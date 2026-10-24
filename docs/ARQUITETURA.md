@@ -87,6 +87,12 @@ carregamento no Android não mudar).
    `header` (microfone, player, menu), `volume`, `reload` (autoatualização), `connection` (online/offline, recuperação, wake lock).
 5. `app.js` só junta e inicia.
 
+**Cabeçalho e estado da conexão.** O `<header>` tem o ponto de status do PC, as abas (`#tabs`) e a área `.actions`: pílula de FPS (`#fps`, `game.js`, só enquanto um jogo roda e fora de Desempenho; em retrato só o número), pílula de energia, câmera, microfone, player e menu. Logo abaixo vem a faixa `#offline` ("PC desconectado" ou "Não autorizado", mais o botão "Tentar agora"): ocupa espaço no fluxo (o pager encolhe) e só aparece com `body[data-state="offline"]`. O botão chama `Deck.connection.retry()`, a mesma verificação do `tick` sem esperar o silêncio do push. Em ≤640 px o cabeçalho é interino (sem o ícone do PC, abas que encolhem) até a navegação da fase 2 do `docs/plano-redesign.md`.
+
+**Voltar.** `Deck.back()` desfaz uma coisa por chamada, na ordem: a sheet de `#modal-root` (último filho), o menu (`#menu-pop`), o overlay aberto mais recente (`Deck.overlay` mantém uma pilha); sem nada aberto, qualquer página que não seja Apps volta para Apps. Devolve `true` se fez algo e `false` se já estava em Apps sem nada aberto. O app Android chama isso em `onBackPressed` e nunca fecha por conta própria. `Deck.goTo(id)` (e `Deck.pager.goToId`) devolve `false` se a página ainda não existe.
+
+**Recorte da câmera.** O tema `DeckTheme` (`res/values-v28`, API 28+) deixa a página desenhar sob o recorte (`shortEdges`); o CSS afasta o conteúdo com `--safe-top/right/bottom/left` (`env(safe-area-inset-*)`, 0 em navegadores sem recorte).
+
 Os módulos conversam por `Deck.tiles`, `Deck.pager`, `Deck.pc`, `Deck.header`, `Deck.volume`, `Deck.reload` e `Deck.connection`, sempre no momento do uso,
 nunca guardando variável de outro. `header.js` precisa vir depois das páginas porque lê `Deck.menuItems`.
 
@@ -119,7 +125,7 @@ A lista da barra de tarefas fica em cache (`data/taskbar-cache.json`) e só é r
 |---|---|---|
 | `npm run lint` | ESLint (inclui "erro engolido precisa de motivo") | Node |
 | `npm test` | Lógica e servidor: carga da interface, geometria, câmera, macros, rede, push, eventos, segurança, HTTP, configuração, rotas (com módulos falsos), `Host` | Node |
-| `npm run test:ui` | A interface em um navegador sem tela (Chrome, Brave ou Edge; `CHROME_PATH` aponta outro) contra um servidor falso. Pulado se não houver navegador | Navegador |
+| `npm run test:ui` | A interface em um navegador sem tela (Chrome, Brave ou Edge; `CHROME_PATH` aponta outro) contra um servidor falso: o deck (abas, arrastar, offline, Voltar, câmera, FPS) e o teste "nada se sobrepõe" (`layout.ui.test.js`, paisagem e retrato, estrito por padrão; `LAYOUT_STRICT=0` só avisa). Pulado se não houver navegador | Navegador |
 | `npm run test:integration` | Helper nativo contra o PowerShell (mesmas perguntas, mesmas respostas) e os dois caminhos do `Host` | Windows |
 | `npm run check` | Tudo | Windows |
 
