@@ -9,9 +9,13 @@
   const { $ } = Deck;
   const status = $('status');
 
-  function setStatus(state, label) {
+  const offlineText = $('offline-text');
+  const retryButton = $('offline-retry');
+
+  function setStatus(state, label, detail = 'PC desconectado') {
     status.dataset.state = state;
     status.textContent = label;
+    offlineText.textContent = detail;
     document.body.dataset.state = state;
     Deck.state.online = state === 'online';
   }
@@ -43,11 +47,16 @@
   async function tick() {
     if (document.hidden) return;
     if (Deck.live.open && Date.now() - lastPush < PUSH_SILENCE_MS) return;
+    await check();
+  }
+
+  // Asks the PC once. Used by the tick and by "Tentar agora" (which must not wait for the push silence to pass).
+  async function check() {
     try {
       await Deck.pc.load();
     } catch (err) {
       online = false;
-      setStatus('offline', err.status === 401 ? 'não autorizado' : 'sem conexão');
+      setStatus('offline', err.status === 401 ? 'não autorizado' : 'sem conexão', err.status === 401 ? 'Não autorizado' : 'PC desconectado');
       // Lost for ~12 s: if the app knows another way to the PC (USB or Wi-Fi), let it switch to it
       missedTicks += 1;
       if (missedTicks % 4 === 0 && err.status !== 401 && window.Android && typeof window.Android.reconnect === 'function') window.Android.reconnect();
@@ -78,7 +87,15 @@
   });
   keepAwake();
 
+  retryButton.addEventListener('click', async () => {
+    retryButton.disabled = true;
+    await check();
+    retryButton.disabled = false;
+  });
+
   Deck.connection = {
+    // the "Tentar agora" button: look for the PC right now
+    retry: check,
     start() {
       tick();
       setInterval(tick, 3000);

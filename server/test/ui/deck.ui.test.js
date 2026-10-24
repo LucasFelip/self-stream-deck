@@ -15,6 +15,13 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
   }
   const deck = await fakeDeck();
   const browser = await launchBrowser();
+  // a second browser at a given size (the first one is a portrait phone)
+  const extra = [];
+  const browser2 = async (width, height) => {
+    const other = await launchBrowser({ width, height });
+    extra.push(other);
+    return other.open(`${deck.url}/`);
+  };
   try {
     const page = await browser.open(`${deck.url}/`);
     await page.waitFor(`document.querySelectorAll('.tile[data-key]').length >= 6`, 'the apps grid');
@@ -103,6 +110,31 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       await page.waitFor(`document.getElementById('status').dataset.state === 'online'`, 'the online indicator', 9000);
     });
 
+    // the offline notice, in both orientations: real text and a button that asks the PC again
+    for (const [label, width, height] of [['landscape', 836, 387], ['portrait', 411, 914]]) {
+      await test(`offline shows the notice with text and a retry button (${label}), and the button checks again`, async () => {
+        const offlinePage = await browser2(width, height);
+        try {
+          await offlinePage.waitFor(`document.getElementById('status').dataset.state === 'online'`, 'online first');
+          assert.strictEqual(await offlinePage.eval(`getComputedStyle(document.getElementById('offline')).display`), 'none');
+          deck.model.down = true;
+          await offlinePage.waitFor(`document.body.dataset.state === 'offline'`, 'the offline state', 9000);
+          const box = await offlinePage.eval(`(() => { const o = document.getElementById('offline').getBoundingClientRect(); const p = document.getElementById('pager').getBoundingClientRect(); const b = document.getElementById('offline-retry').getBoundingClientRect(); return { text: document.getElementById('offline-text').textContent, oBottom: o.bottom, pTop: p.top, w: o.width, bw: b.width, bh: b.height, right: b.right }; })()`);
+          assert.strictEqual(box.text, 'PC desconectado');
+          assert.ok(box.bw > 0 && box.bh > 0 && box.right <= width, JSON.stringify(box));
+          assert.ok(box.pTop >= box.oBottom - 1, `the pager sits under the notice: ${JSON.stringify(box)}`);
+          deck.model.calls.length = 0;
+          deck.model.down = false;
+          await offlinePage.tap('#offline-retry');
+          await offlinePage.waitFor(`document.body.dataset.state === 'online'`, 'back online after Tentar agora', 3000);
+          assert.ok(deck.model.calls.some((c) => c.path === '/api/state'), 'the retry asked the PC');
+        } finally {
+          deck.model.down = false;
+          offlinePage.close();
+        }
+      });
+    }
+
     await test('the page raised no script errors', () => {
       assert.deepStrictEqual(page.errors, []);
     });
@@ -119,6 +151,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
     });
   } finally {
     browser.close();
+    extra.forEach((other) => other.close());
     deck.close();
   }
   console.log(`${passed} passed`);
