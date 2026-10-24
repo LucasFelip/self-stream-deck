@@ -24,7 +24,7 @@ topo para não ser preciso ficar deslizando até achar a certa:
 | Aba | Páginas |
 |---|---|
 | **Apps** | Aplicativos |
-| **Atalhos** | Atalhos de teclado (a grade inteira; o volume fica no botão da faixa de ativos) |
+| **Atalhos** | Atalhos de teclado (a grade inteira) |
 | **Som** | Mídia e áudio numa tela só |
 | **Desempenho** | Desempenho ("Sobre este PC" é o painel Sistema da aba PC) |
 | **Energia** | Energia |
@@ -39,7 +39,7 @@ Um módulo novo escolhe a aba com `Deck.addPage({ section: 'pc', ... })`.
 | Página | O que faz |
 |---|---|
 | **Aplicativos** | Apps fixados na barra de tarefas. Ponto verde = tem janela aberta (tocar traz para a frente); ponto cinza = processo rodando. |
-| **Atalhos** | Atalhos de teclado (configuráveis) na grade inteira. O **volume** não fica mais aqui: é o botão de alto-falante (com o percentual) no começo da faixa de ativos, sempre visível; ele abre um painel com mudo, slider e anterior/play/próxima (global). Fecha tocando de novo, fora ou no Voltar. |
+| **Atalhos** | Atalhos de teclado (configuráveis) na grade inteira. O volume e o mudo ficam na aba Som. |
 | **Janelas e telas** (folha aberta pelo botão Mapa) | Um **mapa em escala das suas telas** com cada janela desenhada onde ela está. **Arraste** uma janela para movê-la, inclusive de uma tela para a outra; arraste até a borda esquerda/direita de uma tela para **encaixar** (metade da tela) ou até o topo para **maximizar**. Toque numa janela para selecioná-la (e trazê-la para a frente); toque no vazio para desmarcar. **No topo** fica a lista de todas as janelas (inclusive minimizadas e escondidas) e **à direita**, em botões grandes com texto, as ações da selecionada: minimizar, maximizar/restaurar, esquerda, direita, outra tela e fechar (dois toques). Sem seleção, esse espaço mostra os controles das telas: desligar telas e projeção (estender/duplicar; "só tela 1/2" exigem segurar). O **brilho** de cada monitor (DDC/CI) fica logo abaixo dele no mapa. |
 | **Som · mídia** (à esquerda) | O que está tocando (Spotify, YouTube ou qualquer coisa no navegador, VLC…): capa, título, artista, barra de tempo com busca, anterior/play/próxima. Vários players viram abas. |
 | **Som · áudio** (à direita) | Saída e entrada padrão (trocar dispositivo, volume, mudo — inclusive o microfone) e mixer de volume por aplicativo. |
@@ -64,7 +64,7 @@ mostra isso. Para remover essas ações da API: `"powerControls": false` no `con
 
 ### Cabeçalho
 
-Discreto de propósito: o ícone do PC com uma luz de status (o texto só aparece se algo estiver errado), as abas, e à direita **microfone** (alterna o mudo do microfone padrão; fica vermelho e riscado quando mutado), **play/pause** do que estiver tocando (toque = play/pause, segurar = abrir o Som; some quando nada toca; ao mudar de faixa aparece um aviso rápido com o título) e o menu **⚙** Configurações (nome do PC, Editar botões, Câmera do celular, Escurecer após… (apaga a tela depois de 1, 2 ou 5 min sem toque; o primeiro toque só acorda), Endereço do PC no app e Atualizar; em retrato abre como folha inferior). Durante um desligamento agendado aparece a contagem regressiva.
+Discreto de propósito: o ícone do PC com uma luz de status (o texto só aparece se algo estiver errado), as abas, e à direita **microfone** (alterna o mudo do microfone padrão; fica vermelho e riscado quando mutado) e o menu **⚙** Configurações (nome do PC, Editar botões, Câmera do celular, Escurecer após… (apaga a tela depois de 1, 2 ou 5 min sem toque; o primeiro toque só acorda), Endereço do PC no app e Atualizar; em retrato abre como folha inferior). Durante um desligamento agendado aparece a contagem regressiva.
 
 ## Rodando o servidor
 
@@ -147,7 +147,7 @@ npm run lan -- status    # mostra a regra de firewall, a impressão digital do c
 | `tileOrder` | Posição dos botões nas telas Apps e Atalhos (`{ apps: [...], shortcuts: [...] }`, chaves `a:<app>`, `s:<atalho>`, `m:<macro>`, `c:camera`). Salvo ao arrastar; não precisa editar à mão. |
 | `shortcuts` | Atalhos: `{ "id", "label", "keys" }`, com `keys` como `ctrl+shift+esc`. |
 | `powerControls` | `false` remove as ações de energia da API. |
-| `miniPlayer` | `false` desliga o botão play/pause do cabeçalho (e dispensa manter o helper de mídia ligado, ~90 MB). |
+| `miniPlayer` | `false` desliga o aviso de faixa nova (e dispensa manter o helper de mídia ligado, ~90 MB). |
 | `autoOpenPhone` | `true` para sempre abrir no celular via USB ao iniciar. |
 | `token` | Token de pareamento. Apague e reinicie para gerar outro. |
 

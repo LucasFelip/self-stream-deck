@@ -4,11 +4,10 @@
 // (a rail on the left in landscape, a bar at the bottom in portrait), the status light, the menu button and the live strip
 // must not run past the viewport or sit on top of each other or of the pages, the navigation targets must be at least 48 px,
 // and the body must not scroll sideways. Two passes per viewport: a game running with the microphone on ("normal"), and the
-// worst case with every live control on at once (power pill, camera, microphone, player, FPS). A third pass checks that the
+// worst case with every live control on at once (power pill, camera, microphone, FPS). A third pass checks that the
 // live strip gives its height back when nothing is on (landscape) and stays as the top row in portrait.
 //
-// Phase 2C: the volume button (#vol-btn) is the first button of the strip and is always there; the volume panel and the settings menu
-// are measured when open (portrait: bottom sheets over the bar, never under it and never over it); a 360x740 portrait viewport joins
+// Phase 2C: the settings menu is measured when open (portrait: bottom sheets over the bar, never under it and never over it); a 360x740 portrait viewport joins
 // the two usual ones for the worst case.
 //
 // Strict by default: any violation fails the run (LAYOUT_STRICT=0 turns it back into a list of warnings, handy while
@@ -97,14 +96,8 @@ const probe = (section, landscape, worst, narrow) => `(() => {
     if (Math.round(r.width) < ${LIVE_TOUCH} || Math.round(r.height) < ${LIVE_TOUCH}) out.push('alvo: ' + label(el) + ' mede ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' (minimo ${LIVE_TOUCH})');
   }
 
-  // (d3) the volume button: always the first button of the strip, with a percentage and a speaker
-  const vol = document.getElementById('vol-btn');
-  if (!(vol && shown(vol))) out.push('volume: #vol-btn nao esta visivel');
-  else {
-    if (strip.firstElementChild !== vol) out.push('volume: #vol-btn deveria ser o primeiro filho da faixa');
-    if (!/^([0-9]+%|mudo)$/.test(vol.querySelector('.vol-pct').textContent)) out.push('volume: percentual ilegivel (' + vol.textContent + ')');
-    if (vol.scrollWidth > vol.clientWidth + 1 || vol.scrollHeight > vol.clientHeight + 1) out.push('volume: #vol-btn corta o conteudo');
-  }
+  // (d3) the volume button and panel are gone from every page
+  if (document.getElementById('vol-btn') || document.getElementById('volume-panel')) out.push('volume: #vol-btn / #volume-panel nao deveriam existir');
   if (${worst} && ${narrow}) {
     const pill = document.getElementById('power-pill');
     if (pill && Math.round(box(pill).width) < 56) out.push('pior caso: a pilula de energia ficou menor que 56 px (' + Math.round(box(pill).width) + ')');
@@ -114,7 +107,7 @@ const probe = (section, landscape, worst, narrow) => `(() => {
   const fps = document.querySelector('#fps');
   if (${JSON.stringify(section)} !== 'pc' &&!(fps && !fps.hidden && shown(fps))) out.push('fps: pilula nao apareceu');
   if (${worst}) {
-    for (const id of ['power-pill', 'cam', 'mic', 'player', 'fps']) {
+    for (const id of ['power-pill', 'cam', 'mic', 'fps']) {
       const el = document.getElementById(id);
       if (!(el && !el.hidden && shown(el)) && !(id === 'fps' && ${JSON.stringify(section)} === 'pc')) out.push('pior caso: #' + id + ' nao esta visivel');
     }
@@ -176,36 +169,6 @@ const menuProbe = (landscape) => `(async () => {
   return out;
 })()`;
 
-// the open volume panel: inside the screen, beside the rail (landscape) or right over the bar (portrait), never under the navigation
-const volumeProbe = (landscape) => `(async () => {
-  const out = [];
-  document.getElementById('vol-btn').click();
-  await new Promise((resolve) => setTimeout(resolve, 350));
-  const panel = document.getElementById('volume-panel');
-  const nav = document.querySelector('nav.nav').getBoundingClientRect();
-  const r = panel.getBoundingClientRect();
-  const where = Math.round(r.left) + ',' + Math.round(r.top) + ' .. ' + Math.round(r.right) + ',' + Math.round(r.bottom) + ' em ' + innerWidth + 'x' + innerHeight;
-  if (panel.hidden || !r.width) out.push('volume: o painel nao abriu');
-  else {
-    if (r.left < -1 || r.top < -1 || r.right > innerWidth + 1 || r.bottom > innerHeight + 1) out.push('volume: #volume-panel sai da tela (' + where + ')');
-    const hit = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
-    if (hit(r, nav)) out.push('volume: #volume-panel cobre a navegacao (' + where + ')');
-    if (${landscape} ? r.left < nav.right - 1 : Math.abs(r.bottom - nav.top) > 1) out.push('volume: #volume-panel mal posicionado (' + where + ')');
-    for (const sel of ['#mute', '#vol', '[data-media=prev]', '[data-media=playpause]', '[data-media=next]']) {
-      const b = document.querySelector(sel).getBoundingClientRect();
-      if (b.width < 44 || b.height < 44) out.push('volume: ' + sel + ' mede ' + Math.round(b.width) + 'x' + Math.round(b.height) + ' (minimo 44)');
-      if (b.left < r.left - 1 || b.right > r.right + 1 || b.top < r.top - 1 || b.bottom > r.bottom + 1) out.push('volume: ' + sel + ' sai do painel');
-    }
-    const kids = ['#mute', '#vol', '#vol-value', '[data-media=prev]', '[data-media=playpause]', '[data-media=next]'].map((sel) => [sel, document.querySelector(sel).getBoundingClientRect()]);
-    for (let i = 0; i < kids.length; i += 1) for (let j = i + 1; j < kids.length; j += 1) if (hit(kids[i][1], kids[j][1])) out.push('volume: ' + kids[i][0] + ' sobrepoe ' + kids[j][0]);
-    if (panel.scrollHeight > panel.clientHeight + 1 || panel.scrollWidth > panel.clientWidth + 1) out.push('volume: o painel rola por dentro');
-  }
-  document.getElementById('vol-btn').click();
-  return out;
-})()`;
-
-const player = { session: 's1', status: 'playing', title: 'Faixa de teste', artist: 'Banda', app: 'Player', canToggle: true };
-
 (async () => {
   if (!findBrowser()) {
     console.log('skipped (no Chrome, Brave or Edge found; set CHROME_PATH)');
@@ -225,14 +188,14 @@ const player = { session: 's1', status: 'playing', title: 'Faixa de teste', arti
           const pass = worst ? 'pior caso' : 'normal';
           deck.model.fps = { fps: 60, frameMs: 16.6, app: 'Jogo' };
           deck.model.state.scheduled = worst ? { action: 'advanced', inSec: 5 * 3600 } : null;
-          deck.model.state.playing = worst ? player : null;
+          deck.model.state.playing = null;
           const page = await browser.open(`${deck.url}/`);
           await page.waitFor(`document.querySelectorAll('#tabs .tab').length >= ${SECTIONS.length}`, 'the tabs');
           // the game is already running when the page opens: the FPS may arrive before the pages exist (that race is handled by game.js)
           await page.waitFor(`document.querySelector('#fps b').textContent === '60'`, 'the fps from the fake game');
           await page.waitFor("document.querySelector('#tabs .tab[data-section=pc]').getAttribute('aria-selected') === 'true'", 'the deck to slide to PC > Desempenho');
           if (worst) {
-            await page.waitFor(`!document.getElementById('power-pill').hidden && !document.getElementById('player').hidden`, 'the power pill and the player');
+            await page.waitFor(`!document.getElementById('power-pill').hidden `, 'the power pill');
             await page.eval(`document.getElementById('cam').hidden = false`); // the camera is only "live" while the phone sends it
           }
           await sleep(500);
@@ -245,11 +208,10 @@ const player = { session: 's1', status: 'playing', title: 'Faixa de teste', arti
             record(viewport, pass, section, await page.eval(probe(section, viewport.landscape, worst, viewport.width < 400)));
           }
           record(viewport, pass, 'menu aberto', await page.eval(menuProbe(viewport.landscape)));
-          record(viewport, pass, 'volume aberto', await page.eval(volumeProbe(viewport.landscape)));
           page.close();
         }
 
-        // the strip is always there now (the volume button): a live button showing / hiding (the microphone) must not change the pager's
+        // the strip is always there (44 px): a live button showing / hiding (the microphone) must not change the pager's
         // height or rebuild the tiles (that blinks); a rotation must rebuild them (other cols x rows)
         if (viewport.landscape) {
           deck.model.fps = null;
@@ -287,10 +249,10 @@ const player = { session: 's1', status: 'playing', title: 'Faixa de teste', arti
         await sleep(600);
         const strip = await bare.eval(`(() => { const s = document.getElementById('live-strip'); return { hidden: s.hidden, height: s.getBoundingClientRect().height, visible: [...s.children].filter((c) => c.getBoundingClientRect().width > 0).length, pagerTop: document.getElementById('pager').getBoundingClientRect().top }; })()`);
         const found = [];
-        // nothing else on: the strip is just the volume button (44 px) in both orientations
-        if (strip.hidden) found.push('faixa de ativos: nao deveria estar hidden (o volume e sempre visivel)');
-        if (Math.round(strip.height) !== 44) found.push(`faixa de ativos: deveria ter 44 px so com o volume (${JSON.stringify(strip)})`);
-        if (strip.visible !== 1) found.push(`faixa de ativos: deveria mostrar so o #vol-btn (${JSON.stringify(strip)})`);
+        // nothing else on: the strip stays 44 px but empty, in both orientations
+        if (strip.hidden) found.push('faixa de ativos: nao deveria estar hidden');
+        if (Math.round(strip.height) !== 44) found.push(`faixa de ativos: deveria ter 44 px vazia (${JSON.stringify(strip)})`);
+        if (strip.visible !== 0) found.push(`faixa de ativos: deveria estar vazia (${JSON.stringify(strip)})`);
         record(viewport, 'sem ativos', 'apps', found);
         deck.model.state.mic = { available: true, muted: false };
         bare.close();

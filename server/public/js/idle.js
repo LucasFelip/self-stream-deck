@@ -4,7 +4,7 @@
  * Idle dimmer for the AMOLED screen (menu ⚙ > Escurecer após…). After N minutes without a touch a black veil covers the deck and, in the
  * Android shell, window.Android.setDim(true) drops the screen brightness. The first touch only wakes it: the veil swallows that tap, so
  * it never reaches the key underneath. Never dims while the camera transmits, a power action is scheduled, edit mode / a sheet / an
- * overlay / a panel is open, or a finger is down (a slider or a drag in progress): it just checks again later.
+ * overlay / the menu is open, or a finger is down (a slider or a drag in progress): it just checks again later.
  * The choice (minutes, 0 = off) lives in localStorage (`ssd.idleMinutes`) inside try/catch; off by default.
  */
 (() => {
@@ -44,7 +44,6 @@
       || document.body.classList.contains('editing')
       || $('modal-root').childElementCount > 0
       || Boolean(document.querySelector('.overlay:not([hidden])'))
-      || !$('volume-panel').hidden
       || !$('menu-pop').hidden;
   };
 

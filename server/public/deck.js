@@ -343,7 +343,7 @@ window.Deck = (() => {
 
   /**
    * The Android Back button (MainActivity calls this) and any "go back" gesture. Undoes one thing per call, newest first:
-   * the sheet in #modal-root, the volume panel, the open menu, the newest overlay, edit mode; with nothing open, any page but Apps goes
+   * the sheet in #modal-root, the open menu, the newest overlay, edit mode; with nothing open, any page but Apps goes
    * to Apps. Returns true if it did something, false if already on Apps with nothing open (the shell then ignores the press:
    * a stray Back must not drop the deck).
    */
@@ -353,7 +353,7 @@ window.Deck = (() => {
       sheet.remove();
       return true;
     }
-    for (const id of ['volume-panel', 'menu-pop']) {
+    for (const id of ['menu-pop']) {
       const panel = $(id);
       if (panel && !panel.hidden) {
         panel.hidden = true;

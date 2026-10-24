@@ -121,16 +121,9 @@ body {
 
 .main { position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; padding-top: var(--safe-top); }
 
-/* Live controls: one thin row above the pages, always there. The volume button holds the left end (its place never moves);
-   the power pill, camera, microphone, player and FPS pill sit at the right end, each shown only while it matters. */
+/* Live controls: one thin row above the pages, always there. The power pill, camera, microphone and FPS pill sit at the right end, each shown only while it matters. */
 .live-strip { display: flex; align-items: center; justify-content: flex-end; flex: none; gap: 4px; min-width: 0; height: var(--strip-h); padding: 0 calc(10px + var(--safe-right)) 0 10px; }
 .live-strip .pill { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-/* volume: icon over a short percentage, 44 px square like the others; red while muted */
-.live-strip > .vol-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; margin-right: auto; color: var(--text); }
-.vol-btn-ico { display: inline-grid; }
-.vol-pct { font-size: 0.6rem; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.vol-btn[aria-expanded="true"] { background: var(--surface-2); }
-.vol-btn[data-muted="true"] { color: var(--err); background: rgba(229, 100, 107, 0.12); }
 /* every control in the strip is a 44 px touch target; the pills keep their 28 px look, drawn by ::before inside the taller button */
 .live-strip > .icon-btn { width: 44px; height: 44px; }
 .live-strip .pill, .live-strip .fps-float { position: relative; isolation: isolate; height: 44px; border: 0; background: transparent; }
@@ -159,8 +152,6 @@ body {
   .nav-end { display: flex; justify-content: center; height: var(--touch); margin-top: auto; }
   /* the menu opens beside the rail, from the bottom, 8 px from the screen edge */
   .menu { left: calc(var(--rail-w) + var(--safe-left) + 6px); bottom: calc(8px + var(--safe-bottom)); }
-  /* the volume panel hangs under the strip, beside the rail */
-  .vol-panel { top: calc(var(--safe-top) + var(--strip-h) + 4px); left: calc(var(--rail-w) + var(--safe-left) + 10px); width: min(420px, calc(100vw - var(--rail-w) - var(--safe-left) - 20px)); border-radius: 14px; }
 }
 
 @media (orientation: portrait) {
@@ -178,15 +169,14 @@ body {
   .nav-status { left: calc(10px + var(--safe-left)); }
   .glyph { display: none; }
   .nav-end { right: calc(4px + var(--safe-right)); }
-  /* the menu and the volume panel are bottom sheets over the bar: full width, rounded top, a grabber to drag them down */
-  .menu, .vol-panel { left: 0; right: 0; bottom: calc(var(--bar-h) + var(--safe-bottom)); border-bottom: 0; border-radius: 18px 18px 0 0; animation: sheet-up 0.18s ease; }
+  /* the menu is a bottom sheet over the bar: full width, rounded top, a grabber to drag them down */
+  .menu { left: 0; right: 0; bottom: calc(var(--bar-h) + var(--safe-bottom)); border-bottom: 0; border-radius: 18px 18px 0 0; animation: sheet-up 0.18s ease; }
   .menu { max-height: calc(100vh - var(--bar-h) - var(--safe-top) - var(--safe-bottom) - 56px); padding: 0 calc(12px + var(--safe-right)) 12px calc(12px + var(--safe-left)); }
-  .vol-panel { padding: 16px calc(16px + var(--safe-right)) 16px calc(16px + var(--safe-left)); }
   .menu > .grip { display: flex; justify-content: center; padding: 10px 0 6px; touch-action: none; }
   .grip i { width: 40px; height: 4px; border-radius: 2px; background: var(--muted); opacity: 0.5; }
   .menu-host { touch-action: none; }
   .nav-end .icon-btn { width: var(--strip-h); height: var(--strip-h); }
-  /* with everything on at once (power pill, camera, mic, player, FPS) 411 px is tight: the buttons stay 44 px, the pill gives up
+  /* with everything on at once (power pill, camera, mic, FPS) 411 px is tight: the buttons stay 44 px, the pill gives up
      padding and, as a last resort, shrinks with an ellipsis (the strip leaves room for the status light and the menu) */
   .live-strip { gap: 2px; padding: 0 calc(48px + var(--safe-right)) 0 calc(18px + var(--safe-left)); }
   .live-strip .pill { padding: 0 6px; }
@@ -197,7 +187,6 @@ body {
 .icon-btn[hidden] { display: none; }
 #cam { color: var(--err); }
 #mic[data-muted="true"] { color: var(--err); background: rgba(229, 100, 107, 0.12); }
-#player[data-status="playing"] { color: var(--text); }
 
 .menu {
   position: fixed;
@@ -222,7 +211,7 @@ body {
 .menu button:active { background: var(--surface-2); }
 .menu button[hidden] { display: none; }
 
-/* a tap outside an open panel (volume, menu) lands on this and only closes it (header.js) */
+/* a tap outside an open panel (menu) lands on this and only closes it (header.js) */
 .scrim { position: fixed; inset: 0; z-index: 29; background: transparent; touch-action: none; }
 .scrim[hidden] { display: none; }
 
@@ -370,63 +359,6 @@ body[data-state="offline"] .offline { display: flex; }
   color: var(--muted);
 }
 
-/* --- volume panel: the strip inside #volume-panel (opened by #vol-btn) ---------------------------- */
-
-.vol-panel { position: fixed; z-index: 30; padding: 12px; border: 1px solid var(--border); background: var(--surface); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); outline: none; }
-.vol-panel[hidden] { display: none; }
-
-/* row 1: mute, slider, value; row 2: previous, play/pause, next, one third each */
-.volume-bar { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 10px 12px; transition: opacity 0.2s ease; }
-.volume-bar[data-ready="false"] { opacity: 0.5; pointer-events: none; }
-
-.volume-bar .icon-btn { width: 48px; height: 48px; border-radius: 12px; background: var(--surface-2); color: var(--text); }
-.volume-bar .icon-btn svg { width: 22px; height: 22px; }
-.volume-bar .icon-btn:active { background: var(--border); }
-
-#mute .cross { display: none; stroke: var(--err); }
-.volume-bar[data-muted="true"] #mute .waves { display: none; }
-.volume-bar[data-muted="true"] #mute .cross { display: block; }
-
-#vol-value {
-  min-width: 3.4em;
-  font-size: 1.05rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-.volume-bar[data-muted="true"] #vol,
-.volume-bar[data-muted="true"] #vol-value { opacity: 0.4; }
-
-.media { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.volume-bar .media .icon-btn { width: auto; }
-
-#vol {
-  -webkit-appearance: none;
-  appearance: none;
-  min-width: 0;
-  height: 48px;
-  margin: 0;
-  background: transparent;
-  cursor: pointer;
-  touch-action: none; /* horizontal drags belong to the slider, not to the page swipe */
-  --fill: 0%;
-}
-#vol::-webkit-slider-runnable-track {
-  height: 6px;
-  border-radius: 3px;
-  background: linear-gradient(to right, var(--accent) var(--fill), var(--surface-2) var(--fill));
-}
-#vol::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 24px;
-  height: 24px;
-  margin-top: -9px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--text);
-  box-shadow: 0 0 0 5px rgba(124, 156, 255, 0.15);
-}
-
 /* --- game frame rate pill (js/game.js): in the live strip on every page but Desempenho, while a game runs ---- */
 
 .fps-float {
@@ -509,7 +441,7 @@ body.editing .slot::before { content: "+"; font-size: 1.8rem; font-weight: 300; 
   .overlay-scrim:not([hidden]) { position: fixed; inset: 0; z-index: 39; display: block; background: rgba(4, 5, 8, 0.7); touch-action: none; }
 }
 
-/* portrait: the scrim behind the volume panel / menu sheet dims the deck (after the base rule, or the base would win); it still only closes */
+/* portrait: the scrim behind the menu sheet dims the deck (after the base rule, or the base would win); it still only closes */
 @media (orientation: portrait) {
   .scrim { background: rgba(4, 5, 8, 0.45); }
 }
