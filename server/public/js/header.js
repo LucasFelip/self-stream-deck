@@ -91,7 +91,10 @@
     setTimeout(() => Deck.pc.refresh(), 500);
   });
 
-  menuButton.addEventListener('click', () => { menu.hidden = !menu.hidden; });
+  menuButton.addEventListener('click', () => {
+    if (menu.hidden) $('volume-panel').hidden = true; // one floating panel at a time
+    menu.hidden = !menu.hidden;
+  });
   menu.addEventListener('click', () => { menu.hidden = true; });
 
   // A panel that floats over the deck (the volume panel, this menu) gets a transparent scrim under it: a tap outside only closes the

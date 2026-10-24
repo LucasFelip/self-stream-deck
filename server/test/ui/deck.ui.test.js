@@ -867,6 +867,79 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.strictEqual(deck.model.calls.filter((c) => c.method === 'POST').length, 0, 'the tap on the strip reached the deck');
     });
 
+    // A drag only closes a sheet when it starts on its handle (bar / grabber / PC name), never on the content: synthetic pointer events
+    // (6 moves of 40 px = 240 px, well past the threshold) on the body must change nothing, on the handle they close.
+    const synthDrag = (check, selector) => check.eval(`(async () => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      const r = el.getBoundingClientRect();
+      const x = r.left + Math.min(40, r.width / 2);
+      const y = r.top + Math.min(20, r.height / 2);
+      const fire = (type, dy) => el.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 7, pointerType: 'touch', clientX: x, clientY: y + dy }));
+      fire('pointerdown', 0);
+      for (let i = 1; i <= 6; i += 1) { fire('pointermove', i * 40); await new Promise((resolve) => setTimeout(resolve, 20)); }
+      fire('pointerup', 240);
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      return true;
+    })()`);
+
+    await test('dragging the CONTENT of a sheet never closes it; dragging its handle does (overlay bar, menu grip and PC name)', async () => {
+      await go('apps');
+      await page.eval(`Deck.camera.openSheet()`);
+      await sleep(400);
+      const open = () => page.eval(`!document.querySelector('.camera-page').closest('.overlay').hidden`);
+      await synthDrag(page, '.overlay:not([hidden]) .overlay-body');
+      assert.strictEqual(await open(), true, 'a drag on the overlay body closed it');
+      assert.strictEqual(await page.eval(`document.querySelector('.overlay:not([hidden])').style.transform`), '', 'a drag on the body moved the sheet');
+      await synthDrag(page, '.overlay:not([hidden]) .overlay-bar');
+      assert.strictEqual(await open(), false, 'a drag on the overlay bar did not close it');
+
+      const menuOpen = async () => {
+        await page.eval(`document.getElementById('menu-pop').hidden = false`);
+        await sleep(300);
+      };
+      const isMenuOpen = () => page.eval(`!document.getElementById('menu-pop').hidden`);
+      await menuOpen();
+      await synthDrag(page, '#menu-pop button:not([hidden])'); // an item (the sheet's content)
+      assert.strictEqual(await isMenuOpen(), true, 'a drag on a menu item closed the menu');
+      assert.strictEqual(await page.eval(`document.getElementById('menu-pop').style.transform`), '');
+      await synthDrag(page, '#menu-pop .grip');
+      assert.strictEqual(await isMenuOpen(), false, 'a drag on the grip did not close the menu');
+      await menuOpen();
+      await synthDrag(page, '#menu-pop .menu-host');
+      assert.strictEqual(await isMenuOpen(), false, 'a drag on the PC name did not close the menu');
+    });
+
+    await test('opening the menu closes the volume panel and the other way round', async () => {
+      await go('apps');
+      await page.eval(`document.getElementById('vol-btn').click()`);
+      await page.waitFor(`!document.getElementById('volume-panel').hidden`, 'the volume panel');
+      await page.eval(`document.getElementById('menu').click()`);
+      await page.waitFor(`!document.getElementById('menu-pop').hidden`, 'the menu');
+      assert.strictEqual(await page.eval(`document.getElementById('volume-panel').hidden`), true, 'the volume panel stayed open under the menu');
+      await page.eval(`document.getElementById('vol-btn').click()`);
+      await page.waitFor(`!document.getElementById('volume-panel').hidden`, 'the volume panel again');
+      assert.strictEqual(await page.eval(`document.getElementById('menu-pop').hidden`), true, 'the menu stayed open under the volume panel');
+      await page.eval(`Deck.back()`);
+    });
+
+    await test('a sheet taken away while a hold-to-confirm button is held never fires the action (Back during the hold)', async () => {
+      await go('power');
+      await page.waitFor(`document.querySelector('.power-status')?.textContent.includes('Desativada')`, 'the power state');
+      await page.eval(`[...document.querySelectorAll('.power-page .actions-grid > .tile')].find((t) => t.textContent.includes('Reiniciar') && !t.textContent.includes('BIOS')).click()`);
+      await page.waitFor(`document.querySelector('#modal-root .hold')`, 'the confirmation sheet');
+      await sleep(350);
+      deck.model.calls.length = 0;
+      const hold = await page.center('#modal-root .hold');
+      await page.touch('touchStart', hold.x, hold.y);
+      await sleep(300);
+      assert.strictEqual(await page.eval('Deck.back()'), true, 'Back removed the sheet');
+      await sleep(1600); // longer than the 1.2 s hold
+      await page.touch('touchEnd', hold.x, hold.y);
+      await sleep(300);
+      assert.strictEqual(deck.model.calls.filter((c) => c.method === 'POST' && c.path === '/api/power').length, 0, 'the removed button still fired the power action');
+      await go('apps');
+    });
+
     await test('overlay (landscape): the full panel, a 48 px Fechar, no grabber and no dimmed strip', async () => {
       const wide = await browser2(836, 387);
       try {

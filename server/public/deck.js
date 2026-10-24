@@ -215,6 +215,8 @@ window.Deck = (() => {
       timer = setTimeout(() => {
         timer = null;
         button.classList.remove('holding');
+        // the sheet was taken away while held (Back, a rebuild): pointerleave never comes for a removed button, and it must not act
+        if (!button.isConnected) return;
         vibrate(80);
         onDone();
       }, ms);

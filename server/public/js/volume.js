@@ -105,7 +105,10 @@
   // --- the panel -------------------------------------------------------------------------------
   // Opened by the button, closed by the button, a tap outside (the scrim, header.js) or Back (Deck.back). Dragging the slider
   // does not close it: the slider keeps its touch-action: none and the panel lives outside the pager, so nothing swipes.
-  const setOpen = (open) => { panel.hidden = !open; };
+  const setOpen = (open) => {
+    if (open) $('menu-pop').hidden = true; // one floating panel at a time
+    panel.hidden = !open;
+  };
   button.addEventListener('click', () => setOpen(panel.hidden));
   new MutationObserver(() => {
     const open = !panel.hidden;

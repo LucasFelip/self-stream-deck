@@ -331,7 +331,7 @@ button.chip:active { background: var(--border); }
 }
 .schedule[hidden] { display: none; }
 .schedule b { color: var(--warn); font-variant-numeric: tabular-nums; }
-.schedule button { margin-left: auto; min-height: 44px; padding: 0 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-family: inherit; font-weight: 600; font-size: 0.72rem; touch-action: manipulation; }
+.schedule button { margin-left: auto; min-height: 48px; padding: 0 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-family: inherit; font-weight: 600; font-size: 0.72rem; touch-action: manipulation; }
 
 /* the actions are keys (the .tile of Apps / Shortcuts): 4x2 in landscape, 2x4 in portrait; with seven (hibernation off) the last one is two columns wide */
 .actions-grid { --cols: 4; --rows: 2; flex: 1; height: auto; min-height: 0; }
