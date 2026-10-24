@@ -4,9 +4,10 @@
 // must not run past the viewport or sit on top of each other, the floating FPS pill must not cover any button or card of
 // the page underneath, and the body must not scroll sideways. A game is faked so the pill is on screen.
 //
-// Today some of these fail on purpose (FPS over the Mapa button, the header in portrait with Desempenho active). So that
-// `npm run check` stays green during Phase 0 the violations are listed as warnings and the test exits 0; with
-// LAYOUT_STRICT=1 they fail it. Phase 1 makes strict mode the default.
+// Today some of these fail on purpose (FPS over the Mapa button; the header in portrait, where the .host grid column
+// shrinks to 1px so its glyph and status overflow onto the first tab). So that `npm run check` stays green during Phase 0
+// the violations are listed as warnings and the test exits 0; with LAYOUT_STRICT=1 they fail it. Phase 1 fixes the app
+// and makes strict mode the default.
 // Skipped, not failed, when no Chromium-based browser is installed (set CHROME_PATH).
 const { fakeDeck, launchBrowser, findBrowser, sleep } = require('./harness');
 
@@ -34,6 +35,25 @@ const probe = (section) => `(() => {
   const row = ['.host', '#tabs', '.actions'].map((s) => document.querySelector(s)).filter((el) => el && shown(el));
   for (let i = 0; i < row.length; i += 1) for (let j = i + 1; j < row.length; j += 1) {
     if (hit(box(row[i]), box(row[j]))) out.push('bar: ' + name(row[i]) + ' sobrepoe ' + name(row[j]));
+  }
+  // the bar's children, by group: a child that spills out of its own box (the .host column shrinks to 1px in portrait and
+  // its glyph/status overflow onto the tabs) is invisible to the box checks above, so measure the children themselves
+  const pick = (sel) => [...document.querySelectorAll(sel)].filter(shown);
+  const groups = [
+    ['host', [...pick('.host .glyph'), ...pick('#status'), ...pick('.host .host-name')]],
+    ['abas', pick('#tabs .tab')],
+    ['acoes', pick('.actions .icon-btn, .actions .pill')],
+  ];
+  const label = (el) => name(el) + (el.classList.contains('tab') && el.textContent.trim() ? ' "' + el.textContent.trim().slice(0, 12) + '"' : '');
+  const hostEl = document.querySelector('.host');
+  if (hostEl && shown(hostEl)) {
+    const hb = box(hostEl);
+    for (const el of groups[0][1]) if (box(el).right > hb.right + 1) out.push('bar: ' + name(el) + ' sai da caixa de .host (' + Math.round(box(el).left) + '..' + Math.round(box(el).right) + ' de ' + Math.round(hb.left) + '..' + Math.round(hb.right) + ')');
+  }
+  for (let gi = 0; gi < groups.length; gi += 1) for (let gj = gi + 1; gj < groups.length; gj += 1) {
+    for (const a of groups[gi][1]) for (const b of groups[gj][1]) {
+      if (hit(box(a), box(b))) out.push('bar: ' + label(a) + ' sobrepoe ' + label(b));
+    }
   }
 
   // (b) the FPS pill against the visible page's buttons and cards
