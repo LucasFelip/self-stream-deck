@@ -4,7 +4,7 @@
  * "Câmera do celular": the phone's camera as a webcam for the PC. The page asks the phone for its camera, draws
  * frames into a canvas and posts them as JPEGs to the server (POST /api/camera/frame). The server republishes them as
  * an MJPEG stream that OBS shows in a Browser Source and offers to other apps as its Virtual Camera.
- * It opens as a full-screen sheet from the menu; while it transmits, a red camera icon in the header brings it back.
+ * It opens as a full-screen sheet from the menu; while it transmits, a red camera icon in the live strip brings it back.
  */
 (() => {
   const { h, icon, api, toast } = Deck;

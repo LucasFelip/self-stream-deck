@@ -496,7 +496,7 @@
       // a request that never answers must not freeze the map: give up after a few seconds and try again
       apply(await Promise.race([api('/api/windows'), new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))]));
     } catch {
-      // keep what is on screen; the header's connection indicator reports outages
+      // keep what is on screen; the navigation's connection light reports outages
     } finally {
       inFlight = false;
       if (pollAgain) {

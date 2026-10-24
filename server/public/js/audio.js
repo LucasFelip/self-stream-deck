@@ -163,7 +163,7 @@
     try {
       render(await api('/api/audio'));
     } catch {
-      // keep what is on screen; the connection indicator in the header reports outages
+      // keep what is on screen; the connection light in the navigation reports outages
     }
   }
 

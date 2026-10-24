@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * What the PC says about itself for the header and the keys: which apps run or have a window, the scheduled shutdown
+ * What the PC says about itself for the navigation, the live strip and the keys: which apps run or have a window, the scheduled shutdown
  * (the pill), the microphone, what is playing. It arrives pushed (connection.js) or by request, and paint() puts it on screen.
  */
 (() => {
@@ -34,7 +34,7 @@
   }
   pill.addEventListener('click', () => Deck.pager.goToId('power'));
 
-  // the dots on the app keys, the camera key, the power pill and the header
+  // the dots on the app keys, the camera key, the power pill and the live strip
   function paint() {
     Deck.tiles.paintCamera();
     const running = new Set(state.running);

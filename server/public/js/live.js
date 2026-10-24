@@ -119,7 +119,7 @@ Deck.live = (() => {
         try {
           handle(await poll());
         } catch {
-          // the header's connection indicator reports outages; keep what is on screen
+          // the navigation's connection light reports outages; keep what is on screen
         }
       }
       schedule();

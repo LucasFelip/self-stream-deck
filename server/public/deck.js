@@ -235,7 +235,7 @@ window.Deck = (() => {
   // show/hide hooks for pages that app.js generates itself (the shortcuts page hosts the windows list): id -> { show, hide }
   const lifecycle = {};
 
-  // entries the header's menu shows besides its own: { label, onClick }
+  // entries the ⋯ menu shows besides its own: { label, onClick }
   const menuItems = [];
 
   // A full-screen panel over the deck (the screen map, the system info): one tap in the menu or on a button opens it,
