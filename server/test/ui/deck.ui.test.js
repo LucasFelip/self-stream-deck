@@ -156,6 +156,22 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       await page.tap('#tabs .tab[data-section="apps"]');
     });
 
+    await test('Câmera do celular: opening the sheet does not ask for the camera; "Ver prévia" and "Transmitir ao PC" do', async () => {
+      await page.eval(`(() => { window.__gum = 0; navigator.mediaDevices.getUserMedia = async () => { window.__gum += 1; throw Object.assign(new Error('blocked'), { name: 'NotAllowedError' }); }; })()`);
+      await page.tap('#menu');
+      await page.waitFor(`!document.getElementById('menu-pop').hidden`, 'the menu');
+      await page.eval(`[...document.querySelectorAll('#menu-pop button')].find((b) => b.textContent.includes('Câmera do celular')).click()`);
+      await page.waitFor(`document.querySelector('.camera-page') && !document.querySelector('.camera-page').closest('.overlay').hidden`, 'the camera sheet');
+      await sleep(400);
+      assert.strictEqual(await page.eval('window.__gum'), 0, 'opening the sheet asked for the camera');
+      assert.strictEqual(await page.eval(`document.querySelector('.cam-placeholder button').hidden`), false, 'the Ver prévia button is there');
+      await page.tap('.cam-placeholder button');
+      await page.waitFor('window.__gum === 1', 'getUserMedia after Ver prévia');
+      await page.tap('.cam-send');
+      await page.waitFor('window.__gum === 2', 'getUserMedia after Transmitir ao PC');
+      await page.eval(`document.querySelector('.camera-page').closest('.overlay').querySelector('.overlay-close').click()`);
+    });
+
     await test('the page raised no script errors', () => {
       assert.deepStrictEqual(page.errors, []);
     });

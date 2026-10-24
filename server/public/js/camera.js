@@ -30,7 +30,16 @@
 
   const preview = h('video', { muted: true, playsinline: true, autoplay: true, class: 'cam-video' });
   preview.muted = true;
-  const placeholder = h('div', { class: 'cam-placeholder', text: 'Ligando a câmera…' });
+  // what the picture area says while there is no picture: a line of text and, while the camera is off, "Ver prévia"
+  const placeholderText = h('span');
+  const previewButton = h('button', { type: 'button', class: 'cam-act', text: 'Ver prévia', on: { click: () => startCamera() } });
+  const placeholder = h('div', { class: 'cam-placeholder' }, placeholderText, previewButton);
+  function say(text, withButton = false) {
+    placeholderText.textContent = text;
+    previewButton.hidden = !withButton;
+    placeholder.hidden = false;
+  }
+  const WAITING = 'A câmera só liga quando você pedir: veja a prévia ou transmita ao PC.';
   const view = h('div', { class: 'cam-view' }, preview, placeholder);
 
   const sendButton = h('button', { type: 'button', class: 'bigbtn cam-send', on: { click: () => (sending ? stopSending() : startSending()) } });
@@ -74,19 +83,19 @@
   async function startCamera() {
     if (stream) return true;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      placeholder.textContent = 'Este navegador não libera a câmera aqui. Use o app do Stream Deck.';
+      say('Este navegador não libera a câmera aqui. Use o app do Stream Deck.');
       return false;
     }
+    say('Ligando a câmera…');
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
         audio: false,
       });
     } catch (err) {
-      placeholder.textContent = err && err.name === 'NotAllowedError'
+      say(err && err.name === 'NotAllowedError'
         ? 'A câmera está bloqueada. Permita o acesso à câmera para o app do Stream Deck.'
-        : `Não foi possível abrir a câmera (${err && err.name ? err.name : 'erro'}).`;
-      placeholder.hidden = false;
+        : `Não foi possível abrir a câmera (${err && err.name ? err.name : 'erro'}).`, true);
       return false;
     }
     stream.getVideoTracks().forEach((track) => track.addEventListener('ended', onEnded));
@@ -104,8 +113,7 @@
     stream = null;
     capture.srcObject = null;
     preview.srcObject = null;
-    placeholder.textContent = 'Câmera desligada';
-    placeholder.hidden = false;
+    say(WAITING, true);
   }
 
   // the system took the camera away (screen off, another app): get it back if we were transmitting
@@ -116,8 +124,9 @@
 
   async function flip() {
     facing = facing === 'user' ? 'environment' : 'user';
+    if (!stream) return; // the camera is off: the choice is kept for when it turns on
     stopCamera();
-    placeholder.textContent = 'Trocando de câmera…';
+    say('Trocando de câmera…');
     await startCamera();
   }
 
@@ -202,7 +211,7 @@
       paintDirect();
     }
     if (!status || !sending) {
-      statusLine.textContent = sending ? 'Transmitindo…' : 'Pronto: toque em Transmitir ao PC.';
+      statusLine.textContent = sending ? 'Transmitindo…' : 'Câmera desligada: toque em Ver prévia ou Transmitir ao PC.';
       return;
     }
     const watching = status.viewers > 0 ? 'OBS conectado' : (direct.inUse ? 'câmera direta em uso' : 'nenhum app usando ainda');
@@ -247,7 +256,7 @@
     onOpen() {
       paintSend();
       paintQuality();
-      startCamera();
+      if (!stream) say(WAITING, true); // opening the sheet does not turn the camera on: "Ver prévia" or "Transmitir ao PC" does
       pollStatus();
       clearInterval(statusTimer);
       statusTimer = setInterval(() => { if (!document.hidden) pollStatus(); }, 2000);
@@ -279,6 +288,7 @@
     onChange: null,
   };
 
+  say(WAITING, true);
   headerButton.addEventListener('click', () => sheet.open());
   Deck.menuItems.push({ label: 'Câmera do celular', onClick: () => sheet.open() });
   paintSend();
