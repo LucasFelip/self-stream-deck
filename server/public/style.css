@@ -233,7 +233,8 @@ body[data-state="offline"] .offline { display: flex; }
 .wicon { display: grid; place-items: center; flex: none; width: 22px; height: 22px; }
 .wicon img { width: 22px; height: 22px; object-fit: contain; pointer-events: none; }
 .wicon b { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 5px; background: var(--surface); color: var(--muted); font-size: 0.7rem; }
-.wtitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.74rem; font-weight: 600; }
+/* two lines: long names ("Steamwebhelper") are no longer cut after a few letters */
+.wtitle { display: -webkit-box; flex: 1; min-width: 0; overflow: hidden; font-size: 0.74rem; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .wbtn { flex: none; justify-content: center; width: 40px; padding: 0; color: var(--muted); }
 .wrow.dim .wmain { opacity: 0.55; }
 .wrow.front .wmain { border-color: var(--accent); }

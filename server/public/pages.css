@@ -435,7 +435,10 @@ button.chip:active { background: var(--border); }
 .mwin-bar span { overflow: hidden; text-overflow: ellipsis; }
 .mwin-bar .mwin-icon { display: flex; flex: none; overflow: visible; }
 
-.mon-bright { position: absolute; display: flex; align-items: center; gap: 6px; height: 30px; color: var(--muted); }
+.mon-bright { position: absolute; display: flex; align-items: center; gap: 6px; height: 30px; overflow: hidden; color: var(--muted); }
+.mon-bright > * { min-width: 0; }
+.mon-bright > .small { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* "sem controle de brilho" never runs into the next screen's value */
+.mon-bright .value:empty { display: none; }
 .mon-bright .range { height: 28px; }
 .mon-bright .value { flex: none; min-width: 2.6em; text-align: right; font-size: 0.62rem; font-variant-numeric: tabular-nums; }
 .small { font-size: 0.62rem; }

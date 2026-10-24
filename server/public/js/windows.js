@@ -105,7 +105,7 @@
       const value = h('span', { class: 'value' });
       let control;
       if (screen.brightness === null) {
-        control = h('span', { class: 'muted small', text: 'sem controle de brilho' });
+        control = h('span', { class: 'muted small', text: 'sem controle de brilho', title: 'Este monitor não aceita controle de brilho (DDC/CI)' });
       } else {
         const brightness = slider({ onChange: (level) => post('/api/screens/brightness', { device: screen.device, level }) });
         brightness.set(screen.brightness);
