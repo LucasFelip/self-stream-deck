@@ -33,6 +33,9 @@ async function fakeDeck() {
     layout: { apps: [], shortcuts: [] },
     state: { running: ['app0'], open: [], scheduled: null, mic: { available: true, muted: false }, volume: { level: 40, muted: false }, playing: null, miniPlayer: true, ui: 1, appsRev: 1 },
   };
+  const streams = new Set(); // open event streams that asked for the game topic
+  const sendGame = (res) => res.write(`event: game\ndata: ${JSON.stringify(model.fps)}\n\n`);
+  model.pushGame = () => { for (const res of streams) sendGame(res); };
   const shortcuts = [{ id: 'copy', label: 'Copiar', display: 'Ctrl+C' }, { id: 'paste', label: 'Colar', display: 'Ctrl+V' }];
 
   const server = http.createServer(async (req, res) => {
@@ -50,11 +53,19 @@ async function fakeDeck() {
       model.layout = { ...model.layout, [body.page]: body.order };
       return sendJson(res, 200, model.layout);
     }
+    if (key === 'GET /api/monitor/fps') return sendJson(res, 200, model.fps ?? null);
     if (key === 'GET /api/volume') return sendJson(res, 200, model.state.volume);
     if (url.pathname === '/api/events') {
-      // the push stream is not what these tests are about: leave it open and silent so the page falls back to its own requests
+      // the push stream is silent (the page falls back to its own requests) unless a test sets model.fps: the "game" topic
+      // is then sent at once and on every model.pushGame()
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
-      return res.write(': ok\n\n');
+      res.write(': ok\n\n');
+      if ((url.searchParams.get('topics') || '').split(',').includes('game')) {
+        streams.add(res);
+        res.on('close', () => streams.delete(res));
+        if (model.fps) sendGame(res);
+      }
+      return undefined;
     }
     if (key === 'POST /api/mic') return sendJson(res, 200, { available: true, muted: true });
     if (key === 'POST /api/volume') return sendJson(res, 200, { level: body.level ?? model.state.volume.level, muted: false });
