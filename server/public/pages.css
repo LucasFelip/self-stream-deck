@@ -328,6 +328,9 @@ button.chip:active { background: var(--border); }
   touch-action: manipulation;
   transition: transform 0.08s ease, background 0.15s ease;
 }
+.act[hidden] { display: none; }
+/* seven tiles (hibernation off): the last one takes two columns, so the grid has no hole */
+.actions-grid[data-count="7"] .act:last-child { grid-column: span 2; }
 .act:active { transform: scale(0.97); background: var(--surface-2); }
 .act:disabled { opacity: 0.4; }
 .act .ico { --size: 24px; color: var(--muted); }

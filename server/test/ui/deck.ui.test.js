@@ -135,6 +135,27 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       });
     }
 
+    await test('Energia: no open-windows chips or note, Hibernar hidden while hibernation is off, and the grid has no hole', async () => {
+      await sleep(700); // the deck redraws its pages right after coming back online; a tap during that would be undone
+      await page.tap('#tabs .tab[data-section="power"]');
+      await page.waitFor(`document.querySelector('.power-page .badge')`, 'the power state');
+      const power = await page.eval(`(() => {
+        const page = document.querySelector('.power-page');
+        const tiles = [...page.querySelectorAll('.act')];
+        const shown = tiles.filter((t) => t.getBoundingClientRect().width > 0);
+        const last = shown[shown.length - 1].getBoundingClientRect();
+        const grid = page.querySelector('.actions-grid').getBoundingClientRect();
+        return { chips: page.querySelectorAll('.power-side .chip').length, text: page.querySelector('.power-side').textContent, hibernateHidden: tiles.find((t) => t.textContent.includes('Hibernar')).hidden, shown: shown.length, lastRight: last.right, gridRight: grid.right };
+      })()`);
+      assert.strictEqual(power.chips, 0);
+      assert.ok(!/Janelas abertas|Podem ter trabalho/.test(power.text), power.text);
+      assert.ok(power.text.includes('Hibernação'), 'the state card still explains hibernation');
+      assert.strictEqual(power.hibernateHidden, true);
+      assert.strictEqual(power.shown, 7);
+      assert.ok(Math.abs(power.lastRight - power.gridRight) < 2, `the last tile reaches the grid edge: ${JSON.stringify(power)}`);
+      await page.tap('#tabs .tab[data-section="apps"]');
+    });
+
     await test('the page raised no script errors', () => {
       assert.deepStrictEqual(page.errors, []);
     });

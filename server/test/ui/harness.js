@@ -31,6 +31,7 @@ async function fakeDeck() {
     calls: [],
     down: false, // true: the PC "went away" (the state answers 503)
     layout: { apps: [], shortcuts: [] },
+    power: { enabled: true, hibernate: false, uptimeSec: 3 * 3600, lastBoot: '2026-10-22T08:00:00', rebootPending: false, scheduled: null, openApps: [{ name: 'Navegador', count: 2 }, { name: 'Editor', count: 1 }] },
     state: { running: ['app0'], open: [], scheduled: null, mic: { available: true, muted: false }, volume: { level: 40, muted: false }, playing: null, miniPlayer: true, ui: 1, appsRev: 1 },
   };
   const streams = new Set(); // open event streams that asked for the game topic
@@ -54,13 +55,16 @@ async function fakeDeck() {
       return sendJson(res, 200, model.layout);
     }
     if (key === 'GET /api/monitor/fps') return sendJson(res, 200, model.fps ?? null);
+    if (key === 'GET /api/power') return sendJson(res, 200, model.power);
     if (key === 'GET /api/volume') return sendJson(res, 200, model.state.volume);
     if (url.pathname === '/api/events') {
       // the push stream is silent (the page falls back to its own requests) unless a test sets model.fps: the "game" topic
       // is then sent at once and on every model.pushGame()
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       res.write(': ok\n\n');
-      if ((url.searchParams.get('topics') || '').split(',').includes('game')) {
+      const topics = (url.searchParams.get('topics') || '').split(',');
+      if (topics.includes('power')) res.write(`event: power\ndata: ${JSON.stringify(model.power)}\n\n`);
+      if (topics.includes('game')) {
         streams.add(res);
         res.on('close', () => streams.delete(res));
         if (model.fps) sendGame(res);

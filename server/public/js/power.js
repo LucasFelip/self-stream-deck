@@ -24,7 +24,7 @@
     {
       id: 'hibernate', icon: 'hibernate', label: 'Hibernar', tone: 'soft', short: 'Salva a sessão no disco e desliga.',
       title: 'Hibernar o PC?', effects: 'A sessão é salva no disco e o PC desliga, sem consumo. Ao ligar, tudo volta como estava.',
-      reconnect: 'O painel só volta quando o PC for ligado de novo.', needs: 'hibernate', unavailable: 'Hibernação desativada no Windows',
+      reconnect: 'O painel só volta quando o PC for ligado de novo.', needs: 'hibernate',
     },
     {
       id: 'logoff', icon: 'logout', label: 'Sair da conta', tone: 'warn', short: 'Encerra a sessão e fecha os apps do usuário.',
@@ -67,8 +67,6 @@
   const bootValue = h('dd', { text: '–' });
   const pendingValue = h('dd');
   const hibernateValue = h('dd');
-  const appsBox = h('div', { class: 'chips' });
-  const appsNote = h('p', { class: 'muted', style: 'font-size:0.68rem;line-height:1.4;margin:0' });
 
   const statusCard = h('div', { class: 'card' },
     h('h3', { text: 'Estado' }),
@@ -76,10 +74,7 @@
       h('dt', { text: 'Ligado há' }), uptimeValue,
       h('dt', { text: 'Último boot' }), bootValue,
       h('dt', { text: 'Reinício pendente' }), pendingValue,
-      h('dt', { text: 'Hibernação' }), hibernateValue),
-    h('div', { class: 'divider' }),
-    h('h3', { text: 'Janelas abertas' }),
-    h('div', { class: 'scroll' }, appsBox, appsNote));
+      h('dt', { text: 'Hibernação' }), hibernateValue));
 
   // --- actions side ---------------------------------------------------------------------------
 
@@ -108,16 +103,16 @@
     pendingValue.replaceChildren(power.rebootPending ? badge('Sim', 'warn') : badge('Não'));
     hibernateValue.replaceChildren(power.hibernate ? badge('Ativa', 'ok') : badge('Desativada'));
 
-    appsBox.replaceChildren(...power.openApps.map((app) => h('span', { class: 'chip', text: app.count > 1 ? `${app.name} ×${app.count}` : app.name })));
-    appsNote.textContent = power.openApps.length
-      ? 'Podem ter trabalho não salvo: ao reiniciar ou desligar, o Windows pede que fechem.'
-      : 'Nenhuma janela de aplicativo aberta.';
-
+    // (the open windows are not listed here: the confirmation sheet warns about them, from power.openApps)
+    // an action the PC cannot do (hibernation off) is hidden, not greyed out; the "Hibernação: Desativada" line says why
+    let shown = 0;
     for (const action of ACTIONS) {
-      const blocked = action.needs && !power[action.needs];
-      tiles.get(action.id).disabled = Boolean(blocked) || power.enabled === false;
-      tiles.get(action.id).querySelector('small').textContent = blocked ? action.unavailable : action.short;
+      const tile = tiles.get(action.id);
+      tile.hidden = Boolean(action.needs && !power[action.needs]);
+      tile.disabled = power.enabled === false;
+      if (!tile.hidden) shown += 1;
     }
+    grid.dataset.count = String(shown); // the grid fills its last row when one tile is missing (see pages.css)
 
     paintClock();
   }
