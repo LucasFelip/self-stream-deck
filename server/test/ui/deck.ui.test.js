@@ -204,28 +204,59 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       });
     }
 
-    await test('Energia: no open-windows chips or note, Hibernar hidden while hibernation is off, and the grid has no hole', async () => {
+    await test('Energia: keys (icon + name, no description text), Hibernar hidden while hibernation is off, one status line, and no key reaches the PC without the confirmation', async () => {
       // the deck redraws its pages right after coming back online and a tap during that is undone: tap again until it sticks
       for (let attempt = 0; attempt < 4; attempt += 1) {
         await sleep(500);
         await page.tap('#tabs .tab[data-section="power"]');
         if (await page.waitFor(`document.querySelector('#tabs .tab[data-section="power"]').getAttribute('aria-selected') === 'true'`, 'the Energia tab', 1500).then(() => true, () => false)) break;
       }
-      await page.waitFor(`document.querySelector('.power-page .badge')`, 'the power state');
+      await page.waitFor(`document.querySelector('.power-status b.ok, .power-status b')?.textContent && document.querySelector('.power-status').textContent.includes('Desativada')`, 'the power state');
       const power = await page.eval(`(() => {
         const page = document.querySelector('.power-page');
-        const tiles = [...page.querySelectorAll('.act')];
+        const tiles = [...page.querySelectorAll('.actions-grid > .tile')];
         const shown = tiles.filter((t) => t.getBoundingClientRect().width > 0);
+        const grid = page.querySelector('.actions-grid');
         const last = shown[shown.length - 1].getBoundingClientRect();
-        const grid = page.querySelector('.actions-grid').getBoundingClientRect();
-        return { chips: page.querySelectorAll('.power-side .chip').length, text: page.querySelector('.power-side').textContent, hibernateHidden: tiles.find((t) => t.textContent.includes('Hibernar')).hidden, shown: shown.length, lastRight: last.right, gridRight: grid.right };
+        return {
+          old: page.querySelectorAll('.act, .act small').length,
+          names: shown.map((t) => t.querySelector(':scope > span').textContent),
+          texts: shown.map((t) => t.textContent.trim()),
+          small: page.querySelectorAll('.actions-grid small').length,
+          label: tiles.find((t) => t.textContent.includes('Suspender')).getAttribute('aria-label'),
+          title: tiles.find((t) => t.textContent.includes('Suspender')).title,
+          hibernateHidden: tiles.find((t) => t.textContent.includes('Hibernar')).hidden,
+          status: page.querySelector('.power-status').textContent,
+          statusH: Math.round(page.querySelector('.power-status').getBoundingClientRect().height),
+          cols: getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+          lastRight: Math.round(last.right), gridRight: Math.round(grid.getBoundingClientRect().right),
+        };
       })()`);
-      assert.strictEqual(power.chips, 0);
-      assert.ok(!/Janelas abertas|Podem ter trabalho/.test(power.text), power.text);
-      assert.ok(power.text.includes('Hibernação'), 'the state card still explains hibernation');
+      assert.strictEqual(power.old, 0, 'the old .act cards are gone');
+      assert.deepStrictEqual(power.names, ['Bloquear', 'Suspender', 'Sair da conta', 'Reiniciar', 'Desligar', 'Reiniciar p/ BIOS', 'Modo avançado']);
+      assert.deepStrictEqual(power.texts, power.names, 'a key has its name and nothing else (the description is not in the button)');
+      assert.strictEqual(power.small, 0);
+      assert.match(power.label, /^Suspender\. Baixo consumo/, 'the description is the accessible name');
+      assert.match(power.title, /^Baixo consumo/);
       assert.strictEqual(power.hibernateHidden, true);
-      assert.strictEqual(power.shown, 7);
-      assert.ok(Math.abs(power.lastRight - power.gridRight) < 2, `the last tile reaches the grid edge: ${JSON.stringify(power)}`);
+      assert.match(power.status, /Ligado há .*Reinício pendente .*Hibernação Desativada/);
+      assert.ok(power.statusH < 48, `the state is one line: ${JSON.stringify(power)}`);
+      assert.strictEqual(power.cols, 2, 'portrait: two columns');
+      assert.ok(Math.abs(power.lastRight - power.gridRight) < 2, `with seven keys the last one takes the row: ${JSON.stringify(power)}`);
+
+      // a key opens the confirmation with the full description and the open-windows warning; Cancelar closes it; nothing is sent
+      deck.model.calls.length = 0;
+      await page.tap('.actions-grid > .tile[data-tone="danger"]'); // Reiniciar
+      await page.waitFor(`document.querySelector('#modal-root .sheet')`, 'the confirmation sheet');
+      const sheet = await page.eval(`document.querySelector('#modal-root .sheet').textContent`);
+      assert.match(sheet, /Reiniciar o PC\?/);
+      assert.match(sheet, /Todos os apps são fechados e o Windows reinicia/, 'the full description is in the sheet');
+      assert.match(sheet, /Janelas abertas: Navegador, Editor/, 'the open-windows warning');
+      assert.match(sheet, /Segure para reiniciar/);
+      await page.tap('#modal-root .sheet-actions button:not(.hold)');
+      await page.waitFor(`document.getElementById('modal-root').childElementCount === 0`, 'the sheet closed by Cancelar');
+      await sleep(300);
+      assert.strictEqual(deck.model.calls.filter((c) => c.method === 'POST' && c.path === '/api/power').length, 0, 'a power action reached the PC');
       await page.tap('#tabs .tab[data-section="apps"]');
     });
 
@@ -265,8 +296,8 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       await page.eval(`document.querySelector('#tabs .tab[data-section="power"]').click()`);
       await page.waitFor(`document.querySelector('#tabs .tab[data-section="power"]').getAttribute('aria-selected') === 'true'`, 'the Energia tab');
       // all four at once: a confirmation sheet (the real one: Suspender), the volume panel, the menu and the camera overlay
-      await page.waitFor(`document.querySelector('.power-page .badge')`, 'the power state');
-      await page.eval(`[...document.querySelectorAll('.power-page .act')].find((t) => t.textContent.includes('Suspender')).click()`);
+      await page.waitFor(`document.querySelector('.power-status')?.textContent.includes('Desativada')`, 'the power state');
+      await page.eval(`[...document.querySelectorAll('.power-page .actions-grid > .tile')].find((t) => t.textContent.includes('Suspender')).click()`);
       await page.eval(`Deck.camera.openSheet(); document.getElementById('menu-pop').hidden = false; document.getElementById('volume-panel').hidden = false`);
       const state = () => page.eval(`JSON.stringify({ sheets: document.getElementById('modal-root').childElementCount, volume: !document.getElementById('volume-panel').hidden, menu: !document.getElementById('menu-pop').hidden, overlay: !document.querySelector('.camera-page').closest('.overlay').hidden, section: Deck.pager.currentSection() })`).then(JSON.parse);
       const want = (sheets, volume, menu, overlay) => ({ sheets, volume, menu, overlay, section: 'power' });

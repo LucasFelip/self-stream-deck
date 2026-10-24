@@ -61,47 +61,45 @@
   let watcher = null; // live updates (or the fallback poller) while the page is the visible one
   let clockTimer = null;
 
-  // --- status side ----------------------------------------------------------------------------
+  // --- status line -----------------------------------------------------------------------------
 
-  const uptimeValue = h('dd', { text: '–' });
-  const bootValue = h('dd', { text: '–' });
-  const pendingValue = h('dd');
-  const hibernateValue = h('dd');
+  // one line above the keys: uptime, pending restart, hibernation (the full explanations live in the confirmation sheet)
+  const uptimeValue = h('b', { text: '–' });
+  const pendingValue = h('b');
+  const hibernateValue = h('b');
 
-  const statusCard = h('div', { class: 'card' },
-    h('h3', { text: 'Estado' }),
-    h('dl', { class: 'kv' },
-      h('dt', { text: 'Ligado há' }), uptimeValue,
-      h('dt', { text: 'Último boot' }), bootValue,
-      h('dt', { text: 'Reinício pendente' }), pendingValue,
-      h('dt', { text: 'Hibernação' }), hibernateValue));
+  const statusLine = h('div', { class: 'power-status' },
+    h('span', {}, 'Ligado há ', uptimeValue),
+    h('span', {}, 'Reinício pendente ', pendingValue),
+    h('span', {}, 'Hibernação ', hibernateValue));
 
-  // --- actions side ---------------------------------------------------------------------------
+  // --- the keys -------------------------------------------------------------------------------
 
   const scheduleText = h('span');
   const cancelButton = h('button', { type: 'button', text: 'Cancelar agendamento', on: { click: cancelSchedule } });
   const schedule = h('div', { class: 'schedule', hidden: true }, scheduleText, cancelButton);
 
+  // Same key as Apps and Shortcuts (.tile in a .grid): icon + name. The short description is only a tooltip / accessible name here;
+  // the sheet that opens on tap spells out the consequences. The tone colours the icon.
   const tiles = new Map();
-  const grid = h('div', { class: 'actions-grid' }, ...ACTIONS.map((action) => {
-    const tile = h('button', { type: 'button', class: 'act', 'data-tone': action.tone, on: { click: () => choose(action) } },
-      icon(action.icon), h('div', {}, h('b', { text: action.label }), h('small', { text: action.short })));
+  const grid = h('div', { class: 'grid actions-grid' }, ...ACTIONS.map((action) => {
+    const tile = h('button', { type: 'button', class: 'tile act-tile', 'data-tone': action.tone, title: action.short, 'aria-label': `${action.label}. ${action.short}`, on: { click: () => choose(action) } },
+      h('div', { class: 'fallback' }, icon(action.icon, 30)), h('span', { text: action.label }));
     tiles.set(action.id, tile);
     return tile;
   }));
 
-  const el = h('section', { class: 'power-page' }, h('div', { class: 'power-side' }, statusCard), h('div', { class: 'power-main' }, schedule, grid));
+  const el = h('section', { class: 'power-page' }, statusLine, schedule, grid);
 
   // --- rendering ------------------------------------------------------------------------------
 
-  const badge = (label, tone) => h('span', { class: `badge ${tone || ''}`.trim(), text: label });
+  const setValue = (node, label, tone) => { node.textContent = label; node.className = tone || ''; };
 
   function render() {
     if (!power) return;
 
-    bootValue.textContent = fmt.dateTime(power.lastBoot);
-    pendingValue.replaceChildren(power.rebootPending ? badge('Sim', 'warn') : badge('Não'));
-    hibernateValue.replaceChildren(power.hibernate ? badge('Ativa', 'ok') : badge('Desativada'));
+    setValue(pendingValue, power.rebootPending ? 'Sim' : 'Não', power.rebootPending ? 'warn' : '');
+    setValue(hibernateValue, power.hibernate ? 'Ativa' : 'Desativada', power.hibernate ? 'ok' : '');
 
     // (the open windows are not listed here: the confirmation sheet warns about them, from power.openApps)
     // an action the PC cannot do (hibernation off) is hidden, not greyed out; the "Hibernação: Desativada" line says why
@@ -112,7 +110,7 @@
       tile.disabled = power.enabled === false;
       if (!tile.hidden) shown += 1;
     }
-    grid.dataset.count = String(shown); // the grid fills its last row when one tile is missing (see pages.css)
+    grid.dataset.count = String(shown); // with seven keys the last one takes two columns, so there is no hole (see pages.css)
 
     paintClock();
   }

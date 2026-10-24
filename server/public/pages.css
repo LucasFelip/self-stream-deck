@@ -309,16 +309,18 @@ button.chip:active { background: var(--border); }
 
 /* --- power ---------------------------------------------------------------------------------- */
 
-.power-page { display: grid; grid-template-columns: minmax(190px, 0.8fr) minmax(0, 2.4fr); gap: 10px; }
-.power-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
-.power-main { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.power-page { display: flex; flex-direction: column; gap: 10px; }
 
-.badge { display: inline-block; white-space: nowrap; padding: 2px 8px; border-radius: 999px; font-size: 0.64rem; font-weight: 600; background: var(--surface-2); color: var(--muted); }
-.badge.warn { background: rgba(224, 162, 67, 0.15); color: var(--warn); }
-.badge.ok { background: rgba(76, 195, 138, 0.14); color: var(--ok); }
+/* one line above the keys: uptime, pending restart, hibernation */
+.power-status { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); font-size: 0.66rem; white-space: nowrap; }
+.power-status span { min-width: 0; color: var(--muted); }
+.power-status b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.power-status b.ok { color: var(--ok); }
+.power-status b.warn { color: var(--warn); }
 
 .schedule {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 12px;
   padding: 8px 12px;
@@ -329,37 +331,16 @@ button.chip:active { background: var(--border); }
 }
 .schedule[hidden] { display: none; }
 .schedule b { color: var(--warn); font-variant-numeric: tabular-nums; }
-.schedule button { margin-left: auto; padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-family: inherit; font-weight: 600; font-size: 0.72rem; touch-action: manipulation; }
+.schedule button { margin-left: auto; min-height: 44px; padding: 0 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-family: inherit; font-weight: 600; font-size: 0.72rem; touch-action: manipulation; }
 
-.actions-grid { display: grid; flex: 1; min-height: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.act {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 4px;
-  min-width: 0;
-  min-height: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  touch-action: manipulation;
-  transition: transform 0.08s ease, background 0.15s ease;
-}
-.act[hidden] { display: none; }
-/* seven tiles (hibernation off): the last one takes two columns, so the grid has no hole */
-.actions-grid[data-count="7"] .act:last-child { grid-column: span 2; }
-.act:active { transform: scale(0.97); background: var(--surface-2); }
-.act:disabled { opacity: 0.4; }
-.act .ico { --size: 24px; color: var(--muted); }
-.act[data-tone="warn"] .ico { color: var(--warn); }
-.act[data-tone="danger"] .ico { color: var(--err); }
-.act b { font-size: 0.86rem; }
-.act small { font-size: 0.64rem; line-height: 1.3; color: var(--muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+/* the actions are keys (the .tile of Apps / Shortcuts): 4x2 in landscape, 2x4 in portrait; with seven (hibernation off) the last one is two columns wide */
+.actions-grid { --cols: 4; --rows: 2; flex: 1; height: auto; min-height: 0; }
+.act-tile[hidden] { display: none; }
+.act-tile:disabled { opacity: 0.4; }
+.actions-grid[data-count="7"] .act-tile:last-child { grid-column: span 2; }
+.act-tile[data-tone="warn"] .fallback { background: rgba(224, 162, 67, 0.12); color: var(--warn); }
+.act-tile[data-tone="danger"] .fallback { background: rgba(229, 100, 107, 0.12); color: var(--err); }
+.act-tile .fallback .ico svg { stroke-width: 1.5; }
 
 /* --- confirmation sheet --------------------------------------------------------------------- */
 
@@ -565,7 +546,7 @@ button.chip:active { background: var(--border); }
   .sel-chips { display: flex; }
   .windows-page .wmap-col { flex: none; height: 62vh; }
   .system-page .col { flex: none; overflow: visible; } /* stacked columns keep their full height: the pane scrolls, the cards must not squash into each other */
-  .actions-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; grid-auto-rows: 104px; flex: none; }
+  .actions-grid { --cols: 2; --rows: 4; min-height: 454px; } /* four rows of at least 104 px: shorter screens scroll the page instead of squashing the keys */
   .card .scroll { overflow: visible; }
 
 }
@@ -651,7 +632,6 @@ button.chip:active { background: var(--border); }
   .camera-page::-webkit-scrollbar, .editor-page::-webkit-scrollbar { display: none; }
   .camera-page > *, .editor-page > * { flex: none; }
   /* Câmera: the picture on top (4:3), the controls under it */
-  .act small { -webkit-line-clamp: 2; line-clamp: 2; } /* o texto nao encosta na borda de baixo do botao */
   .cam-view { aspect-ratio: 4 / 3; max-height: 46vh; width: 100%; }
   .cam-side { overflow: visible; }
   /* Editor: list, then form, one column; the list scrolls inside a limited height */

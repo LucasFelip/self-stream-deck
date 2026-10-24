@@ -120,6 +120,29 @@ const probe = (section, landscape, worst, narrow) => `(() => {
     }
   }
 
+  // (e2) Energia: the actions are keys (>= 44 px, none on another, no label or status text cut) and the page does not scroll inside
+  if (${JSON.stringify(section)} === 'power') {
+    const page = document.querySelector('.power-page');
+    const keys = [...page.querySelectorAll('.actions-grid > .tile')].filter(shown);
+    if (keys.length !== 7) out.push('energia: esperava 7 teclas, ha ' + keys.length);
+    for (const key of keys) {
+      const r = box(key);
+      if (Math.round(r.width) < ${LIVE_TOUCH} || Math.round(r.height) < ${LIVE_TOUCH}) out.push('energia: tecla "' + key.textContent.trim() + '" mede ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' (minimo ${LIVE_TOUCH})');
+      const label = key.querySelector(':scope > span');
+      if (label.scrollWidth > label.clientWidth + 1 || label.scrollHeight > label.clientHeight + 1) out.push('texto cortado: tecla "' + label.textContent + '"');
+      const icon = key.querySelector('.fallback').getBoundingClientRect();
+      if (icon.bottom > r.bottom || icon.top < r.top || box(label).top < icon.bottom - 1) out.push('energia: icone e nome da tecla "' + label.textContent + '" nao cabem');
+      const pb2 = box(page);
+      if (r.bottom > pb2.bottom + 1 || r.right > pb2.right + 1) out.push('energia: tecla "' + label.textContent + '" sai da pagina');
+    }
+    const blocks = [...keys, ...page.querySelectorAll('.power-status, .schedule')].filter(shown);
+    for (let i = 0; i < blocks.length; i += 1) for (let j = i + 1; j < blocks.length; j += 1) if (hit(box(blocks[i]), box(blocks[j]))) out.push('energia: ' + label(blocks[i]) + ' sobrepoe ' + label(blocks[j]));
+    const status = page.querySelector('.power-status');
+    if (status.scrollWidth > status.clientWidth + 1 || Math.round(box(status).height) > 44) out.push('energia: a linha de estado nao cabe numa linha (' + status.scrollWidth + ' > ' + status.clientWidth + ', h ' + Math.round(box(status).height) + ')');
+    if (page.scrollHeight > page.clientHeight + 1 || page.scrollWidth > page.clientWidth + 1) out.push('energia: a pagina rola por dentro (' + page.scrollWidth + 'x' + page.scrollHeight + ' em ' + page.clientWidth + 'x' + page.clientHeight + ')');
+    if (page.querySelector('.act')) out.push('energia: sobrou um cartao .act antigo');
+  }
+
   // (f) no sideways scroll
   if (document.body.scrollWidth > document.body.clientWidth) out.push('body: scrollWidth ' + document.body.scrollWidth + ' > clientWidth ' + document.body.clientWidth);
   return out;
