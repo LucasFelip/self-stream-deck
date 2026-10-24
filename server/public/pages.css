@@ -464,7 +464,7 @@ button.chip:active { background: var(--border); }
 .hold.small { height: 36px; border: 0; border-radius: 10px; font-family: inherit; font-size: 0.7rem; font-weight: 600; }
 /* --- portrait / narrow ---------------------------------------------------------------------- */
 
-@media (max-width: 640px) {
+@media (orientation: portrait) {
   .media-body { grid-template-columns: 1fr; justify-items: center; align-content: center; gap: 14px; overflow-y: auto; }
   .cover { height: auto; width: min(52vw, 220px); }
   .track { width: 100%; }
@@ -566,7 +566,7 @@ button.chip:active { background: var(--border); }
 
 /* --- portrait / narrow, for the sheets declared after the first block (same specificity: this one has to come later) ---- */
 
-@media (max-width: 640px) {
+@media (orientation: portrait) {
   .camera-page, .editor-page { display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-x pan-y; scrollbar-width: none; }
   .camera-page::-webkit-scrollbar, .editor-page::-webkit-scrollbar { display: none; }
   .camera-page > *, .editor-page > * { flex: none; }

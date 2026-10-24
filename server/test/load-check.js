@@ -32,6 +32,7 @@ const sandbox = {
   requestAnimationFrame: () => 0, cancelAnimationFrame: () => {},
   fetch: async () => ({ ok: true, json: async () => ({}) }),
   ResizeObserver: class { observe() {} disconnect() {} },
+  MutationObserver: class { observe() {} disconnect() {} },
   CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init && init.detail; } },
   performance: { now: () => Date.now() },
   getComputedStyle: () => dummy(),

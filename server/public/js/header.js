@@ -1,7 +1,8 @@
 'use strict';
 
 /**
- * The header's actions: microphone, mini player and the menu. Deliberately small: icons only.
+ * The live controls (microphone, mini player) and the menu. Deliberately small: icons only. Also hides the live strip
+ * (which also holds the power pill, camera and FPS pill) while none of its buttons is shown.
  * The track title appears as a brief notice when the song changes.
  */
 (() => {
@@ -94,6 +95,17 @@
   document.addEventListener('pointerdown', (event) => {
     if (!menu.hidden && !event.target.closest('#menu-pop, #menu')) menu.hidden = true;
   }, { capture: true, passive: true });
+
+  // The live strip (style.css) is hidden as a whole while none of its buttons is shown, so the pager gets its height back.
+  // The buttons are shown and hidden by several modules (camera, game, pc, this one): watch them instead of asking each.
+  const strip = $('live-strip');
+  function syncStrip() {
+    const empty = [...strip.children].every((el) => el.hidden);
+    if (strip.hidden !== empty) strip.hidden = empty; // only on a change: the observer must not feed itself
+  }
+  const watcher = new MutationObserver(syncStrip);
+  for (const el of strip.children) watcher.observe(el, { attributes: true, attributeFilter: ['hidden'] });
+  syncStrip();
 
   Deck.header = { apply };
 })();

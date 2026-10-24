@@ -9,6 +9,7 @@
 
   const pager = $('pager');
   const tabs = $('tabs');
+  const dots = $('page-dots');
   const volumeHolder = $('volume-holder');
   const volumeBox = $('volume');
 
@@ -21,8 +22,9 @@
 
   // Fit a fixed grid to the real screen: as many rows as the height allows, then as many roughly
   // square columns as the width allows. Also returns how big the icons can be inside those tiles.
-  // the camera cut-out / bars the pages keep clear of (style.css, --safe-*): the grid is fitted to what is left
-  const safe = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
+  // the camera cut-out / bars the pages keep clear of (style.css, --safe-*): the grid is fitted to what is left.
+  // Read from the pager, not the root: the rail / bar already covers its side, so .main zeroes that inset.
+  const safe = (name) => parseFloat(getComputedStyle(pager).getPropertyValue(name)) || 0;
 
   function measure() {
     const width = pager.clientWidth - 2 * PAGE_PADDING_X - safe('--safe-left') - safe('--safe-right');
@@ -107,8 +109,9 @@
 
   // --- section tabs ---------------------------------------------------------------------------
   // The pager is one flat row of pages, but people think in a few places. A tab jumps straight to a place
-  // (remembering the page you last had open there); tapping the active tab goes to its next page; the dots
-  // under the active tab show where you are inside it. Swiping still walks through every page in order.
+  // (remembering the page you last had open there); tapping the active tab goes back to the start of its section;
+  // the dots over the bottom of the pages (#page-dots) show where you are inside a section with several pages.
+  // Swiping still walks through every page in order.
 
   const SECTIONS = [
     { id: 'apps', label: 'Apps', icon: 'grid' },
@@ -158,10 +161,11 @@
   function openSection(sectionId) {
     const pages = pagesOf(sectionId);
     const current = allPages()[currentIndex()];
+    // already in this section: back to its first page (nothing to do if we are there); coming from elsewhere: where we left it
     const target = current && sectionOf(current) === sectionId
-      ? pages[(pages.indexOf(current) + 1) % pages.length]
+      ? pages[0]
       : pages.find((page) => pageId(page) === lastPageIn[sectionId]) || pages[0];
-    if (target) goTo(allPages().indexOf(target));
+    if (target && target !== current) goTo(allPages().indexOf(target));
   }
 
   function renderTabs() {
@@ -171,7 +175,6 @@
         { type: 'button', class: 'tab', role: 'tab', 'aria-selected': 'false', data: { section: section.id }, on: { click: () => openSection(section.id) } },
         Deck.icon(section.icon),
         h('span', { class: 'tab-label', text: section.label }),
-        h('span', { class: 'tab-dots' }),
       )),
     );
     updateNav();
@@ -205,17 +208,12 @@
 
     const activeSection = sectionOf(page);
     lastPageIn[activeSection] = pageId(page);
-    tabs.querySelectorAll('.tab').forEach((tab) => {
-      const active = tab.dataset.section === activeSection;
-      const section = SECTIONS.find((candidate) => candidate.id === tab.dataset.section);
-      const sectionPages = pagesOf(tab.dataset.section);
-      const nested = active && sectionPages.length > 1;
+    tabs.querySelectorAll('.tab').forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.section === activeSection)));
 
-      tab.setAttribute('aria-selected', String(active));
-      // inside a section with several pages the tab names the page you are on ("Desempenho 1/3")
-      tab.querySelector('.tab-label').textContent = nested ? [page.dataset.title, page.dataset.part].filter(Boolean).join(' ') : section.label;
-      tab.querySelector('.tab-dots').replaceChildren(...(nested ? sectionPages.map((candidate) => h('i', { class: candidate === page ? 'on' : '' })) : []));
-    });
+    // the page indicator: only for a section that spans several pages
+    const sectionPages = pagesOf(activeSection);
+    dots.hidden = sectionPages.length < 2;
+    dots.replaceChildren(...(dots.hidden ? [] : sectionPages.map((candidate) => h('i', { class: candidate === page ? 'on' : '' }))));
   }
 
   // Rebuild the generated pages and stay on the same one, so a rotation or a refresh doesn't jump back to page 1.

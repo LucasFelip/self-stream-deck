@@ -28,6 +28,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function fakeDeck() {
   const apps = ['Navegador', 'Terminal', 'Editor', 'Chat', 'Música', 'Jogos'].map((name, i) => ({ id: `app${i}`, name, hasIcon: false, iconVersion: 0 }));
   const model = {
+    apps, // a test can replace it (before opening a page) to get an Apps section with several pages
     calls: [],
     down: false, // true: the PC "went away" (the state answers 503)
     layout: { apps: [], shortcuts: [] },
@@ -45,7 +46,7 @@ async function fakeDeck() {
     const body = req.method === 'POST' ? await readJson(req, 64 * 1024).catch(() => ({})) : undefined;
     model.calls.push({ method: req.method, path: url.pathname, body });
     const key = `${req.method} ${url.pathname}`;
-    if (key === 'GET /api/apps') return sendJson(res, 200, { host: 'PC-TESTE', apps });
+    if (key === 'GET /api/apps') return sendJson(res, 200, { host: 'PC-TESTE', apps: model.apps });
     if (key === 'GET /api/state') return model.down ? sendJson(res, 503, { error: 'down' }) : sendJson(res, 200, model.state);
     if (key === 'GET /api/shortcuts') return sendJson(res, 200, { shortcuts });
     if (key === 'GET /api/macros') return sendJson(res, 200, { macros: [] });

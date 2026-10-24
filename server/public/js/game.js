@@ -2,7 +2,7 @@
 
 /**
  * A game being played. The moment its frame rate shows up the deck slides to Desempenho, so the person sees it; anywhere
- * else a small pill in the header's actions keeps the number in view (tap it to go to Desempenho). It listens to the light "game" topic,
+ * else a small pill in the live strip keeps the number in view (tap it to go to Desempenho). It listens to the light "game" topic,
  * so it works from every page and not only while Desempenho is open (that page tells us when it is the one on screen).
  */
 (() => {
