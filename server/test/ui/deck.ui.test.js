@@ -234,52 +234,53 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.strictEqual(await page.eval('Deck.back()'), false, 'on Apps with nothing open there is nothing to undo');
     });
 
-    await test('a section with several pages: page dots (only then), a plain tab, the last page remembered, and the active tab goes back to the start', async () => {
+    await test('Apps is ONE page: 30 apps keep their size, the page scrolls vertically, there are no dots and no apps-1, and Back / the active tab behave', async () => {
       deck.model.apps = Array.from({ length: 30 }, (_, i) => ({ id: `big${i}`, name: `App ${i}`, hasIcon: false, iconVersion: 0 }));
       const big = await browser2(412, 915);
       try {
-        await big.waitFor(`document.querySelectorAll('.tile[data-key^="a:big"]').length >= 20`, 'many apps');
+        await big.waitFor(`document.querySelectorAll('.tile[data-key^="a:big"]').length === 30`, 'all 30 apps');
         await big.waitFor(`document.body.dataset.state === 'online'`, 'online');
         await sleep(500);
-        const dotsOn = () => big.eval(`[...document.querySelectorAll('#page-dots i')].map((i) => i.classList.contains('on'))`);
-        const label = (section) => big.eval(`document.querySelector('#tabs .tab[data-section="${section}"]').textContent.trim()`);
-        const tabTo = async (section) => {
-          await big.tap(`#tabs .tab[data-section="${section}"]`);
-          await big.waitFor(`document.querySelector('#tabs .tab[data-section="${section}"]').getAttribute('aria-selected') === 'true'`, `${section} tab selected`);
-          await sleep(500);
-        };
-        // starts on Apps, which now has two pages
-        await tabTo('apps');
-        assert.deepStrictEqual(await dotsOn(), [true, false]);
-        assert.strictEqual(await big.eval(`document.getElementById('page-dots').hidden`), false);
-        assert.strictEqual(await big.eval(`getComputedStyle(document.getElementById('page-dots')).pointerEvents`), 'none');
-        // out of the layout: the dots sit on top of the pager and do not shrink it
-        assert.ok(await big.eval(`(() => { const d = document.getElementById('page-dots').getBoundingClientRect(); const p = document.getElementById('pager').getBoundingClientRect(); return d.bottom <= p.bottom + 1 && d.top >= p.top; })()`), 'the dots are inside the pager box');
-        // second page: the tab still just says Apps, the second dot is on
-        assert.strictEqual(await big.eval(`Deck.goTo('apps-1')`), true);
-        await big.waitFor(`document.querySelectorAll('#page-dots i')[1].classList.contains('on')`, 'the second dot');
-        assert.strictEqual(await label('apps'), 'Apps');
-        // another section with a single page: no indicator at all; coming back lands on the page we left
-        await tabTo('shortcuts');
-        assert.strictEqual(await big.eval(`document.getElementById('page-dots').hidden`), true);
-        assert.strictEqual(await big.eval(`document.querySelectorAll('#page-dots i').length`), 0);
-        await tabTo('apps');
-        assert.deepStrictEqual(await dotsOn(), [false, true], 'the second page of Apps was remembered');
-        // tapping the active tab goes back to the first page; once there, it does nothing
-        await big.tap('#tabs .tab[data-section="apps"]');
-        await big.waitFor(`document.querySelectorAll('#page-dots i')[0].classList.contains('on')`, 'back to the first page');
-        await sleep(600); // the slide ends
-        const left = await big.eval(`document.getElementById('pager').scrollLeft`);
-        assert.strictEqual(left, 0);
-        await big.tap('#tabs .tab[data-section="apps"]');
-        await sleep(500);
-        assert.strictEqual(await big.eval(`document.getElementById('pager').scrollLeft`), left);
-        assert.deepStrictEqual(await dotsOn(), [true, false]);
-        assert.strictEqual(await big.eval(`Deck.back()`), false, 'Back on the first page of Apps still has nothing to undo');
-        // Back goes to Apps from any other section, as before (the first Apps page is not "somewhere else")
-        await tabTo('power');
+        const info = await big.eval(`(() => {
+          const pages = [...document.querySelectorAll('.page[data-section="apps"]')];
+          const page = pages[0];
+          const first = document.querySelector('.tile[data-key="a:big0"]').getBoundingClientRect();
+          const last = document.querySelector('.tile[data-key="a:big29"]');
+          const lastRect = last.getBoundingClientRect();
+          return { count: pages.length, id: page.dataset.id, overflowY: getComputedStyle(page).overflowY, scrolls: page.scrollHeight > page.clientHeight + 1, tileW: Math.round(first.width), tileH: Math.round(first.height), lastBelow: lastRect.top >= page.getBoundingClientRect().bottom - 1, dots: document.getElementById('page-dots').hidden, goTo1: Deck.goTo('apps-1'), goTo0: Deck.goTo('apps-0') };
+        })()`);
+        assert.strictEqual(info.count, 1);
+        assert.strictEqual(info.id, 'apps-0');
+        assert.strictEqual(info.overflowY, 'auto');
+        assert.strictEqual(info.scrolls, true);
+        assert.ok(info.tileW >= 48 && info.tileH >= 48, JSON.stringify(info));
+        assert.strictEqual(info.lastBelow, true, 'the last key starts below the visible part');
+        assert.strictEqual(info.dots, true, 'no page dots for Apps');
+        assert.strictEqual(info.goTo1, false);
+        assert.strictEqual(info.goTo0, true);
+        // scrolling the page brings the last key into view, and the pager did not move sideways
+        await big.eval(`document.querySelector('.page[data-section="apps"]').scrollTop = 1e6`);
+        await sleep(200);
+        assert.strictEqual(await big.eval(`(() => { const r = document.querySelector('.tile[data-key="a:big29"]').getBoundingClientRect(); const p = document.getElementById('pager').getBoundingClientRect(); return r.top >= p.top && r.bottom <= p.bottom + 1; })()`), true, 'the last key reachable');
+        assert.strictEqual(await big.eval(`document.getElementById('pager').scrollLeft`), 0);
+        // a real vertical touch drag scrolls the page (and does not swipe to another section)
+        await big.eval(`document.querySelector('.page[data-section="apps"]').scrollTop = 0`);
+        const box = await big.eval(`(() => { const r = document.getElementById('pager').getBoundingClientRect(); return { x: r.left + r.width - 6, y: r.top + r.height * 0.7 }; })()`);
+        await big.touch('touchStart', box.x, box.y);
+        for (let step = 1; step <= 8; step += 1) {
+          await big.touch('touchMove', box.x, box.y - step * 30);
+          await sleep(25);
+        }
+        await big.touch('touchEnd', box.x, box.y - 240);
+        await sleep(300);
+        assert.ok(await big.eval(`document.querySelector('.page[data-section="apps"]').scrollTop`) > 0, 'a vertical drag scrolls the Apps page');
+        assert.strictEqual(await big.eval(`Deck.pager.currentSection()`), 'apps');
+        // other sections: a tab, Back
+        await big.tap('#tabs .tab[data-section="power"]');
+        await big.waitFor(`document.querySelector('#tabs .tab[data-section="power"]').getAttribute('aria-selected') === 'true'`, 'Energia');
         assert.strictEqual(await big.eval(`Deck.back()`), true);
         await big.waitFor(`Deck.pager.currentSection() === 'apps'`, 'Apps after Back');
+        assert.strictEqual(await big.eval(`Deck.back()`), false);
       } finally {
         deck.model.apps = ['Navegador', 'Terminal', 'Editor', 'Chat', 'Música', 'Jogos'].map((name, i) => ({ id: `app${i}`, name, hasIcon: false, iconVersion: 0 }));
         big.close();

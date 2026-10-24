@@ -234,6 +234,10 @@ body[data-state="offline"] .offline { display: flex; }
   height: 100%;
 }
 
+.page.scroll { overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: none; }
+.page.scroll::-webkit-scrollbar { display: none; }
+.page.scroll .grid { height: auto; grid-template-rows: repeat(var(--rows, 2), var(--tile-h, 96px)); }
+
 .slot {
   border: 1px dashed rgba(255, 255, 255, 0.05);
   border-radius: 14px;

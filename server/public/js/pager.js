@@ -32,7 +32,7 @@
     const cols = Math.max(2, Math.round((width + GAP) / (tileH * TILE_ASPECT + GAP)));
     const tileW = (width - (cols - 1) * GAP) / cols;
     const icon = Math.max(32, Math.min(64, tileW - 24, tileH - TILE_CHROME));
-    return { cols, rows, icon };
+    return { cols, rows, icon, tileH };
   }
 
   function buildPage(id, title, part, sectionId) {
@@ -49,20 +49,38 @@
   let built = null;
 
   function buildPages() {
-    const { cols, rows, icon } = measure();
+    const { cols, rows, icon, tileH } = measure();
     const perPage = cols * rows;
     pager.style.setProperty('--icon', `${icon}px`);
+    pager.style.setProperty('--tile-h', `${tileH}px`);
     built = { cols, rows };
 
     const pages = [];
     for (const [key, section] of Object.entries(Deck.tiles.sections)) {
-      // Atalhos has the whole grid (the volume lives in its own panel, opened from the live strip)
       if (section.items.length === 0) {
         if (key === 'apps' || key === 'shortcuts') {
           const page = buildPage(`${key}-0`, section.title, '', key);
           page.innerHTML = `<p class="empty">${key === 'apps' ? 'Nenhum app encontrado na barra de tarefas.' : 'Nenhum atalho configurado.'}</p>`;
           pages.push(page);
         }
+        continue;
+      }
+
+      // Apps is ONE page: the keys keep their size and the page scrolls vertically when there are more than fit. The grid always
+      // has at least one free slot after the last key (the "+" of edit mode). Atalhos stays paginated.
+      if (key === 'apps') {
+        const totalRows = Math.max(rows, Math.ceil((section.items.length + 1) / cols));
+        const page = buildPage('apps-0', section.title, '', key);
+        page.classList.add('scroll');
+        const grid = document.createElement('div');
+        grid.className = 'grid';
+        grid.style.setProperty('--cols', cols);
+        grid.style.setProperty('--rows', totalRows);
+        const tiles = section.items.map(Deck.tiles.makeTile);
+        const slots = Array.from({ length: cols * totalRows - tiles.length }, () => Object.assign(document.createElement('div'), { className: 'slot' }));
+        grid.append(...tiles, ...slots);
+        page.append(grid);
+        pages.push(page);
         continue;
       }
 
@@ -228,9 +246,10 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       if (pager.clientWidth && built) {
-        const { cols, rows, icon } = measure();
+        const { cols, rows, icon, tileH } = measure();
         if (cols === built.cols && rows === built.rows) {
           pager.style.setProperty('--icon', `${icon}px`);
+          pager.style.setProperty('--tile-h', `${tileH}px`);
           return;
         }
       }
