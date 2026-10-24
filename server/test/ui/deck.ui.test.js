@@ -1052,6 +1052,181 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       });
     }
 
+    // --- edit mode on the deck (menu > Editar botões) ---------------------------------------------------
+    const menuEdit = async (check) => {
+      await check.tap('#menu');
+      await check.waitFor(`!document.getElementById('menu-pop').hidden`, 'the menu');
+      await sleep(300);
+      await check.eval(`[...document.querySelectorAll('#menu-pop button')].find((b) => b.textContent.trim() === 'Editar botões').click()`);
+      await check.waitFor(`document.body.classList.contains('editing')`, 'edit mode on');
+    };
+    const editorOpen = (check) => check.eval(`!document.querySelector('.editor-page').closest('.overlay').hidden`);
+    const closeEditor = async (check) => {
+      await check.eval(`Deck.back()`);
+      await check.waitFor(`document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor closed');
+    };
+
+    await test('edit mode: the menu turns it on, a tap on a key opens the editor on that key and does not launch the app, Back closes the editor and then ends the mode', async () => {
+      const edit = await browser2(411, 914);
+      try {
+        await edit.waitFor(`document.querySelectorAll('.tile[data-key]').length >= 6`, 'the apps grid');
+        assert.strictEqual(await edit.eval(`document.getElementById('edit-bar').hidden`), true, 'no bar outside edit mode');
+        await menuEdit(edit);
+        assert.strictEqual(await edit.eval(`document.getElementById('edit-bar').hidden`), false);
+        assert.strictEqual(await editorOpen(edit), false, 'the mode starts on the deck, not in the editor sheet');
+        deck.model.calls.length = 0;
+        await edit.tap('.tile[data-key="a:app0"]');
+        await edit.waitFor(`!document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor');
+        assert.strictEqual(deck.model.calls.some((call) => call.path.startsWith('/api/launch')), false, 'a tap in edit mode must not launch the app');
+        await edit.waitFor(`document.querySelector('.ed-tabs [aria-pressed="true"]')?.textContent === 'Apps'`, 'the Apps tab of the editor');
+        // Back closes the sheet first and the mode stays; the next Back ends the mode; then Back is the usual "already on Apps"
+        assert.strictEqual(await edit.eval(`Deck.back()`), true);
+        await edit.waitFor(`document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor closed');
+        assert.strictEqual(await edit.eval(`document.body.classList.contains('editing')`), true);
+        assert.strictEqual(await edit.eval(`Deck.back()`), true);
+        assert.strictEqual(await edit.eval(`document.body.classList.contains('editing') || !document.getElementById('edit-bar').hidden`), false);
+        assert.strictEqual(await edit.eval(`Deck.back()`), false);
+        // outside the mode a tap launches again
+        await edit.tap('.tile[data-key="a:app0"]');
+        await edit.waitFor(`true`);
+        await sleep(300);
+        assert.ok(deck.model.calls.some((call) => call.path === '/api/launch/app0'), 'a tap outside edit mode launches');
+      } finally {
+        edit.close();
+      }
+    });
+
+    await test('edit mode: a shortcut key opens the editor on its own row, 3 touches from the gear', async () => {
+      const edit = await browser2(411, 914);
+      try {
+        await edit.waitFor(`document.querySelectorAll('.tile[data-key]').length >= 6`, 'the apps grid');
+        await go('shortcuts', edit);
+        await menuEdit(edit); // touches 1 (gear) and 2 (Editar botões)
+        assert.strictEqual(await edit.eval(`Deck.pager.currentSection()`), 'shortcuts', 'the mode works on the Atalhos page too');
+        deck.model.calls.length = 0;
+        await edit.tap('.tile[data-key="s:paste"]'); // touch 3
+        await edit.waitFor(`!document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor');
+        await edit.waitFor(`document.querySelector('.ed-form input.ed-input')?.value === 'Colar'`, 'the form of the tapped shortcut');
+        assert.strictEqual(await edit.eval(`document.querySelector('.ed-tabs [aria-pressed="true"]').textContent`), 'Atalhos');
+        assert.strictEqual(await edit.eval(`document.querySelector('.ed-list .ed-row[aria-pressed="true"] b').textContent`), 'Colar');
+        assert.ok(!deck.model.calls.some((call) => call.path === '/api/shortcut/paste'), 'not fired');
+        await closeEditor(edit);
+      } finally {
+        edit.close();
+      }
+    });
+
+    await test('edit mode: empty slots become "+" and open the editor with a new item for that page; outside the mode they are plain', async () => {
+      const edit = await browser2(411, 914);
+      try {
+        await edit.waitFor(`document.querySelectorAll('.tile[data-key]').length >= 6`, 'the apps grid');
+        assert.strictEqual(await edit.eval(`document.querySelectorAll('.slot[role="button"]').length`), 0, 'plain slots outside the mode');
+        await menuEdit(edit);
+        assert.ok(await edit.eval(`document.querySelectorAll('.page[data-section="apps"] .slot[role="button"]').length`) > 0, 'slots are buttons now');
+        assert.strictEqual(await edit.eval(`getComputedStyle(document.querySelector('.page[data-section="apps"] .slot'), '::before').content`), '"+"');
+        const size = await edit.eval(`(() => { const r = document.querySelector('.page[data-section="apps"] .slot').getBoundingClientRect(); return { w: r.width, h: r.height }; })()`);
+        assert.ok(size.w >= 48 && size.h >= 48, JSON.stringify(size));
+        await edit.tap('.page[data-section="apps"] .slot');
+        await edit.waitFor(`!document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor');
+        await edit.waitFor(`document.querySelector('.ed-form input.ed-input')`, 'the new item form');
+        assert.strictEqual(await edit.eval(`document.querySelector('.ed-tabs [aria-pressed="true"]').textContent`), 'Macros');
+        assert.strictEqual(await edit.eval(`document.querySelector('.ed-form input.ed-input').value`), '');
+        assert.strictEqual(await edit.eval(`document.querySelector('.ed-form .chips [aria-pressed="true"]').textContent`), 'Apps', 'the new macro is for the Apps page');
+        await closeEditor(edit);
+        // and on the Atalhos page the new item is a shortcut
+        await go('shortcuts', edit);
+        await edit.tap('.page[data-section="shortcuts"] .slot');
+        await edit.waitFor(`!document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor');
+        await edit.waitFor(`document.querySelector('.ed-tabs [aria-pressed="true"]')?.textContent === 'Atalhos'`, 'the Atalhos tab');
+        assert.strictEqual(await edit.eval(`document.querySelector('.ed-form input.ed-input').value`), '');
+        await closeEditor(edit);
+        await edit.tap('#edit-done');
+        assert.strictEqual(await edit.eval(`document.querySelectorAll('.slot[role="button"]').length`), 0, 'slots are plain again');
+      } finally {
+        edit.close();
+      }
+    });
+
+    for (const [width, height] of [[836, 387], [740, 360], [411, 914], [360, 740]]) {
+      await test(`edit mode ${width}x${height}: "Concluir" is at least 48 px, overlaps neither the live strip, the bar nor the keys, and ends the mode`, async () => {
+        const edit = await browser2(width, height);
+        try {
+          await edit.waitFor(`document.querySelectorAll('.tile[data-key]').length >= 6`, 'the apps grid');
+          await menuEdit(edit);
+          await sleep(500); // the pager shrinks and the grid is rebuilt
+          await edit.waitFor(`document.querySelectorAll('.page[data-section="apps"] .tile[data-key]').length >= 6`, 'the keys again');
+          const box = await edit.eval(`(() => {
+            const r = (sel) => { const e = document.querySelector(sel).getBoundingClientRect(); return { l: e.left, t: e.top, r: e.right, b: e.bottom, w: e.width, h: e.height }; };
+            const hit = (a, b) => a.l < b.r - 0.5 && a.r > b.l + 0.5 && a.t < b.b - 0.5 && a.b > b.t + 0.5;
+            const done = r('#edit-done');
+            const others = { strip: r('#live-strip'), nav: r('nav.nav'), pager: r('#pager'), menu: r('#menu'), vol: r('#vol-btn') };
+            const tiles = [...document.querySelectorAll('.tile')].filter((t) => t.getBoundingClientRect().width > 0 && t.getBoundingClientRect().left >= 0 && t.getBoundingClientRect().right <= innerWidth);
+            return { done, overlaps: Object.keys(others).filter((k) => hit(done, others[k])), tileHit: tiles.some((t) => { const e = t.getBoundingClientRect(); return hit(done, { l: e.left, t: e.top, r: e.right, b: e.bottom }); }), inside: done.l >= 0 && done.r <= innerWidth && done.t >= 0 && done.b <= innerHeight, hint: r('.edit-hint') };
+          })()`);
+          assert.ok(box.done.h >= 48 && box.done.w >= 48, JSON.stringify(box.done));
+          assert.deepStrictEqual(box.overlaps, [], 'Concluir overlaps');
+          assert.strictEqual(box.tileHit, false, 'Concluir covers a key');
+          assert.strictEqual(box.inside, true, 'Concluir leaves the screen');
+          assert.ok(box.hint.w > 40 && box.hint.r <= box.done.l + 1, `the hint is squeezed: ${JSON.stringify(box.hint)}`);
+          await edit.tap('#edit-done');
+          assert.strictEqual(await edit.eval(`document.body.classList.contains('editing')`), false);
+          assert.strictEqual(await edit.eval(`document.getElementById('edit-bar').hidden`), true);
+        } finally {
+          edit.close();
+        }
+      });
+    }
+
+    await test('edit mode ends when you leave Apps / Atalhos for another section, and the menu entry brings you back', async () => {
+      const edit = await browser2(411, 914);
+      try {
+        await edit.waitFor(`document.querySelectorAll('.tile[data-key]').length >= 6`, 'the apps grid');
+        await menuEdit(edit);
+        await go('windows', edit);
+        assert.strictEqual(await edit.eval(`document.body.classList.contains('editing')`), false);
+        await menuEdit(edit);
+        await edit.waitFor(`Deck.pager.currentSection() === 'apps'`, 'back on Apps');
+        assert.strictEqual(await edit.eval(`document.body.classList.contains('editing')`), true);
+      } finally {
+        edit.close();
+      }
+    });
+
+    await test('edit mode: the first-time tip shows once (kept in localStorage)', async () => {
+      const edit = await browser2(411, 914);
+      try {
+        await edit.waitFor(`document.querySelectorAll('.tile[data-key]').length >= 6`, 'the apps grid');
+        assert.strictEqual(await edit.eval(`localStorage.getItem('ssd.editHint')`), null);
+        await menuEdit(edit);
+        await edit.waitFor(`document.getElementById('toast').classList.contains('show')`, 'the tip');
+        assert.match(await edit.eval(`document.getElementById('toast').textContent`), /Toque numa tecla para editar/);
+        assert.strictEqual(await edit.eval(`localStorage.getItem('ssd.editHint')`), '1');
+        await edit.eval(`Deck.edit.exit(); document.getElementById('toast').classList.remove('show'); Deck.edit.enter()`);
+        await sleep(200);
+        assert.strictEqual(await edit.eval(`document.getElementById('toast').classList.contains('show')`), false, 'the tip must not come back');
+      } finally {
+        edit.close();
+      }
+    });
+
+    await test('edit mode: with no usable storage the mode still works and the tip shows once per load', async () => {
+      const broken = `Object.defineProperty(window, 'localStorage', { get() { throw new Error('no storage'); } });`;
+      const edit = await browser2(411, 914, { script: broken });
+      try {
+        await edit.waitFor(`document.querySelectorAll('.tile[data-key]').length >= 6`, 'the apps grid');
+        await menuEdit(edit);
+        await edit.waitFor(`document.getElementById('toast').classList.contains('show')`, 'the tip');
+        await edit.eval(`Deck.edit.exit(); document.getElementById('toast').classList.remove('show'); Deck.edit.enter()`);
+        await sleep(200);
+        assert.strictEqual(await edit.eval(`document.getElementById('toast').classList.contains('show')`), false);
+        await edit.tap('.tile[data-key="a:app1"]');
+        await edit.waitFor(`!document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor opens without storage');
+        assert.deepStrictEqual(edit.errors, []);
+      } finally {
+        edit.close();
+      }
+    });
+
     await test('the page raised no script errors', () => {
       assert.deepStrictEqual(page.errors, []);
     });

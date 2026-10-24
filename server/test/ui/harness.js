@@ -45,7 +45,7 @@ async function fakeDeck() {
   const streams = new Set(); // open event streams that asked for the game topic
   const sendGame = (res) => res.write(`event: game\ndata: ${JSON.stringify(model.fps)}\n\n`);
   model.pushGame = () => { for (const res of streams) sendGame(res); };
-  const shortcuts = [{ id: 'copy', label: 'Copiar', display: 'Ctrl+C' }, { id: 'paste', label: 'Colar', display: 'Ctrl+V' }];
+  const shortcuts = [{ id: 'copy', label: 'Copiar', keys: 'ctrl+c', display: 'Ctrl+C' }, { id: 'paste', label: 'Colar', keys: 'ctrl+v', display: 'Ctrl+V' }];
 
   const sampleReply = () => ({
     cpu: { usage: 23, freqMHz: 4200, temp: 51, tempSource: 'fake', power: 40, processes: 210, threads: 3100, cores: [10, 20, 30, 40] },
@@ -83,6 +83,7 @@ async function fakeDeck() {
     if (key === 'GET /api/state') return model.down ? sendJson(res, 503, { error: 'down' }) : sendJson(res, 200, model.state);
     if (key === 'GET /api/shortcuts') return sendJson(res, 200, { shortcuts });
     if (key === 'GET /api/macros') return sendJson(res, 200, { macros: [] });
+    if (key === 'GET /api/editor') return sendJson(res, 200, { shortcuts, macros: [], apps: model.apps.map((app) => ({ ...app, hidden: false, canPlace: true })), devices: { playback: [], capture: [] }, screens: 1 });
     if (key === 'GET /api/layout') return sendJson(res, 200, model.layout);
     if (key === 'POST /api/layout') {
       model.layout = { ...model.layout, [body.page]: body.order };
