@@ -162,6 +162,12 @@ button.chip:active { background: var(--border); }
 .sound-page .device { padding: 7px 10px; }
 .sound-page .device .name small { display: none; }
 
+/* nothing playing: the player card only needs its icon and "Nada tocando", so it gives the width to the devices and the mixer */
+.sound-media .media-empty small { display: none; }
+.sound-media .media-empty .ico { width: 28px; height: 28px; }
+.sound-media .media-empty p { font-size: 0.85rem; }
+.sound-page:has(.media-page[data-empty="true"]) { grid-template-columns: 150px minmax(0, 1fr); }
+
 .device-list { display: flex; flex-direction: column; gap: 6px; }
 .device {
   display: flex;
@@ -459,13 +465,22 @@ button.chip:active { background: var(--border); }
   .track-title, .track-artist { text-align: center; }
   .track-source { justify-content: center; }
 
-  .audio-page, .monitor-page, .system-page, .processes-page, .power-page, .windows-page { display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-x pan-y; /* vertical scroll inside, horizontal swipes still reach the pager */ scrollbar-width: none; }
-  .audio-page::-webkit-scrollbar, .monitor-page::-webkit-scrollbar, .system-page::-webkit-scrollbar, .processes-page::-webkit-scrollbar, .power-page::-webkit-scrollbar, .windows-page::-webkit-scrollbar { display: none; }
-  .audio-page > .card, .monitor-page > .card, .processes-page > .card, .windows-page > .card { flex: none; }
+  .audio-page, .monitor-page, .system-page, .processes-page, .power-page, .windows-page, .sound-page { display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-x pan-y; /* vertical scroll inside, horizontal swipes still reach the pager */ scrollbar-width: none; }
+  .audio-page::-webkit-scrollbar, .monitor-page::-webkit-scrollbar, .system-page::-webkit-scrollbar, .processes-page::-webkit-scrollbar, .power-page::-webkit-scrollbar, .windows-page::-webkit-scrollbar, .sound-page::-webkit-scrollbar { display: none; }
+  .audio-page > .card, .monitor-page > .card, .processes-page > .card, .windows-page > .card, .sound-page > .card { flex: none; }
+
+  /* Som: the page itself scrolls; the audio block inside it must not become a second scroller */
+  .sound-page .audio-page { display: flex; flex: none; height: auto; overflow: visible; }
+  .sound-media .media-body { overflow: visible; }
+  /* nothing playing: the player is a thin strip instead of a whole column */
+  .sound-media .media-page[data-empty="true"] .media-empty { flex-direction: row; gap: 10px; }
+  .sound-media .media-empty p { margin: 0; }
+
   .windows-page .wmap-col { flex: none; height: 62vh; }
   .system-page .col { overflow: visible; }
   .actions-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; grid-auto-rows: 104px; flex: none; }
   .card .scroll { overflow: visible; }
+
 }
 
 /* --- camera: the phone's camera as the PC's webcam -------------------------------------------- */
@@ -540,3 +555,17 @@ button.chip:active { background: var(--border); }
 .ed-save[data-dirty="true"] { border-color: transparent !important; background: var(--accent) !important; color: #0b0c10 !important; }
 .ed-delete { color: var(--err) !important; }
 .ed-delete[data-armed="true"] { background: var(--err) !important; color: #1a0505 !important; }
+
+/* --- portrait / narrow, for the sheets declared after the first block (same specificity: this one has to come later) ---- */
+
+@media (max-width: 640px) {
+  .camera-page, .editor-page { display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-x pan-y; scrollbar-width: none; }
+  .camera-page::-webkit-scrollbar, .editor-page::-webkit-scrollbar { display: none; }
+  .camera-page > *, .editor-page > * { flex: none; }
+  /* Câmera: the picture on top (4:3), the controls under it */
+  .cam-view { aspect-ratio: 4 / 3; max-height: 46vh; width: 100%; }
+  .cam-side { overflow: visible; }
+  /* Editor: list, then form, one column; the list scrolls inside a limited height */
+  .ed-list { flex: none; max-height: 42vh; }
+  .ed-form { flex: none; overflow: visible; }
+}

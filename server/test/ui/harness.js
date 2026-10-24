@@ -160,6 +160,11 @@ async function launchBrowser({ width = 412, height = 915 } = {}) {
         }
         await page.touch('touchEnd', to.x, to.y);
       },
+      /** a PNG of the page, written to `file` (for looking at a layout by hand) */
+      async shot(file) {
+        const { data } = await send('Page.captureScreenshot', { format: 'png' });
+        fs.writeFileSync(file, Buffer.from(data, 'base64'));
+      },
       close: () => { socket.close(); },
     };
     return page;
