@@ -12,7 +12,7 @@
   --touch: 48px; /* smallest target for anything in the navigation */
   --rail-w: 72px; /* the navigation rail (landscape), without the cut-out inset */
   --bar-h: 56px; /* the navigation bar (portrait), without the bottom inset */
-  --strip-h: 36px; /* the strip of live controls above the pages */
+  --strip-h: 44px; /* the strip of live controls above the pages */
   /* the camera cut-out / system bars the window may draw under (viewport-fit=cover); 0 in browsers without any */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
@@ -125,6 +125,12 @@ body {
    [hidden] on the whole strip while none of its buttons is shown, so the pager gets the height back. */
 .live-strip { display: flex; align-items: center; justify-content: flex-end; flex: none; gap: 4px; min-width: 0; height: var(--strip-h); padding: 0 calc(10px + var(--safe-right)) 0 10px; }
 .live-strip .pill { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* every control in the strip is a 44 px touch target; the pills keep their 28 px look, drawn by ::before inside the taller button */
+.live-strip > .icon-btn { width: 44px; height: 44px; }
+.live-strip .pill, .live-strip .fps-float { position: relative; isolation: isolate; height: 44px; border: 0; background: transparent; }
+.live-strip .pill::before, .live-strip .fps-float::before { content: ""; position: absolute; inset: 8px 0; z-index: -1; border: 1px solid var(--pill-bd); border-radius: 999px; background: var(--pill-bg); }
+.live-strip .pill { --pill-bd: rgba(224, 162, 67, 0.4); --pill-bg: rgba(224, 162, 67, 0.12); }
+.live-strip .fps-float { --pill-bd: var(--border); --pill-bg: var(--surface); align-items: center; justify-content: center; min-width: 44px; line-height: 1; }
 
 /* where you are inside a section with several pages: dots over the bottom padding of the pages, out of the layout */
 .page-dots { position: absolute; left: 0; right: 0; bottom: 3px; z-index: 2; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
@@ -162,14 +168,14 @@ body {
   .tab { flex: 1 1 0; height: auto; margin: 3px 2px; }
   /* six destinations fill the bar, so the status light and the menu ride on the live strip row (which stays in portrait) */
   .nav-status, .nav-end { position: fixed; top: var(--safe-top); z-index: 6; display: flex; align-items: center; height: var(--strip-h); }
-  .nav-status { left: calc(14px + var(--safe-left)); }
+  .nav-status { left: calc(10px + var(--safe-left)); }
   .glyph { display: none; }
   .nav-end { right: calc(4px + var(--safe-right)); }
   .nav .menu { right: 4px; } /* 8 px from the screen edge */
   .nav-end .icon-btn { width: var(--strip-h); height: var(--strip-h); }
-  /* with everything on at once (power pill, camera, mic, player, FPS) 411 px is tight: the buttons and the pill give up a few pixels */
-  .live-strip { gap: 2px; padding: 0 calc(42px + var(--safe-right)) 0 calc(28px + var(--safe-left)); }
-  .live-strip .icon-btn { width: 32px; }
+  /* with everything on at once (power pill, camera, mic, player, FPS) 411 px is tight: the buttons stay 44 px, the pill gives up
+     padding and, as a last resort, shrinks with an ellipsis (the strip leaves room for the status light and the menu) */
+  .live-strip { gap: 2px; padding: 0 calc(52px + var(--safe-right)) 0 calc(24px + var(--safe-left)); }
   .live-strip .pill { padding: 0 8px; }
 }
 

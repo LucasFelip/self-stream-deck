@@ -20,6 +20,7 @@ const VIEWPORTS = [
 ];
 const SECTIONS = ['apps', 'shortcuts', 'sound', 'monitor', 'power', 'processes'];
 const TOUCH = 48;
+const LIVE_TOUCH = 44; // the live strip's buttons and the menu button
 
 // runs in the page: returns a list of violation strings for the destination currently on screen
 const probe = (section, landscape, worst) => `(() => {
@@ -81,6 +82,13 @@ const probe = (section, landscape, worst) => `(() => {
   for (const tab of pick('#tabs .tab')) {
     const r = box(tab);
     if (Math.round(r.width) < ${TOUCH} || Math.round(r.height) < ${TOUCH}) out.push('alvo: ' + label(tab) + ' mede ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' (minimo ${TOUCH})');
+  }
+
+  // (d2) the live strip's buttons and the menu button: at least ${LIVE_TOUCH} px on both axes (the pills are buttons too: they
+  // keep a smaller look, but the button itself, which is what takes the finger, is ${LIVE_TOUCH} px tall)
+  for (const el of [...pick('#live-strip > button'), ...pick('#menu')]) {
+    const r = box(el);
+    if (Math.round(r.width) < ${LIVE_TOUCH} || Math.round(r.height) < ${LIVE_TOUCH}) out.push('alvo: ' + label(el) + ' mede ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' (minimo ${LIVE_TOUCH})');
   }
 
   // (e) the FPS pill lives in the live strip (the group check covers it); it must be there outside Desempenho

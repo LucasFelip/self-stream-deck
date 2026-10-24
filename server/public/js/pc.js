@@ -12,7 +12,7 @@
   let state = { running: [], open: [], scheduled: null, receivedAt: Date.now() };
   let appsRev = null;
 
-  const PILL_LABELS = { shutdown: 'Desliga', restart: 'Reinicia', firmware: 'Reinicia p/ BIOS', advanced: 'Reinicia (avançado)' };
+  const PILL_LABELS = { shutdown: 'Desliga', restart: 'Reinicia', firmware: 'Reinicia BIOS', advanced: 'Reinicia av.' };
   let pillTimer;
 
   function renderPill() {
