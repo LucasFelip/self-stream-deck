@@ -419,11 +419,11 @@ button.chip:active { background: var(--border); }
 .windows-page { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 10px; height: 100%; min-height: 0; }
 .windows-page .seg { display: none; }
 .wpane { min-width: 0; min-height: 0; }
-.wpane-map { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 10px; }
+.wpane-map { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 84px; gap: 10px; } /* the bottom row has the same height with the window panel or the Telas card: selecting a window must never resize the map */
 .win-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-x pan-y; scrollbar-width: none; }
 .win-side::-webkit-scrollbar { display: none; }
 .win-side .card[hidden] { display: none; }
-.win-side .card { flex: 1 0 auto; flex-direction: row; align-items: center; } /* landscape: one row under the map (portrait stacks it again) */
+.win-side .card { flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-width: none; flex-direction: row; align-items: center; } /* landscape: one row under the map (portrait stacks it again) */
 .wmap-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
 
 /* touch-action none: drags on the map move windows instead of swiping to another page (use the tabs for that) */
@@ -549,7 +549,7 @@ button.chip:active { background: var(--border); }
   .windows-page .wpane::-webkit-scrollbar { display: none; }
   .wpane-list .wlist { height: auto; overflow: visible; }
   .wpane-map { display: flex; flex-direction: column; }
-  .win-side .card { flex-direction: column; align-items: stretch; }
+  .win-side .card { flex: none; flex-direction: column; align-items: stretch; overflow: visible; }
   .sel-hint { display: block; }
   .bigs { flex: none; grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
   .bigs .bigbtn:last-child:nth-child(odd) { grid-column: 1 / -1; } /* with a single screen "close" takes the whole row */
@@ -657,4 +657,13 @@ button.chip:active { background: var(--border); }
   /* Editor: list, then form, one column; the list scrolls inside a limited height */
   .ed-list { flex: none; max-height: 42vh; }
   .ed-form { flex: none; overflow: visible; }
+}
+
+/* the drive list of the Disco card (landscape): a soft shadow on the edge that still has rows hidden behind it, so a fourth drive is not missed */
+.monitor-page .c-dsk .scroll {
+  background:
+    linear-gradient(var(--surface) 30%, rgba(18, 20, 26, 0)) center top / 100% 22px no-repeat local,
+    linear-gradient(rgba(18, 20, 26, 0), var(--surface) 70%) center bottom / 100% 22px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgba(124, 156, 255, 0.35), rgba(124, 156, 255, 0)) center top / 100% 8px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgba(124, 156, 255, 0.35), rgba(124, 156, 255, 0)) center bottom / 100% 8px no-repeat scroll;
 }

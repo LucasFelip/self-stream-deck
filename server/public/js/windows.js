@@ -82,7 +82,16 @@
   const hints = []; // one drop-zone highlight per screen
   let winLayer = null;
 
+  // A rebuild (resize, projection change) replaces every window element: never in the middle of a drag, whose finger is on one of
+  // them. It waits for the end of the gesture; a drag whose element is already gone is a lost gesture and is dropped.
+  let redrawLater = false;
+
   function renderScreens() {
+    if (drag && !drag.finishing && !drag.el.isConnected) drag = null;
+    if (drag) {
+      redrawLater = true;
+      return;
+    }
     layout = computeLayout();
     hints.length = 0;
     if (!layout) {
@@ -244,7 +253,20 @@
     showHint(-1, null);
     drag = null;
     renderWindows();
+    flushRedraw();
   }
+
+  function flushRedraw() {
+    if (!redrawLater) return;
+    redrawLater = false;
+    if (screens.length && visible && wrap.clientWidth > 0) renderScreens();
+  }
+
+  // The finger lifted (or the gesture was taken away) while the dragged element was no longer in the page: its own listeners
+  // never fire, so end the drag from here and draw again
+  const dropLostDrag = () => { if (drag && !drag.finishing && !drag.el.isConnected) { drag = null; renderWindows(); flushRedraw(); } };
+  document.addEventListener('pointerup', dropLostDrag, true);
+  document.addEventListener('pointercancel', dropLostDrag, true);
 
   async function finishDrag(up) {
     const { el, moved } = drag;
@@ -285,6 +307,7 @@
     if (local) local();
     el.style.transform = '';
     renderWindows();
+    flushRedraw();
 
     if (request) {
       pending += 1;
