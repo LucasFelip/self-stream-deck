@@ -297,6 +297,56 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       }
     });
 
+    await test('landscape pages are stacked and swipe up / down in the rail order; portrait stays sideways; rotating keeps the page', async () => {
+      const wide = await browser2(836, 387);
+      try {
+        await wide.waitFor(`document.querySelectorAll('#tabs .tab').length === 6 && document.querySelectorAll('.tile[data-key]').length >= 6`, 'the deck');
+        await sleep(500);
+        const axes = () => wide.eval(`(() => { const p = document.getElementById('pager'); const cs = getComputedStyle(p); return { snap: cs.scrollSnapType, top: Math.round(p.scrollTop), left: Math.round(p.scrollLeft), section: Deck.pager.currentSection(), dots: getComputedStyle(document.getElementById('page-dots')).flexDirection }; })()`);
+        let now = await axes();
+        assert.match(now.snap, /^y /);
+        assert.deepStrictEqual({ top: now.top, left: now.left, section: now.section }, { top: 0, left: 0, section: 'apps' });
+        // the pages sit one under the other in the order of the rail, top to bottom
+        const order = await wide.eval(`(() => { const tabs = [...document.querySelectorAll('#tabs .tab')].map((t) => t.dataset.section); const tops = tabs.map((id) => document.querySelector('.page[data-section="' + id + '"]').offsetTop); return { tabs, sorted: tops.every((v, i) => i === 0 || v > tops[i - 1]), x: [...document.querySelectorAll('.page')].every((p) => p.offsetLeft === 0) }; })()`);
+        assert.deepStrictEqual(order.tabs, ['apps', 'shortcuts', 'windows', 'sound', 'pc', 'power']);
+        assert.strictEqual(order.sorted && order.x, true);
+        // a tab and Deck.goTo move on Y only
+        await wide.tap('#tabs .tab[data-section="sound"]');
+        await wide.waitFor(`Deck.pager.currentSection() === 'sound'`, 'Som');
+        await sleep(600);
+        now = await axes();
+        assert.ok(now.top > 0 && now.left === 0, JSON.stringify(now));
+        // a real swipe up on Apps goes to the next page in the rail order (Atalhos)
+        await wide.tap('#tabs .tab[data-section="apps"]');
+        await wide.waitFor(`Deck.pager.currentSection() === 'apps'`, 'Apps');
+        await sleep(700);
+        const from = await wide.eval(`(() => { const r = document.getElementById('pager').getBoundingClientRect(); return { x: r.left + 6, y: r.top + r.height * 0.85 }; })()`);
+        await wide.touch('touchStart', from.x, from.y);
+        for (let step = 1; step <= 10; step += 1) {
+          await wide.touch('touchMove', from.x, from.y - step * 25);
+          await sleep(25);
+        }
+        await wide.touch('touchEnd', from.x, from.y - 250);
+        await wide.waitFor(`Deck.pager.currentSection() === 'shortcuts'`, 'the swipe to Atalhos', 4000);
+        assert.strictEqual((await axes()).left, 0);
+        // rotating keeps the page: portrait goes sideways on the same page
+        await wide.setViewport(411, 914);
+        await sleep(900);
+        now = await axes();
+        assert.match(now.snap, /^x /);
+        assert.deepStrictEqual({ top: now.top, section: now.section }, { top: 0, section: 'shortcuts' });
+        assert.ok(now.left > 0, JSON.stringify(now));
+        await wide.setViewport(740, 360);
+        await sleep(900);
+        now = await axes();
+        assert.match(now.snap, /^y /);
+        assert.deepStrictEqual({ left: now.left, section: now.section }, { left: 0, section: 'shortcuts' });
+        assert.ok(now.top > 0, JSON.stringify(now));
+      } finally {
+        wide.close();
+      }
+    });
+
     // --- Janelas, PC and Atalhos (phase 2B) ---------------------------------------------------------------------------
     const go = async (target, check = page) => {
       // a click while the deck redraws its pages (just after loading / coming back online) is undone: click again until it sticks

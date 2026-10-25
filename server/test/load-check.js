@@ -37,6 +37,7 @@ const sandbox = {
   performance: { now: () => Date.now() },
   getComputedStyle: () => dummy(),
   innerWidth: 360, innerHeight: 640,
+  matchMedia: () => ({ matches: false, addEventListener() {} }),
   localStorage: dummy(),
   navigator: dummy(),
   document: dummy(),

@@ -116,6 +116,10 @@ body {
 @media (orientation: landscape) {
   body { flex-direction: row; }
   .main { --safe-left: 0px; }
+  /* the rail is vertical, so the pages are stacked and swipe up / down in the rail's order */
+  .main > .pager { flex-direction: column; overflow-x: hidden; overflow-y: auto; scroll-snap-type: y mandatory; }
+  .main > .pager > .page { min-height: 0; }
+  .page-dots { left: auto; right: 3px; top: 0; bottom: 0; flex-direction: column; align-items: center; }
   .nav {
     flex-direction: column;
     width: calc(var(--rail-w) + var(--safe-left));
@@ -390,7 +394,7 @@ body[data-state="offline"] .offline { display: flex; }
 .tile.busy { border-color: var(--accent); opacity: 0.7; }
 
 /* rearranging: the lifted key follows the finger, the page does not scroll */
-.pager.arranging { overflow-x: hidden; scroll-snap-type: none; }
+.pager.arranging { overflow: hidden; scroll-snap-type: none; }
 .tile.lifting { position: relative; z-index: 20; border-color: var(--accent); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55); transition: none !important; will-change: transform; }
 .grid { position: relative; } /* the lifted key is measured against it */
 .tile.drop-target, .slot.drop-target { outline: 2px solid var(--accent); outline-offset: -2px; background: var(--surface-2); }

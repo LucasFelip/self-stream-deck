@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * The pager (swipe between pages), the generated Apps / Shortcuts pages that fit the real screen, the section tabs and
+ * The pager (swipe between pages: sideways in portrait, up / down in landscape), the generated Apps / Shortcuts pages that fit the real screen, the section tabs and
  * "which page am I on". The other pages live in js/*.js and register themselves with Deck.addPage().
  */
 (() => {
@@ -79,7 +79,7 @@
     const perPage = cols * rows;
     pager.style.setProperty('--icon', `${icon}px`);
     pager.style.setProperty('--tile-h', `${tileH}px`);
-    built = { cols, rows };
+    built = { cols, rows, vertical: vertical() };
 
     const pages = [];
     for (const [key, section] of Object.entries(Deck.tiles.sections)) {
@@ -159,13 +159,19 @@
   }
 
   const allPages = () => [...pager.querySelectorAll('.page')];
-  const currentIndex = () => Math.round(pager.scrollLeft / Math.max(1, pager.clientWidth));
+  // Landscape: the tabs are a rail on the left, so the pages are stacked and swipe up / down in the rail's order. Portrait: side by side.
+  const vertical = () => window.matchMedia('(orientation: landscape)').matches;
+  const currentIndex = () => (vertical()
+    ? Math.round(pager.scrollTop / Math.max(1, pager.getBoundingClientRect().height))
+    : Math.round(pager.scrollLeft / Math.max(1, pager.clientWidth)));
   const pageId = (page) => page.dataset.id;
   const sectionOf = (page) => page.dataset.section;
   const pagesOf = (sectionId) => allPages().filter((page) => sectionOf(page) === sectionId);
 
   function goTo(index, smooth = true) {
-    pager.scrollTo({ left: index * pager.clientWidth, behavior: smooth ? 'smooth' : 'instant' });
+    const behavior = smooth ? 'smooth' : 'instant';
+    if (vertical()) pager.scrollTo({ left: 0, top: index * pager.getBoundingClientRect().height, behavior });
+    else pager.scrollTo({ left: index * pager.clientWidth, top: 0, behavior });
   }
 
   // A jump asked for by id that has not arrived yet: a rebuild of the pages (render) in the middle of the slide must
@@ -203,7 +209,7 @@
     updateNav();
   }
 
-  // The page the user is on, remembered by id. Reading it back from scrollLeft after the DOM changed
+  // The page the user is on, remembered by id. Reading it back from the scroll position after the DOM changed
   // would be wrong: the browser may have re-snapped to a different page in the meantime.
   let currentId = null;
 
@@ -257,6 +263,9 @@
     requestAnimationFrame(() => { pager.style.scrollSnapType = ''; });
   }
 
+  // Rotating flips the scroll axis: the old offset then reads as another page. Aim the next render at the page we are on.
+  window.matchMedia('(orientation: landscape)').addEventListener('change', () => { if (currentId) pendingId = currentId; });
+
   // the person takes over: whatever slide was pending is forgotten
   pager.addEventListener('touchstart', () => { pendingId = null; }, { passive: true });
 
@@ -276,7 +285,7 @@
         if (pager.classList.contains('arranging')) return; // a key is lifted: never rebuild under the finger
         const { cols, rows, icon, tileH } = measure();
         const apps = appsLayoutNow();
-        if (cols === built.cols && rows === built.rows && JSON.stringify(apps) === appsSig) {
+        if (cols === built.cols && rows === built.rows && vertical() === built.vertical && JSON.stringify(apps) === appsSig) {
           pager.style.setProperty('--icon', `${icon}px`);
           pager.style.setProperty('--tile-h', `${tileH}px`);
           return;
