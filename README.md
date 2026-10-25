@@ -33,7 +33,7 @@ topo para não ser preciso ficar deslizando até achar a certa:
 Tocar numa aba vai direto para ela (na última página que você tinha aberto ali); tocar na aba **ativa**
 avança para a próxima página do grupo; os pontinhos sob a aba ativa mostram onde você está, e o nome da
 aba vira o da página atual. Arrastar para os lados continua percorrendo todas as páginas em ordem (o mapa de janelas abre numa folha própria, então o arrasto dele nunca briga com a troca de página).
-Apps fica numa página só (rola na vertical se houver mais apps do que cabem); a grade de apps/atalhos é calculada pelo tamanho real da tela e funciona deitado ou em pé.
+Apps fica numa página só, com todos os apps de uma vez (as teclas encolhem para caber; só com muitíssimos apps ela rola na vertical); a grade de apps/atalhos é calculada pelo tamanho real da tela e funciona deitado ou em pé.
 Um módulo novo escolhe a aba com `Deck.addPage({ section: 'pc', ... })`.
 
 | Página | O que faz |

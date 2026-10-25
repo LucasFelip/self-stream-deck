@@ -236,6 +236,10 @@ body[data-state="offline"] .offline { display: flex; }
 
 .page.scroll { overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: none; }
 .page.scroll::-webkit-scrollbar { display: none; }
+.grid.compact { gap: 8px; --icon: var(--apps-icon, 32px); }
+.grid.compact .tile { gap: 3px; padding: 4px 3px; border-radius: 10px; }
+.grid.compact .tile span { height: 1.25em; font-size: 10px; line-height: 1.25; -webkit-line-clamp: 1; line-clamp: 1; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grid.compact .slot { border-radius: 10px; }
 .page.scroll .grid { height: auto; grid-template-rows: repeat(var(--rows, 2), var(--tile-h, 96px)); }
 
 .slot {

@@ -32,8 +32,33 @@
     const cols = Math.max(2, Math.round((width + GAP) / (tileH * TILE_ASPECT + GAP)));
     const tileW = (width - (cols - 1) * GAP) / cols;
     const icon = Math.max(32, Math.min(64, tileW - 24, tileH - TILE_CHROME));
-    return { cols, rows, icon, tileH };
+    return { cols, rows, icon, tileH, width, height };
   }
+
+  // Apps shows EVERY key at once. Few keys: the normal grid. More than it holds: try every column count and keep the one that gives the
+  // biggest keys (the smaller side of a key is what counts), in a compact look (one-line label, tighter gap). Only if even that is
+  // too small to read (key under 44 x 60 px) does the page fall back to the normal grid and scrolls vertically.
+  const FIT_GAP = 8;
+  const FIT_MIN_W = 44;
+  const FIT_MIN_H = 60;
+  function appsLayout(count, base) {
+    const need = count + 1; // the free slot after the last key is the "+" of edit mode
+    if (need <= base.cols * base.rows) return { mode: 'normal', cols: base.cols, rows: base.rows, icon: base.icon };
+    let best = null;
+    for (let cols = 1; cols <= need; cols += 1) {
+      const rows = Math.ceil(need / cols);
+      const w = (base.width - (cols - 1) * FIT_GAP) / cols;
+      const h = (base.height - (rows - 1) * FIT_GAP) / rows;
+      const side = Math.min(w, h);
+      if (!best || side > best.side + 0.5) best = { cols, rows, w, h, side };
+    }
+    if (best.w >= FIT_MIN_W && best.h >= FIT_MIN_H) {
+      return { mode: 'fit', cols: best.cols, rows: best.rows, icon: Math.max(32, Math.min(64, best.w - 12, best.h - 28)), w: Math.floor(best.w), h: Math.floor(best.h) };
+    }
+    const rows = Math.max(base.rows, Math.ceil(need / base.cols));
+    return { mode: 'scroll', cols: base.cols, rows, icon: base.icon };
+  }
+  const appsLayoutNow = () => appsLayout(Deck.tiles.sections.apps.items.length, measure());
 
   function buildPage(id, title, part, sectionId) {
     const page = document.createElement('section');
@@ -47,6 +72,7 @@
 
   // the grid the pages were last built for: the pages only depend on cols and rows (the icon size is a CSS variable)
   let built = null;
+  let appsSig = null; // the Apps layout the page was built for
 
   function buildPages() {
     const { cols, rows, icon, tileH } = measure();
@@ -66,21 +92,22 @@
         continue;
       }
 
-      // Apps is ONE page: the keys keep their size and the page scrolls vertically when there are more than fit. The grid always
-      // has at least one free slot after the last key (the "+" of edit mode). Atalhos stays paginated.
+      // Apps is ONE page with every key on it (see appsLayout); Atalhos stays paginated.
       if (key === 'apps') {
-        const totalRows = Math.max(rows, Math.ceil((section.items.length + 1) / cols));
+        const fit = appsLayoutNow();
         const page = buildPage('apps-0', section.title, '', key);
-        page.classList.add('scroll');
+        if (fit.mode === 'scroll') page.classList.add('scroll');
         const grid = document.createElement('div');
-        grid.className = 'grid';
-        grid.style.setProperty('--cols', cols);
-        grid.style.setProperty('--rows', totalRows);
+        grid.className = fit.mode === 'fit' ? 'grid compact' : 'grid';
+        grid.style.setProperty('--cols', fit.cols);
+        grid.style.setProperty('--rows', fit.rows);
         const tiles = section.items.map(Deck.tiles.makeTile);
-        const slots = Array.from({ length: cols * totalRows - tiles.length }, () => Object.assign(document.createElement('div'), { className: 'slot' }));
+        const slots = Array.from({ length: fit.cols * fit.rows - tiles.length }, () => Object.assign(document.createElement('div'), { className: 'slot' }));
         grid.append(...tiles, ...slots);
         page.append(grid);
         pages.push(page);
+        appsSig = JSON.stringify(fit);
+        pager.style.setProperty('--apps-icon', `${fit.icon}px`);
         continue;
       }
 
@@ -246,8 +273,10 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       if (pager.clientWidth && built) {
+        if (pager.classList.contains('arranging')) return; // a key is lifted: never rebuild under the finger
         const { cols, rows, icon, tileH } = measure();
-        if (cols === built.cols && rows === built.rows) {
+        const apps = appsLayoutNow();
+        if (cols === built.cols && rows === built.rows && JSON.stringify(apps) === appsSig) {
           pager.style.setProperty('--icon', `${icon}px`);
           pager.style.setProperty('--tile-h', `${tileH}px`);
           return;
