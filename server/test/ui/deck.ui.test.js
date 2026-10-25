@@ -347,6 +347,71 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       }
     });
 
+    const SOUND_SCENES = {
+      playing: () => {},
+      vazio: () => { deck.model.media = { current: null, sessions: [] }; },
+      muitos: () => { deck.model.audio.sessions = Array.from({ length: 14 }, (_, i) => ({ pid: 100 + i, system: false, label: `Aplicativo ${i} com nome comprido`, active: i % 2 === 0, level: 30 + i * 4, muted: i === 3 })); },
+    };
+    for (const scene of Object.keys(SOUND_SCENES)) {
+      for (const [width, height] of [[836, 387], [740, 360], [411, 914], [360, 740]]) {
+        await test(`Som (${scene}) ${width}x${height}: compact player, Saida / Entrada / Aplicativos in the same card language, targets >= 44 (slider 48), nothing overlaps or is cut`, async () => {
+          const saved = JSON.stringify({ media: deck.model.media, audio: deck.model.audio });
+          SOUND_SCENES[scene]();
+          const snd = await browser2(width, height);
+          try {
+            await snd.waitFor(`document.querySelectorAll('#tabs .tab').length === 6 && document.querySelectorAll('.tile[data-key]').length >= 6`, 'the deck');
+            await snd.eval(`document.querySelector('#tabs .tab[data-section="sound"]').click()`);
+            await snd.waitFor(`Deck.pager.currentSection() === 'sound'`, 'Som');
+            await snd.waitFor(`document.querySelectorAll('.audio-page .device').length === 4 && document.querySelectorAll('.mixer .vol-row').length >= 2`, 'the audio data');
+            await sleep(900);
+            if (process.env.SOUND_SHOTS) await snd.shot(`${process.env.SOUND_SHOTS}/som-${scene}-${width}x${height}.png`);
+            const landscape = width > height;
+            const info = await snd.eval(`(() => {
+              const page = document.querySelector('.sound-page');
+              const p = page.getBoundingClientRect();
+              const r = (e) => e.getBoundingClientRect();
+              const small = (sel, min) => [...page.querySelectorAll(sel)].filter((e) => r(e).width > 0).filter((e) => r(e).width < min || r(e).height < min).map((e) => sel + ' ' + Math.round(r(e).width) + 'x' + Math.round(r(e).height));
+              const cards = [...page.querySelectorAll(':scope > .card, .audio-page > .card')].filter((c) => r(c).width > 0);
+              const hit = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1;
+              const overlaps = [];
+              for (let i = 0; i < cards.length; i += 1) for (let j = i + 1; j < cards.length; j += 1) if (hit(r(cards[i]), r(cards[j]))) overlaps.push(i + '/' + j);
+              const cut = [...page.querySelectorAll('.card')].filter((c) => r(c).right > p.right + 1 || r(c).left < p.left - 1).length;
+              const out = page.querySelector('.audio-out .vol-row .range');
+              const media = page.querySelector('.sound-media');
+              return {
+                small: [...small('.transport button', 44), ...small('.audio-out .vol-row .icon-btn, .audio-in .vol-row .icon-btn', 44), ...small('.device', 44), ...small('.mixer .vol-row .icon-btn', 44)],
+                sliderH: Math.round(r(out).height),
+                overlaps, cut,
+                pageScrolls: page.scrollHeight > page.clientHeight + 1,
+                bottomOk: cards.every((c) => r(c).bottom <= p.bottom + 1),
+                playerH: Math.round(r(media).height),
+                empty: page.querySelector('.media-page').dataset.empty,
+                mixerScrolls: (() => { const s = page.querySelector('.audio-mixer .scroll'); return s.scrollHeight > s.clientHeight + 1; })(),
+                order: cards.map((c) => c.className.replace('card ', '')),
+              };
+            })()`);
+            assert.deepStrictEqual(info.small, [], JSON.stringify(info));
+            assert.ok(info.sliderH >= 48, JSON.stringify(info));
+            assert.deepStrictEqual(info.overlaps, []);
+            assert.strictEqual(info.cut, 0);
+            assert.deepStrictEqual(info.order.slice(0, 4), ['sound-media', 'audio-out', 'audio-in', 'audio-mixer'], JSON.stringify(info));
+            assert.strictEqual(info.empty, scene === 'vazio' ? 'true' : 'false');
+            assert.ok(info.playerH <= (scene === 'vazio' ? 64 : landscape ? 100 : 180), `player too big: ${JSON.stringify(info)}`);
+            if (landscape) {
+              assert.strictEqual(info.pageScrolls, false, `landscape Som must not scroll: ${JSON.stringify(info)}`);
+              assert.strictEqual(info.bottomOk, true);
+              if (scene === 'muitos') assert.strictEqual(info.mixerScrolls, true, 'the mixer scrolls inside when there are many apps');
+            }
+          } finally {
+            const back = JSON.parse(saved);
+            deck.model.media = back.media;
+            deck.model.audio = back.audio;
+            snd.close();
+          }
+        });
+      }
+    }
+
     // --- Janelas, PC and Atalhos (phase 2B) ---------------------------------------------------------------------------
     const go = async (target, check = page) => {
       // a click while the deck redraws its pages (just after loading / coming back online) is undone: click again until it sticks

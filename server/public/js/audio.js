@@ -46,7 +46,7 @@
     };
   }
 
-  /** Radio-style list of devices; rebuilt only when the set of devices or the default changes. */
+  /** Radio-style chips of devices (the active one is lit); rebuilt only when the set of devices or the default changes. */
   function deviceList(onPick) {
     const list = h('div', { class: 'device-list', role: 'radiogroup' });
     return {
@@ -87,7 +87,7 @@
     onLevel: (level) => (playbackDefault ? post('/api/audio/device', { id: playbackDefault.id, level }) : null),
     onMute: (muted) => (playbackDefault ? post('/api/audio/device', { id: playbackDefault.id, muted }).then(poll, fail) : null),
   });
-  const outputCard = h('div', { class: 'card' }, h('h3', { text: 'Saída' }), h('div', { class: 'scroll' }, outputList.el), outputRow.el);
+  const outputCard = h('div', { class: 'card audio-out' }, h('h3', { text: 'Saída' }), outputRow.el, h('div', { class: 'scroll' }, outputList.el));
 
   // --- Entrada --------------------------------------------------------------------------------
 
@@ -104,12 +104,12 @@
     onLevel: (level) => (captureDefault ? post('/api/audio/device', { id: captureDefault.id, level }) : null),
     onMute: (muted) => (captureDefault ? post('/api/audio/device', { id: captureDefault.id, muted }).then(poll, fail) : null),
   });
-  const inputCard = h('div', { class: 'card' }, h('h3', { text: 'Entrada' }), h('div', { class: 'scroll' }, inputList.el), inputRow.el);
+  const inputCard = h('div', { class: 'card audio-in' }, h('h3', { text: 'Entrada' }), inputRow.el, h('div', { class: 'scroll' }, inputList.el));
 
   // --- Aplicativos ----------------------------------------------------------------------------
 
   const mixer = h('div', { class: 'mixer' });
-  const mixerCard = h('div', { class: 'card' }, h('h3', { text: 'Aplicativos' }), h('div', { class: 'scroll' }, mixer));
+  const mixerCard = h('div', { class: 'card audio-mixer' }, h('h3', { text: 'Aplicativos' }), h('div', { class: 'scroll' }, mixer));
   const mixerRows = new Map(); // session key -> row
 
   function renderMixer(sessions) {

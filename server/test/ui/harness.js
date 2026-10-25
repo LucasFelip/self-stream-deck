@@ -40,6 +40,13 @@ async function fakeDeck() {
       { handle: 103, title: 'Terminal', app: 'Terminal', appId: null, iconVersion: 0, state: 1, monitor: 0, x: 0, y: 0, w: 0, h: 0 },
     ],
     screens: [{ device: 'DISPLAY1', left: 0, top: 0, width: 1920, height: 1080, primary: true, brightness: 60 }],
+    // the Som page: devices and per-app sessions, and what is playing (a test can change them before opening a page)
+    audio: {
+      playback: [{ id: 'out1', name: 'Alto-falantes (Realtek)', adapter: 'Realtek', default: true, level: 40, muted: false }, { id: 'out2', name: 'Fone Bluetooth', adapter: 'BT', default: false, level: 70, muted: false }],
+      capture: [{ id: 'in1', name: 'Microfone (USB)', adapter: 'USB', default: true, level: 80, muted: false }, { id: 'in2', name: 'Microfone do headset', adapter: 'BT', default: false, level: 60, muted: false }],
+      sessions: [{ pid: 0, system: true, label: 'Sons do sistema', active: false, level: 100, muted: false }, { pid: 11, system: false, label: 'Navegador', active: true, level: 55, muted: false }],
+    },
+    media: { current: 's1', sessions: [{ id: 's1', app: 'Spotify', status: 'playing', title: 'Uma faixa com um nome bem comprido para testar o corte', artist: 'Banda', album: 'Disco', duration: 215, position: 42, canPlay: true, canPause: true, canPrev: true, canNext: true, canSeek: true, hasArt: false, artKey: 'k1' }] },
     state: { running: ['app0'], open: [], scheduled: null, mic: { available: true, muted: false }, volume: { level: 40, muted: false }, playing: null, miniPlayer: true, ui: 1, appsRev: 1 },
   };
   const streams = new Set(); // open event streams that asked for the game topic
@@ -96,6 +103,8 @@ async function fakeDeck() {
     if (key === 'GET /api/monitor/processes') return sendJson(res, 200, processesReply());
     if (key === 'GET /api/monitor/info') return sendJson(res, 200, infoReply());
     if (key === 'GET /api/power') return sendJson(res, 200, model.power);
+    if (key === 'GET /api/audio') return sendJson(res, 200, model.audio);
+    if (key === 'GET /api/media') return sendJson(res, 200, model.media);
     if (key === 'GET /api/volume') return sendJson(res, 200, model.state.volume);
     if (url.pathname === '/api/events') {
       // The push stream sends the current value of windows / monitor / processes / power when they are subscribed and nothing
@@ -107,6 +116,8 @@ async function fakeDeck() {
       if (topics.includes('power')) res.write(`event: power\ndata: ${JSON.stringify(model.power)}\n\n`);
       // like the real server: a topic's current value arrives as soon as it is subscribed
       const push = (name, value) => res.write(`event: ${name}\ndata: ${JSON.stringify(value)}\n\n`);
+      if (topics.includes('audio')) push('audio', model.audio);
+      if (topics.includes('media')) push('media', model.media);
       if (topics.includes('windows')) push('windows', { windows: model.windows });
       if (topics.includes('monitor')) push('monitor', sampleReply());
       if (topics.includes('processes')) push('processes', processesReply());

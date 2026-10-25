@@ -149,40 +149,50 @@ button.chip:active { background: var(--border); }
 
 .audio-page { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 
-/* --- sound: the player on the left, devices and mixer on the right ------------------------------- */
+/* --- sound: a slim player strip on top, then Saída | Entrada | Aplicativos (landscape) or stacked (portrait) ------------ */
 
-.sound-page { display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.5fr); gap: 10px; height: 100%; min-height: 0; }
-.sound-media { justify-content: center; overflow: hidden; }
+.sound-page { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto minmax(0, 1fr); gap: 10px; height: 100%; min-height: 0; }
+.sound-page .audio-page { display: contents; } /* its three cards become cells of the page grid */
+.sound-media { grid-column: 1 / -1; justify-content: center; overflow: hidden; padding: 8px 10px; }
 .sound-media .media-page { height: auto; flex: 1; justify-content: center; }
-.sound-media .media-body { flex: none; grid-template-columns: 92px minmax(0, 1fr); grid-template-areas: "cover source" "cover text" "time time" "ctl ctl"; gap: 6px 12px; align-items: start; }
+/* landscape: [cover] [source / title+artist / timeline] [prev play next] */
+.sound-media .media-body { flex: none; grid-template-columns: 64px minmax(0, 1fr) auto; grid-template-areas: "cover source ctl" "cover text ctl" "cover time ctl"; gap: 2px 12px; align-items: center; }
 .sound-media .track { display: contents; }
-.sound-media .cover { grid-area: cover; height: 92px; border-radius: 12px; }
-.sound-media .track-source { grid-area: source; }
+.sound-media .cover { grid-area: cover; width: 64px; height: 64px; border-radius: 12px; }
+.sound-media .cover .ico { width: 28px; height: 28px; }
+.sound-media .track-source { grid-area: source; min-height: 20px; }
 .sound-media .track-text { grid-area: text; min-width: 0; }
-.sound-media .timeline { grid-area: time; }
-.sound-media .transport { grid-area: ctl; gap: 14px; }
-.sound-media .track-title { font-size: 0.95rem; -webkit-line-clamp: 2; }
-.sound-media .track-artist { margin-top: 2px; font-size: 0.74rem; }
-.sound-page .audio-page { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto minmax(0, 1fr); gap: 10px; }
-.sound-page .audio-page > :nth-child(3) { grid-column: 1 / -1; }
-.sound-page .device { padding: 7px 10px; }
-.sound-page .device .name small { display: none; }
+.sound-media .timeline { grid-area: time; gap: 8px; font-size: 0.66rem; }
+.sound-media .timeline .range { height: 20px; }
+.sound-media .transport { grid-area: ctl; gap: 8px; }
+.sound-media .transport button { width: 48px; height: 48px; border-radius: 14px; }
+.sound-media .transport button.primary { width: 52px; height: 52px; }
+.sound-media .track-title { font-size: 0.92rem; -webkit-line-clamp: 1; line-clamp: 1; overflow: hidden; text-overflow: ellipsis; }
+.sound-media .track-artist { margin-top: 1px; font-size: 0.74rem; }
+.sound-media .chip { padding: 2px 8px; }
 
-/* nothing playing: the player card only needs its icon and "Nada tocando", so it gives the width to the devices and the mixer */
+/* nothing playing: one thin line with the note and "Nada tocando" */
+.sound-media .media-empty { flex-direction: row; gap: 10px; padding: 4px 0; }
 .sound-media .media-empty small { display: none; }
-.sound-media .media-empty .ico { width: 28px; height: 28px; }
-.sound-media .media-empty p { font-size: 0.85rem; }
-.sound-page:has(.media-page[data-empty="true"]) { grid-template-columns: 150px minmax(0, 1fr); }
+.sound-media .media-empty .ico { width: 24px; height: 24px; }
+.sound-media .media-empty p { margin: 0; font-size: 0.85rem; }
 
-.device-list { display: flex; flex-direction: column; gap: 6px; }
+/* Saída / Entrada: the volume line (48 px mute + 48 px slider) first, then the devices as chips, the lit one is the default */
+.audio-out, .audio-in, .audio-mixer { gap: 6px; }
+.audio-out .vol-row, .audio-in .vol-row { gap: 8px; }
+.audio-out .vol-row .icon-btn, .audio-in .vol-row .icon-btn { width: 48px; height: 48px; }
+.audio-out .vol-row .range, .audio-in .vol-row .range { height: 48px; }
+.device-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .device {
   display: flex;
+  flex: 1 1 100%;
   align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 10px;
+  gap: 8px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 10px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--surface-2);
   color: var(--text);
   font: inherit;
@@ -190,20 +200,20 @@ button.chip:active { background: var(--border); }
   touch-action: manipulation;
 }
 .device .name { flex: 1; min-width: 0; font-size: 0.78rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.device .name small { display: block; margin-top: 1px; font-weight: 400; font-size: 0.64rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.device .name small { display: none; }
 .device .mark { width: 9px; height: 9px; border: 1.5px solid var(--muted); border-radius: 50%; flex: none; }
-.device[aria-checked="true"] { border-color: var(--accent); }
+.device[aria-checked="true"] { border-color: var(--accent); background: var(--surface); }
 .device[aria-checked="true"] .mark { border-color: var(--accent); background: var(--accent); }
 
 .vol-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .vol-row .label { flex: none; max-width: 38%; font-size: 0.74rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.vol-row.labeled { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; grid-template-areas: "mute label value" "mute range range"; align-items: center; gap: 0 8px; }
+.vol-row.labeled { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; grid-template-areas: "mute label value" "mute range range"; align-items: center; gap: 0 8px; }
 .vol-row.labeled .icon-btn { grid-area: mute; }
 .vol-row.labeled .label { grid-area: label; max-width: none; }
 .vol-row.labeled .value { grid-area: value; }
 .vol-row.labeled .range { grid-area: range; height: 26px; }
 .vol-row .value { flex: none; min-width: 2.8em; text-align: right; font-size: 0.74rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-.vol-row .icon-btn { width: 34px; height: 34px; background: var(--surface-2); color: var(--text); border-radius: 10px; }
+.vol-row .icon-btn { width: 44px; height: 44px; background: var(--surface-2); color: var(--text); border-radius: 12px; }
 .vol-row .icon-btn[aria-pressed="true"] { color: var(--err); }
 .vol-row[data-muted="true"] .range, .vol-row[data-muted="true"] .value { opacity: 0.4; }
 .vol-row.inactive .label { color: var(--muted); }
@@ -516,13 +526,18 @@ button.chip:active { background: var(--border); }
   .audio-page::-webkit-scrollbar, .monitor-page::-webkit-scrollbar, .system-page::-webkit-scrollbar, .processes-page::-webkit-scrollbar, .power-page::-webkit-scrollbar, .sound-page::-webkit-scrollbar { display: none; }
   .audio-page > .card, .monitor-page > .card, .processes-page > .card, .sound-page > .card { flex: none; }
 
-  /* Som: the page itself scrolls; the audio block inside it must not become a second scroller */
-  .sound-page .audio-page { display: flex; flex: none; height: auto; overflow: visible; }
-  .sound-media .media-body { overflow: visible; justify-items: stretch; }
-  .sound-media .cover { width: 92px; height: 92px; } /* the generic portrait cover (52vw) would not fit the compact player grid */
-  /* nothing playing: the player is a thin strip instead of a whole column */
-  .sound-media .media-page[data-empty="true"] .media-empty { flex-direction: row; gap: 10px; }
-  .sound-media .media-empty p { margin: 0; }
+  /* Som: the page itself scrolls (player, Saída, Entrada, Aplicativos in that order); the audio block inside must not become a second scroller */
+  .sound-page { display: flex; }
+  .sound-page .audio-page { display: contents; }
+  .sound-page .audio-mixer { flex: none; }
+  .sound-media { padding: 10px; }
+  .sound-media .media-body { overflow: visible; justify-items: stretch; grid-template-columns: 64px minmax(0, 1fr); grid-template-areas: "cover source" "cover text" "time time" "ctl ctl"; gap: 4px 12px; }
+  .sound-media .cover { width: 64px; height: 64px; }
+  .sound-media .timeline .range { height: 28px; }
+  .sound-media .track-title, .sound-media .track-artist { text-align: left; }
+  .sound-media .track-source { justify-content: flex-start; }
+  .sound-media .transport { gap: 16px; }
+  .device { flex: 1 1 100%; }
 
   /* Janelas: the selector stays on top, the chosen pane (list or map) scrolls under it */
   .windows-page { display: flex; flex-direction: column; gap: 10px; overflow: hidden; }

@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * "Som" page: what is playing (media.js) on the left and the audio devices and per-app mixer (audio.js) on the right,
- * so changing the song and changing the output never takes a swipe.
+ * "Som" page: a slim player strip on top (media.js) and, under it, Saída, Entrada and the per-app mixer (audio.js) as three cards in
+ * landscape or stacked in portrait, so changing the song and changing the output never takes a swipe.
  */
 (() => {
   const { h } = Deck;
