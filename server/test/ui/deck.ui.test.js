@@ -1100,8 +1100,8 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
               }
               return { navTop: Math.round(nav.top), lowest: Math.round(lowest), name: String(name).slice(0, 40), scrollers: scrollers.length };
             })()`);
-            // the two panes that always overflow in portrait really scroll (otherwise this check would prove nothing)
-            if (action.includes('data-seg="map"') || action.includes("'system'")) assert.ok(result.scrollers >= 1, `${section} (${action}) should scroll inside: ${JSON.stringify(result)}`);
+            // the panes that overflow in portrait really scroll (otherwise this check would prove nothing); Sistema's compact cards fit a tall screen whole
+            if (action.includes('data-seg="map"') || (action.includes("'system'") && height < 900)) assert.ok(result.scrollers >= 1, `${section} (${action}) should scroll inside: ${JSON.stringify(result)}`);
             assert.ok(result.lowest <= result.navTop + 1, `${section} (${action || 'plain'}): the last element ends at ${result.lowest} but the bar starts at ${result.navTop} (${result.name})`);
           }
         } finally {
