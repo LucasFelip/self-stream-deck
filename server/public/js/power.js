@@ -15,39 +15,39 @@
 
   // What each action does, in the words shown in the sheet. `apps`: warn about open apps. `delay`: can be scheduled.
   const ACTIONS = [
-    { id: 'lock', icon: 'lock', label: 'Bloquear', tone: 'soft', short: 'Vai para a tela de login. Os apps continuam abertos.', immediate: true },
+    { id: 'lock', icon: 'fl-lock', label: 'Bloquear', tone: 'soft', short: 'Vai para a tela de login. Os apps continuam abertos.', immediate: true },
     {
-      id: 'sleep', icon: 'sleep', label: 'Suspender', tone: 'soft', short: 'Baixo consumo, volta em segundos.',
+      id: 'sleep', icon: 'fl-sleep', label: 'Suspender', tone: 'soft', short: 'Baixo consumo, volta em segundos.',
       title: 'Suspender o PC?', effects: 'O PC entra em suspensão com tudo aberto na memória.',
       reconnect: 'O painel perde a conexão até o PC acordar (mouse, teclado ou botão de ligar).',
     },
     {
-      id: 'hibernate', icon: 'hibernate', label: 'Hibernar', tone: 'soft', short: 'Salva a sessão no disco e desliga.',
+      id: 'hibernate', icon: 'fl-hibernate', label: 'Hibernar', tone: 'soft', short: 'Salva a sessão no disco e desliga.',
       title: 'Hibernar o PC?', effects: 'A sessão é salva no disco e o PC desliga, sem consumo. Ao ligar, tudo volta como estava.',
       reconnect: 'O painel só volta quando o PC for ligado de novo.', needs: 'hibernate',
     },
     {
-      id: 'logoff', icon: 'logout', label: 'Sair da conta', tone: 'warn', short: 'Encerra a sessão e fecha os apps do usuário.',
+      id: 'logoff', icon: 'fl-logout', label: 'Sair da conta', tone: 'warn', short: 'Encerra a sessão e fecha os apps do usuário.',
       title: 'Sair da conta?', effects: 'A sessão do usuário é encerrada e todos os apps abertos são fechados.',
       reconnect: 'O painel para de funcionar até alguém entrar de novo (o servidor roda dentro da sessão).', apps: true,
     },
     {
-      id: 'restart', icon: 'restart', label: 'Reiniciar', tone: 'danger', short: 'Fecha tudo e liga de novo.',
+      id: 'restart', icon: 'fl-restart', label: 'Reiniciar', tone: 'danger', short: 'Fecha tudo e liga de novo.',
       title: 'Reiniciar o PC?', effects: 'Todos os apps são fechados e o Windows reinicia.',
       reconnect: 'O painel reconecta sozinho quando o Windows e o servidor voltarem.', apps: true, delay: true,
     },
     {
-      id: 'shutdown', icon: 'power', label: 'Desligar', tone: 'danger', short: 'Fecha tudo e desliga o PC.',
+      id: 'shutdown', icon: 'fl-power', label: 'Desligar', tone: 'danger', short: 'Fecha tudo e desliga o PC.',
       title: 'Desligar o PC?', effects: 'Todos os apps são fechados e o PC desliga por completo.',
       reconnect: 'Para ligar de novo você precisa apertar o botão do PC: este painel não consegue acordá-lo.', apps: true, delay: true,
     },
     {
-      id: 'firmware', icon: 'chip', label: 'Reiniciar p/ BIOS', tone: 'danger', short: 'Reinicia direto na configuração da placa-mãe (UEFI).',
+      id: 'firmware', icon: 'fl-board', label: 'Reiniciar p/ BIOS', tone: 'danger', short: 'Reinicia direto na configuração da placa-mãe (UEFI).',
       title: 'Reiniciar para a BIOS?', effects: 'O PC reinicia e abre a configuração UEFI em vez do Windows. É preciso um teclado e monitor no PC para usá-la.',
       reconnect: 'O painel só volta depois que você sair da BIOS e o Windows iniciar.', apps: true, delay: true,
     },
     {
-      id: 'advanced', icon: 'wrench', label: 'Modo avançado', tone: 'danger', short: 'Menu de recuperação: modo seguro, reparo, restauração.',
+      id: 'advanced', icon: 'fl-wrench', label: 'Modo avançado', tone: 'danger', short: 'Menu de recuperação: modo seguro, reparo, restauração.',
       title: 'Reiniciar no menu avançado?', effects: 'O PC reinicia no menu de opções avançadas do Windows (modo seguro, reparo de inicialização, restauração).',
       reconnect: 'O painel só volta depois que você escolher uma opção e o Windows iniciar. É preciso teclado e monitor no PC.', apps: true, delay: true,
     },
@@ -84,7 +84,7 @@
   const tiles = new Map();
   const grid = h('div', { class: 'grid actions-grid' }, ...ACTIONS.map((action) => {
     const tile = h('button', { type: 'button', class: 'tile act-tile', 'data-tone': action.tone, title: action.short, 'aria-label': `${action.label}. ${action.short}`, on: { click: () => choose(action) } },
-      h('div', { class: 'fallback' }, icon(action.icon, 30)), h('span', { text: action.label }));
+      h('div', { class: 'fallback' }, icon(action.icon)), h('span', { text: action.label }));
     tiles.set(action.id, tile);
     return tile;
   }));

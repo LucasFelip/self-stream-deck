@@ -23,6 +23,9 @@ const DEFAULTS = {
   powerControls: true,
   // the header's play/pause button for whatever is playing. It keeps the media helper running (~90 MB); false turns it off.
   miniPlayer: true,
+  // Windows notifications shown on the deck even while Do Not Disturb hides them on the PC. "apps" are words matched against
+  // the app's name or id (see the Action Center); enabled: false turns it off.
+  notifications: { enabled: true, apps: ['whatsapp'] },
   // false turns off the button editor in the app (shortcuts, macros, hidden/ordered apps can then only be changed here)
   editor: true,
   // macros: lists of whitelisted steps (see src/macros.js); the editor in the app writes them

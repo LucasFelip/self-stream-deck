@@ -10,6 +10,7 @@ const { log } = require('../log');
 const realDeps = () => ({
   system: require('../system'),
   media: require('../media'),
+  notifications: require('../notifications'),
   monitor: require('../monitor'),
   power: require('../power'),
   camera: require('../camera'),

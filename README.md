@@ -43,8 +43,8 @@ Um módulo novo escolhe a aba com `Deck.addPage({ section: 'pc', ... })`.
 | **Janelas e telas** (folha aberta pelo botão Mapa) | Um **mapa em escala das suas telas** com cada janela desenhada onde ela está. **Arraste** uma janela para movê-la, inclusive de uma tela para a outra; arraste até a borda esquerda/direita de uma tela para **encaixar** (metade da tela) ou até o topo para **maximizar**. Toque numa janela para selecioná-la (e trazê-la para a frente); toque no vazio para desmarcar. **No topo** fica a lista de todas as janelas (inclusive minimizadas e escondidas) e **à direita**, em botões grandes com texto, as ações da selecionada: minimizar, maximizar/restaurar, esquerda, direita, outra tela e fechar (dois toques). Sem seleção, esse espaço mostra os controles das telas: desligar telas e projeção (estender/duplicar; "só tela 1/2" exigem segurar). O **brilho** de cada monitor (DDC/CI) fica logo abaixo dele no mapa. |
 | **Som · mídia** (faixa no topo) | O que está tocando (Spotify, YouTube ou qualquer coisa no navegador, VLC…): capa, título, artista, barra de tempo com busca, anterior/play/próxima. Vários players viram abas. |
 | **Som · áudio** (Saída, Entrada e Aplicativos, abaixo) | Saída e entrada padrão (trocar dispositivo, volume, mudo — inclusive o microfone) e mixer de volume por aplicativo. |
-| **Desempenho** | CPU (total e por núcleo, clock, temperatura e potência), memória, GPU, disco e rede, ao vivo. Com um jogo desenhando quadros, o cartão da GPU mostra o FPS e o tempo de quadro (lido do RTSS, que acompanha o MSI Afterburner). |
-| **Sobre este PC** (aba PC, painel Sistema) | Hardware e Windows: processador, memória (módulos), vídeo, placa-mãe/BIOS, armazenamento, rede, monitores, uptime. |
+| **Desempenho** | CPU (total e por núcleo, clock, temperatura e potência), memória, GPU, disco e rede, ao vivo, em cartões compactos de tamanho parecido. Com um jogo desenhando quadros, o cartão da GPU mostra o FPS e o tempo de quadro (lido do RTSS, que acompanha o MSI Afterburner). |
+| **Sobre este PC** (aba PC, painel Sistema) | Hardware e Windows: processador, memória (módulos), vídeo, placa-mãe/BIOS, armazenamento, rede, monitores, uptime, em cartões temáticos que cabem na tela sem rolar em paisagem. |
 | **Processos** | Maiores usos de CPU e de memória. |
 | **Energia** | Teclas (4x2 deitado, 2x4 em pé): bloquear, suspender, hibernar, sair da conta, reiniciar, desligar, reiniciar para a BIOS e para o menu avançado, com atraso, contagem regressiva e cancelamento. |
 
@@ -147,6 +147,7 @@ npm run lan -- status    # mostra a regra de firewall, a impressão digital do c
 | `tileOrder` | Posição dos botões nas telas Apps e Atalhos (`{ apps: [...], shortcuts: [...] }`, chaves `a:<app>`, `s:<atalho>`, `m:<macro>`, `c:camera`). Salvo ao arrastar; não precisa editar à mão. |
 | `shortcuts` | Atalhos: `{ "id", "label", "keys" }`, com `keys` como `ctrl+shift+esc`. |
 | `powerControls` | `false` remove as ações de energia da API. |
+| `notifications` | `{ "enabled": true, "apps": ["whatsapp"] }`: mostra no deck as notificações do Windows desses apps (palavras que casam com o nome ou o id do app), mesmo com Não Incomodar ou jogo ligado. WhatsApp Web no navegador chega como o app do navegador e o texto não cita o WhatsApp: use `["brave"]` (ou `"chrome"`, `"edge"`), o que mostra as notificações de qualquer site desse navegador. `enabled: false` desliga. |
 | `miniPlayer` | `false` desliga o aviso de faixa nova (e dispensa manter o helper de mídia ligado, ~90 MB). |
 | `autoOpenPhone` | `true` para sempre abrir no celular via USB ao iniciar. |
 | `token` | Token de pareamento. Apague e reinicie para gerar outro. |

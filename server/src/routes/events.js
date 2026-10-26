@@ -40,7 +40,7 @@ const withoutSpinner = (title) => String(title).replace(/^[^\p{L}\p{N}]+/u, '');
 const withoutCountdown = (data) => JSON.stringify({ ...data, scheduled: data.scheduled ? { ...data.scheduled, inSec: 0 } : null });
 
 module.exports = function eventsRoutes(ctx, on) {
-  const { system, media, monitor, events } = ctx;
+  const { system, media, notifications, monitor, events } = ctx;
 
   events.register('windows', {
     stopFns: [],
@@ -83,6 +83,8 @@ module.exports = function eventsRoutes(ctx, on) {
   events.register('media', every(1500, () => media.state(), (state) => ({
     signature: JSON.stringify(state.sessions.map((s) => ({ ...s, position: Math.floor((s.position || 0) / 5) }))),
   })));
+  // what Windows kept quiet (Do Not Disturb, a game) from the apps listed in config.notifications.apps; the phone shows the new ones
+  events.register('notifications', every(2000, () => notifications.list(ctx.config.notifications && ctx.config.notifications.enabled === false ? [] : (ctx.config.notifications || {}).apps)));
   events.register('monitor', every(2000, () => monitor.sample(), () => ({ force: true })));
   // the game's frame rate (or null): lets the phone notice a game from any page, not only from Desempenho
   events.register('game', every(1000, () => monitor.fps()));

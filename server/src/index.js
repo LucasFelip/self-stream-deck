@@ -8,6 +8,7 @@ const { createRoutes } = require('./routes');
 const { sendJson, serveStatic, isStaticPath } = require('./http');
 const system = require('./system');
 const media = require('./media');
+const notifications = require('./notifications');
 const monitor = require('./monitor');
 const camera = require('./camera');
 const vcam = require('./vcam');
@@ -120,6 +121,7 @@ function shutdown(signal) {
   console.log(`[server] stopping (${signal})`);
   system.stop();
   media.stop();
+  notifications.stop();
   monitor.stop();
   camera.stop();
   vcam.stop();

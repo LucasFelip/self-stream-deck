@@ -40,6 +40,13 @@ function validate(config) {
 
   if (config.hidden !== undefined && !(Array.isArray(config.hidden) && config.hidden.every(isText))) add('hidden', 'hidden must be a list of app ids');
 
+  if (config.notifications !== undefined) {
+    const { notifications } = config;
+    if (!isObject(notifications) || (notifications.enabled !== undefined && typeof notifications.enabled !== 'boolean') || (notifications.apps !== undefined && !(Array.isArray(notifications.apps) && notifications.apps.every(isText)))) {
+      add('notifications', 'notifications must be { enabled: true or false, apps: a list of words }');
+    }
+  }
+
   if (config.tileOrder !== undefined) {
     const ok = isObject(config.tileOrder) && Object.values(config.tileOrder).every((list) => Array.isArray(list) && list.every(isText));
     if (!ok) add('tileOrder', 'tileOrder must map each page to a list of keys');

@@ -77,7 +77,7 @@
 
   const cpuBig = h('div', { class: 'big', 'data-level': 'ok' });
   const cpuSpark = spark({ max: 100 });
-  const cpuStats = { clock: stat('Clock'), temp: stat('Temperatura'), power: stat('Potência'), tasks: stat('Processos') };
+  const cpuStats = { clock: stat('Clock'), temp: stat('Temp.'), power: stat('Potência'), tasks: stat('Tarefas') };
   const coreBars = Array.from({ length: 16 }, () => h('i', {}, h('b')));
   const cpuCard = card('CPU', '', cpuBig, cpuSpark.el, h('div', { class: 'stats' }, ...Object.values(cpuStats).map((s) => s.el)), h('div', { class: 'cores' }, ...coreBars));
   cpuCard.el.classList.add('c-cpu');
@@ -90,7 +90,7 @@
 
   const gpuBig = h('div', { class: 'big', 'data-level': 'ok' });
   const gpuBar = bar();
-  const gpuStats = { vram: stat('VRAM'), temp: stat('Temperatura'), power: stat('Potência'), fan: stat('Ventoinha'), clock: stat('Clock') };
+  const gpuStats = { vram: stat('VRAM'), temp: stat('Temp.'), power: stat('Potência'), fan: stat('Fan'), clock: stat('Clock') };
   const gpuCard = card('GPU', '', gpuBig, gpuBar.el, h('div', { class: 'stats' }, ...Object.values(gpuStats).map((s) => s.el)));
   gpuCard.el.classList.add('c-gpu');
 
@@ -113,13 +113,14 @@
   const fpsFrame = h('span', { class: 'fps-frame' });
   const fpsCard = h('div', { class: 'card c-fps' }, h('div', { class: 'fps-info' }, fpsGame, fpsFrame), fpsBig, fpsSpark.el);
 
-  const monitorEl = h('section', { class: 'monitor-page' }, h('div', { class: 'col-cpu' }, fpsCard, cpuCard.el), memCard.el, gpuCard.el, diskCard.el, netCard.el);
+  const monitorEl = h('section', { class: 'monitor-page' }, fpsCard, h('div', { class: 'perf-grid' }, cpuCard.el, memCard.el, gpuCard.el, diskCard.el, netCard.el));
   let gaming = false;
 
   function updateFps(fps) {
     if (Boolean(fps) !== gaming) {
       gaming = Boolean(fps);
       fpsCard.classList.toggle('on', gaming);
+      monitorEl.classList.toggle('gaming', gaming); // no easing while a game runs: the bars jump to the value
     }
     if (!fps) return;
     fpsGame.textContent = fps.app || 'Jogo';
@@ -140,7 +141,7 @@
     cpuStats.clock.set(orDash(cpu.freqMHz, (v) => `${(v / 1000).toFixed(2)} GHz`));
     cpuStats.temp.set(orDash(cpu.temp, (v) => `${Math.round(v)} °C`));
     cpuStats.power.set(orDash(cpu.power, (v) => `${v.toFixed(0)} W`));
-    cpuStats.tasks.set(`${cpu.processes} · ${cpu.threads} thr`);
+    cpuStats.tasks.set(`${cpu.processes} · ${cpu.threads}`);
     cpu.cores.forEach((usage, i) => {
       const cell = coreBars[i];
       if (cell) cell.firstChild.style.height = `${Math.min(100, usage)}%`;
@@ -151,9 +152,9 @@
     memBig.dataset.level = level(memory.usedPct, 80, 92);
     memBig.replaceChildren(`${memory.usedPct}`, h('small', { text: '%' }));
     memBar.set(memory.usedPct, level(memory.usedPct, 80, 92));
-    memStats.used.set(`${fmt.gb(memory.usedMB)} / ${fmt.gb(memory.totalMB)}`);
+    memStats.used.set(`${fmt.gb(memory.usedMB).replace(' GB', '')} / ${fmt.gb(memory.totalMB)}`);
     memStats.free.set(fmt.gb(memory.totalMB - memory.usedMB));
-    memStats.commit.set(`${fmt.gb(memory.commitUsedMB)} / ${fmt.gb(memory.commitLimitMB)}`);
+    memStats.commit.set(`${fmt.gb(memory.commitUsedMB).replace(' GB', '')} / ${fmt.gb(memory.commitLimitMB)}`);
 
     if (gpu) {
       gpuCard.sub.textContent = gpu.name.replace(/^NVIDIA\s+/i, '').replace(/^GeForce\s+/i, '');
@@ -161,7 +162,7 @@
       gpuBig.replaceChildren(`${Math.round(gpu.usage ?? 0)}`, h('small', { text: '%' }));
       const vramPct = (gpu.memUsedMB / gpu.memTotalMB) * 100;
       gpuBar.set(vramPct, level(vramPct, 85, 95));
-      gpuStats.vram.set(`${fmt.gb(gpu.memUsedMB)} / ${fmt.gb(gpu.memTotalMB)}`);
+      gpuStats.vram.set(`${fmt.gb(gpu.memUsedMB).replace(' GB', '')} / ${fmt.gb(gpu.memTotalMB)}`);
       gpuStats.temp.set(orDash(gpu.temp, (v) => `${v} °C`));
       gpuStats.power.set(`${orDash(gpu.power, (v) => v.toFixed(0))} / ${orDash(gpu.powerLimit, (v) => v.toFixed(0))} W`);
       gpuStats.fan.set(orDash(gpu.fan, (v) => `${v}%`));
@@ -210,13 +211,30 @@
 
   // --- Sistema --------------------------------------------------------------------------------
 
-  const systemColumns = [h('div', { class: 'col' }), h('div', { class: 'col' }), h('div', { class: 'col' })];
   const systemLoading = h('div', { class: 'loading', text: 'Lendo informações do sistema…' });
-  const systemEl = h('section', { class: 'system-page' }, ...systemColumns);
-  systemColumns[0].append(systemLoading);
+  const systemEl = h('section', { class: 'system-page' }, systemLoading);
 
   const kv = (rows) => h('dl', { class: 'kv' }, ...rows.filter(([, value]) => value !== null && value !== undefined && value !== '').flatMap(([key, value]) => [h('dt', { text: key }), h('dd', { text: String(value) })]));
   const infoCard = (title, ...children) => h('div', { class: 'card' }, h('h3', { text: title }), ...children);
+
+  // a physical disk (model, then "SSD · NVMe · 1 TB" below it) followed by its partitions; partitions with no known disk go in one extra block
+  const driveRow = (drive) => {
+    const usage = bar();
+    usage.set(((drive.totalGB - drive.freeGB) / drive.totalGB) * 100);
+    return h('div', { class: 'drive' }, h('div', { class: 'row' }, h('span', { text: `${drive.name} ${drive.label || ''} · ${drive.fs}`.trim() }), h('b', { text: `${drive.freeGB} / ${drive.totalGB} GB livres` })), usage.el);
+  };
+  const sizeText = (gb) => (gb >= 1000 ? `${Math.round(gb / 100) / 10} TB` : `${gb} GB`);
+  function storageBlocks(disks, drives) {
+    const known = new Set(disks.map((disk) => disk.id));
+    const blocks = disks.map((disk) => {
+      const own = drives.filter((drive) => drive.disk != null && drive.disk === disk.id);
+      const kind = [disk.type && disk.type !== 'Unspecified' ? disk.type : '', disk.bus, sizeText(disk.sizeGB)].filter(Boolean).join(' · ');
+      return h('div', { class: 'disk' }, h('div', { class: 'disk-name', text: disk.model }), h('div', { class: 'disk-kind', text: kind }), ...own.map(driveRow));
+    });
+    const loose = drives.filter((drive) => drive.disk == null || !known.has(drive.disk));
+    if (loose.length) blocks.push(h('div', { class: 'disk' }, ...loose.map(driveRow)));
+    return blocks;
+  }
 
   let uptimeEl = null;
   let bootTime = null;
@@ -225,31 +243,27 @@
     const { os, cpu, memory, gpus, board, storage, network, monitors } = data;
     bootTime = os.lastBoot ? new Date(os.lastBoot).getTime() : null;
 
-    systemColumns[0].replaceChildren(
+    // four themed columns (landscape; two grid columns in portrait, see .system-page): the cards of a column share its height
+    systemEl.replaceChildren(
+      h('div', { class: 'col' },
       infoCard('Sistema',
         kv([['Computador', data.host], ['Usuário', data.user], ['Windows', os.name.replace(/^Microsoft\s+/, '')], ['Versão', `${os.version} (build ${os.build})`], ['Arquitetura', os.arch], ['Instalado em', fmt.date(os.installed)], ['Último boot', fmt.dateTime(os.lastBoot)], ['Ligado há', '–']])),
-      infoCard('Placa-mãe', kv([['Fabricante', board.maker], ['Modelo', board.model], ['BIOS', board.bios], ['Data da BIOS', fmt.date(board.biosDate)]])),
-    );
-
-    systemColumns[1].replaceChildren(
+      infoCard('Monitores', kv(monitors.map((monitor) => [monitor.name + (monitor.primary ? ' ★' : ''), `${monitor.width}×${monitor.height}`])))
+      ),
+      h('div', { class: 'col' },
       infoCard('Processador', kv([['Modelo', cpu.name], ['Núcleos / threads', `${cpu.cores} / ${cpu.threads}`], ['Clock base', orDash(cpu.maxMHz, (v) => `${(v / 1000).toFixed(2)} GHz`)], ['Cache', `L2 ${cpu.l2KB / 1024} MB · L3 ${cpu.l3KB / 1024} MB`]])),
       infoCard('Memória', kv([['Total', `${memory.totalGB} GB`], ...memory.modules.map((m) => [m.slot, `${m.sizeGB} GB ${m.type} ${m.speed || ''} MHz`.replace(/\s+/g, ' ')])])),
+      infoCard('Placa-mãe', kv([['Fabricante', board.maker], ['Modelo', board.model], ['BIOS', board.bios], ['Data da BIOS', fmt.date(board.biosDate)]]))
+      ),
+      h('div', { class: 'col' },
       infoCard('Vídeo', ...gpus.map((gpu) => kv([['Placa', gpu.name], ['VRAM', `${gpu.vramGB} GB`], ['Driver', gpu.driver]]))),
+      infoCard('Rede', ...network.map((adapter) => kv([[adapter.name, adapter.ip], ['Link', adapter.speed], ['MAC', adapter.mac]])))
+      ),
+      h('div', { class: 'col' },
+      infoCard('Armazenamento', ...storageBlocks(storage, data.drives))
+      ),
     );
-
-    systemColumns[2].replaceChildren(
-      infoCard('Armazenamento',
-        kv(storage.map((disk) => [disk.model, `${disk.sizeGB} GB ${disk.type} ${disk.bus}`.replace(/\s+/g, ' ')])),
-        h('div', { class: 'divider' }),
-        h('div', { class: 'drives' }, ...data.drives.map((drive) => {
-          const usage = bar();
-          usage.set(((drive.totalGB - drive.freeGB) / drive.totalGB) * 100);
-          return h('div', { class: 'drive' }, h('div', { class: 'row' }, h('span', { text: `${drive.name} ${drive.label || ''} · ${drive.fs}`.trim() }), h('b', { text: `${drive.freeGB} / ${drive.totalGB} GB livres` })), usage.el);
-        }))),
-      infoCard('Rede', ...network.map((adapter) => kv([[adapter.name, adapter.ip], ['Link', adapter.speed], ['MAC', adapter.mac]]))),
-      infoCard('Monitores', kv(monitors.map((monitor) => [monitor.name + (monitor.primary ? ' ★' : ''), `${monitor.width}×${monitor.height}`]))),
-    );
-    uptimeEl = systemColumns[0].querySelector('dl dd:last-child'); // the "Ligado há" row, ticked every second
+    uptimeEl = systemEl.querySelector('dl dd:last-child'); // the "Ligado há" row, ticked every second
     paintUptime();
   }
 

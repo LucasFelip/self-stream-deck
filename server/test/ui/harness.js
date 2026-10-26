@@ -34,6 +34,9 @@ async function fakeDeck() {
     layout: { apps: [], shortcuts: [] },
     power: { enabled: true, hibernate: false, uptimeSec: 3 * 3600, lastBoot: '2026-10-22T08:00:00', rebootPending: false, scheduled: null, openApps: [{ name: 'Navegador', count: 2 }, { name: 'Editor', count: 1 }] },
     // what the Janelas and PC pages ask for: coherent canned answers (a test can change them between steps)
+    drives: [{ name: 'C:', label: 'Sistema', totalGB: 500, freeGB: 200 }, { name: 'D:', label: 'Laika', totalGB: 730, freeGB: 195 }, { name: 'E:', label: 'Strelka', totalGB: 466, freeGB: 408 }], // the disk card's drives
+    infoFails: false, // true: GET /api/monitor/info answers 500
+    noGpu: false, // true: the sample has no GPU
     windows: [
       { handle: 101, title: 'Documento - Editor', app: 'Editor', appId: null, iconVersion: 0, state: 0, monitor: 0, x: 100, y: 80, w: 900, h: 600 },
       { handle: 102, title: 'Navegador', app: 'Navegador', appId: null, iconVersion: 0, state: 2, monitor: 0, x: 0, y: 0, w: 1920, h: 1040 },
@@ -57,8 +60,8 @@ async function fakeDeck() {
   const sampleReply = () => ({
     cpu: { usage: 23, freqMHz: 4200, temp: 51, tempSource: 'fake', power: 40, processes: 210, threads: 3100, cores: [10, 20, 30, 40] },
     memory: { usedPct: 48, usedMB: 15000, totalMB: 32000, commitUsedMB: 20000, commitLimitMB: 40000 },
-    gpu: { name: 'NVIDIA GeForce RTX 4070', usage: 35, memUsedMB: 4000, memTotalMB: 12000, temp: 60, power: 120, powerLimit: 200, fan: 40, clock: 2100 },
-    disk: { total: { active: 5, readBps: 1000, writeBps: 2000 }, drives: [{ name: 'C:', label: 'Sistema', totalGB: 500, freeGB: 200 }, { name: 'D:', label: 'Laika', totalGB: 730, freeGB: 195 }, { name: 'E:', label: 'Strelka', totalGB: 466, freeGB: 408 }] },
+    gpu: model.noGpu ? null : { name: 'NVIDIA GeForce RTX 4070', usage: 35, memUsedMB: 4000, memTotalMB: 12000, temp: 60, power: 120, powerLimit: 200, fan: 40, clock: 2100 },
+    disk: { total: { active: 5, readBps: 1000, writeBps: 2000 }, drives: model.drives },
     network: [{ name: 'Ethernet', downBps: 5000, upBps: 1000, speed: '1 Gbps' }],
     fps: model.fps ?? null,
   });
@@ -101,7 +104,7 @@ async function fakeDeck() {
     if (key === 'GET /api/screens') return sendJson(res, 200, { monitors: model.screens });
     if (key === 'GET /api/monitor/sample') return sendJson(res, 200, sampleReply());
     if (key === 'GET /api/monitor/processes') return sendJson(res, 200, processesReply());
-    if (key === 'GET /api/monitor/info') return sendJson(res, 200, infoReply());
+    if (key === 'GET /api/monitor/info') return model.infoFails ? sendJson(res, 500, { error: 'sem leitura' }) : sendJson(res, 200, infoReply());
     if (key === 'GET /api/power') return sendJson(res, 200, model.power);
     if (key === 'GET /api/audio') return sendJson(res, 200, model.audio);
     if (key === 'GET /api/media') return sendJson(res, 200, model.media);
@@ -149,12 +152,29 @@ async function launchBrowser({ width = 412, height = 915 } = {}) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'ssd-ui-'));
   const proc = spawn(exe, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--disable-gpu', '--disable-extensions', '--mute-audio', 'about:blank'], { stdio: 'ignore' });
 
+  // Stops the browser and deletes its profile (~120 MB). Retries because the browser's helpers (e.g. the crashpad handler)
+  // can hold files for a moment after the kill, and also runs on process exit so an aborted test run never leaves it behind.
+  let cleaned = false;
+  function cleanup() {
+    if (cleaned) return;
+    cleaned = true;
+    process.removeListener('exit', cleanup);
+    // On Windows the process we started can be only a launcher: the real browser (and its helpers) is found by its profile folder
+    if (process.platform === 'win32') {
+      const script = `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*${path.basename(profile)}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
+      spawnSync('powershell', ['-NoProfile', '-Command', script], { stdio: 'ignore' });
+    }
+    proc.kill();
+    try { fs.rmSync(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); } catch { /* still locked: nothing more to do */ }
+  }
+  process.on('exit', cleanup);
+
   let port = null;
   for (let i = 0; i < 100 && !port; i += 1) {
     await sleep(100);
     try { port = Number(fs.readFileSync(path.join(profile, 'DevToolsActivePort'), 'utf8').split('\n')[0]); } catch { /* not written yet */ }
   }
-  if (!port) { proc.kill(); throw new Error('the browser did not open its debugging port'); }
+  if (!port) { cleanup(); throw new Error('the browser did not open its debugging port'); }
 
   // `script` runs before the page's own scripts (e.g. to fake window.Android)
   async function open(url, { script } = {}) {
@@ -243,15 +263,7 @@ async function launchBrowser({ width = 412, height = 915 } = {}) {
 
   return {
     open,
-    close() {
-      // On Windows the process we started can be only a launcher: the real browser (and its helpers) is found by its profile folder
-      if (process.platform === 'win32') {
-        const script = `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*${path.basename(profile)}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
-        spawnSync('powershell', ['-NoProfile', '-Command', script], { stdio: 'ignore' });
-      }
-      proc.kill();
-      try { fs.rmSync(profile, { recursive: true, force: true }); } catch { /* the browser may still hold files for a moment */ }
-    },
+    close: cleanup,
   };
 }
 

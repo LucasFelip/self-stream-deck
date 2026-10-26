@@ -668,75 +668,81 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       await go('apps');
     });
 
-    await test('PC (portrait): Desempenho cards keep their natural height (no clipping, a usable sparkline), and the System cards do not overlap', async () => {
-      const tall = await browser2(411, 914);
-      try {
-        await tall.waitFor(`document.querySelectorAll('#tabs .tab').length === 6`, 'the tabs');
-        await go('pc', tall);
-        await tall.waitFor(`document.querySelector('.c-cpu .big').textContent.startsWith('23')`, 'the sample drawn');
-        const cards = await tall.eval(`(() => {
-          const pane = document.querySelector('.monitor-page').getBoundingClientRect();
-          const cpu = document.querySelector('.c-cpu');
-          const rect = (e) => e.getBoundingClientRect();
-          const rows = [...cpu.querySelectorAll('.stats > div')].map((d) => ({ h: rect(d).height, inside: rect(d).bottom <= rect(cpu).bottom && rect(d).top >= rect(cpu).top }));
-          return {
-            clipped: [...document.querySelectorAll('.monitor-page .card')].filter((c) => rect(c).width > 0 && c.scrollHeight > c.clientHeight + 1).map((c) => c.className),
-            spark: rect(cpu.querySelector('.spark')).height,
-            rows,
-            cores: rect(cpu.querySelector('.cores')).height,
-            cpuH: rect(cpu).height,
-            paneW: pane.width,
-          };
-        })()`);
-        assert.deepStrictEqual(cards.clipped, [], JSON.stringify(cards));
-        assert.ok(cards.spark >= 60, `the CPU sparkline is squashed: ${JSON.stringify(cards)}`);
-        assert.strictEqual(cards.rows.length, 4, 'Clock, Temperatura, Potência and Processos');
-        assert.ok(cards.rows.every((row) => row.h > 0 && row.inside), `a CPU stat is hidden: ${JSON.stringify(cards)}`);
-        assert.ok(cards.cores > 10, `the per-core bars are squashed: ${JSON.stringify(cards)}`);
-
-        await tall.tap('.pc-page .seg-btn[data-seg="system"]');
-        await tall.waitFor(`document.querySelectorAll('.system-page .card').length >= 6`, 'the system cards');
-        await sleep(300);
-        const overlaps = await tall.eval(`(() => {
-          const cards = [...document.querySelectorAll('.system-page .card')].map((c) => ({ name: c.querySelector('h3').textContent, r: c.getBoundingClientRect() }));
-          const out = [];
-          for (let i = 0; i < cards.length; i += 1) for (let j = i + 1; j < cards.length; j += 1) {
-            const a = cards[i].r; const b = cards[j].r;
-            if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) out.push(cards[i].name + ' x ' + cards[j].name);
+    const PC_SCENES = {
+      normal: () => {},
+      'muitos discos': () => { deck.model.drives = Array.from({ length: 8 }, (_, i) => ({ name: `${String.fromCharCode(67 + i)}:`, label: `Volume ${i}`, totalGB: 500, freeGB: 100 + i * 30 })); },
+      'sem GPU': () => { deck.model.noGpu = true; },
+    };
+    for (const scene of Object.keys(PC_SCENES)) {
+      for (const [width, height] of [[836, 387], [740, 360], [411, 914], [360, 740]]) {
+        await test(`PC (${scene}) ${width}x${height}: Desempenho, Processos and Sistema fit their cards, nothing overlaps or is cut, the selector is 48 px`, async () => {
+          PC_SCENES[scene]();
+          const pcp = await browser2(width, height);
+          const landscape = width > height;
+          try {
+            await pcp.waitFor(`document.querySelectorAll('#tabs .tab').length === 6 && document.querySelectorAll('.tile[data-key]').length >= 6`, 'the deck');
+            await go('pc', pcp);
+            await pcp.waitFor(`document.querySelector('.c-cpu .big').textContent.startsWith('23')`, 'the sample drawn');
+            await sleep(400);
+            const measure = (pane) => pcp.eval(`(() => {
+              const root = document.querySelector('.${pane}');
+              const rect = (e) => e.getBoundingClientRect();
+              const shown = (e) => rect(e).width > 0 && rect(e).height > 0;
+              const cards = [...root.querySelectorAll('.card')].filter(shown);
+              const hit = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+              const overlaps = [];
+              for (let i = 0; i < cards.length; i += 1) for (let j = i + 1; j < cards.length; j += 1) if (hit(rect(cards[i]), rect(cards[j]))) overlaps.push(i + '/' + j);
+              const cut = cards.filter((c) => c.scrollHeight > c.clientHeight + 1 || c.scrollWidth > c.clientWidth + 1).map((c) => (c.querySelector('h3') || c).textContent.slice(0, 20));
+              const text = [...root.querySelectorAll('.stats span, .kv dd, .kv dt, .big, .proc .name, .proc .val, .drive .row span, .drive .row b')].filter(shown).filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent.slice(0, 24));
+              const page = document.querySelector('.pc-page').getBoundingClientRect();
+              const outside = cards.filter((c) => rect(c).right > page.right + 1 || rect(c).left < page.left - 1).length;
+              return { cards: cards.length, overlaps, cut, text, outside, rootScrolls: root.scrollHeight > root.clientHeight + 1, seg: Math.round(rect(document.querySelector('.pc-page .seg-btn')).height) };
+            })()`);
+            // Desempenho
+            let info = await measure('monitor-page');
+            assert.strictEqual(info.cards, 5, JSON.stringify(info));
+            assert.deepStrictEqual({ o: info.overlaps, c: info.cut, t: info.text, out: info.outside }, { o: [], c: [], t: [], out: 0 }, JSON.stringify(info));
+            assert.ok(info.seg >= 48, JSON.stringify(info));
+            if (landscape) assert.strictEqual(info.rootScrolls, false, `landscape Desempenho must not scroll: ${JSON.stringify(info)}`);
+            const kinds = await pcp.eval(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); return { cpuH: Math.round(r('.c-cpu').height), memH: Math.round(r('.c-mem').height), cols: getComputedStyle(document.querySelector('.perf-grid')).gridTemplateColumns.split(' ').length }; })()`);
+            assert.strictEqual(kinds.cols, landscape ? 3 : 2);
+            if (landscape) assert.ok(Math.abs(kinds.cpuH - kinds.memH) <= 2, `the CPU card is not the dominant one: ${JSON.stringify(kinds)}`);
+            // Processos
+            await pcp.tap('.pc-page .seg-btn[data-seg="processes"]');
+            await pcp.waitFor(`document.querySelectorAll('.processes-page .proc').length === 12`, 'the processes');
+            await sleep(300);
+            info = await measure('processes-page');
+            assert.deepStrictEqual({ o: info.overlaps, t: info.text, out: info.outside }, { o: [], t: [], out: 0 }, JSON.stringify(info));
+            const rows = await pcp.eval(`[...document.querySelectorAll('.processes-page .proc')].map((e) => Math.round(e.getBoundingClientRect().height))`);
+            assert.ok(rows.every((hh) => hh >= 40), JSON.stringify(rows));
+            // Sistema
+            await pcp.tap('.pc-page .seg-btn[data-seg="system"]');
+            await pcp.waitFor(`document.querySelectorAll('.system-page .card').length === 8`, 'the system cards');
+            await sleep(900);
+            info = await measure('system-page');
+            assert.deepStrictEqual({ o: info.overlaps, c: info.cut, out: info.outside }, { o: [], c: [], out: 0 }, scene + ' ' + width + 'x' + height + ' ' + JSON.stringify(info));
+            if (landscape || height >= 900) { assert.strictEqual(info.rootScrolls, false, `Sistema must not scroll here: ${JSON.stringify(info)}`); }
+            if (landscape) { assert.strictEqual(await pcp.eval(`getComputedStyle(document.querySelector('.system-page')).gridTemplateColumns.split(' ').length`), 4); }
+          } finally {
+            deck.model.drives = ['C:', 'D:', 'E:'].map((name, i) => ({ name, label: ['Sistema', 'Laika', 'Strelka'][i], totalGB: [500, 730, 466][i], freeGB: [200, 195, 408][i] }));
+            deck.model.noGpu = false;
+            pcp.close();
           }
-          const clipped = cards.filter((c, i) => document.querySelectorAll('.system-page .card')[i].scrollHeight > document.querySelectorAll('.system-page .card')[i].clientHeight + 1).map((c) => c.name);
-          return { out, clipped };
-        })()`);
-        assert.deepStrictEqual(overlaps, { out: [], clipped: [] });
-      } finally {
-        tall.close();
+        });
       }
-    });
+    }
 
-    await test('PC (landscape): Desempenho shows every card whole, including three drives, and nothing scrolls inside', async () => {
-      const wide = await browser2(836, 387);
+    await test('PC > Sistema: when the machine cannot be read the pane says so instead of staying empty', async () => {
+      deck.model.infoFails = true;
+      const bad = await browser2(836, 387);
       try {
-        await wide.waitFor(`document.querySelectorAll('#tabs .tab').length === 6`, 'the tabs');
-        await go('pc', wide);
-        await wide.waitFor(`document.querySelectorAll('.c-dsk .drive').length === 3`, 'three drives');
-        await sleep(300);
-        const info = await wide.eval(`(() => {
-          const rect = (e) => e.getBoundingClientRect();
-          const dsk = document.querySelector('.c-dsk');
-          const list = dsk.querySelector('.scroll');
-          return {
-            clipped: [...document.querySelectorAll('.monitor-page .card')].filter((c) => rect(c).width > 0 && (c.scrollHeight > c.clientHeight + 1 || c.scrollWidth > c.clientWidth + 1)).map((c) => c.className),
-            listScrolls: list.scrollHeight > list.clientHeight + 1,
-            drivesInside: [...dsk.querySelectorAll('.drive')].every((d) => rect(d).bottom <= rect(dsk).bottom - 1),
-            seg: rect(document.querySelector('.pc-page .seg-btn')).height,
-          };
-        })()`);
-        assert.deepStrictEqual(info.clipped, [], JSON.stringify(info));
-        assert.strictEqual(info.listScrolls, false, 'the drive list scrolls inside the Disco card');
-        assert.ok(info.drivesInside, 'a drive row runs past the bottom of the card');
-        assert.ok(info.seg >= 48);
+        await bad.waitFor(`document.querySelectorAll('#tabs .tab').length === 6`, 'the tabs');
+        await go('pc', bad);
+        await bad.tap('.pc-page .seg-btn[data-seg="system"]');
+        await bad.waitFor(`document.querySelector('.system-page .loading')?.textContent.startsWith('Não foi possível')`, 'the error text');
       } finally {
-        wide.close();
+        deck.model.infoFails = false;
+        bad.close();
       }
     });
 
@@ -750,6 +756,8 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       deck.model.pushGame();
       await page.waitFor(`document.querySelector('#tabs .tab[data-section="pc"]').getAttribute('aria-selected') === 'true' && Deck.perf.pane === 'monitor'`, 'PC > Desempenho for the game', 8000);
       assert.strictEqual(await page.eval(`document.getElementById('fps').hidden`), true, 'the pill hides on Desempenho');
+      const easing = `getComputedStyle(document.querySelector('.monitor-page .bar > i')).transitionDuration`;
+      assert.strictEqual(await page.eval(easing), '0s', 'the bars do not ease while a game runs');
       // the counter shows on another page
       await go('apps');
       await page.eval(`Deck.perf.showPane('system')`);
@@ -760,6 +768,9 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       deck.model.fps = null;
       deck.model.pushGame();
       await page.waitFor(`document.getElementById('fps').hidden`, 'the game ending', 9000);
+      await go('pc');
+      await page.eval(`Deck.perf.showPane('monitor')`);
+      await page.waitFor(`${easing} !== '0s'`, 'the bars easing again once the game ends');
       await go('apps');
     });
 

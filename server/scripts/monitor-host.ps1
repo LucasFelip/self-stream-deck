@@ -245,9 +245,10 @@ function Get-SystemInfo {
         $gpus += [ordered]@{ name = $video.Name; driver = $video.DriverVersion; vramGB = (Round ($vram / 1GB) 1); refreshHz = $video.CurrentRefreshRate }
     }
 
-    $storage = @(Try-Get { Get-PhysicalDisk | ForEach-Object { [ordered]@{ model = $_.FriendlyName; sizeGB = (Round ($_.Size / 1GB) 0); type = [string]$_.MediaType; bus = [string]$_.BusType; health = [string]$_.HealthStatus } } })
+    $storage = @(Try-Get { Get-PhysicalDisk | ForEach-Object { [ordered]@{ id = [string]$_.DeviceId; model = $_.FriendlyName; sizeGB = (Round ($_.Size / 1GB) 0); type = [string]$_.MediaType; bus = [string]$_.BusType; health = [string]$_.HealthStatus } } })
     $drives = @([IO.DriveInfo]::GetDrives() | Where-Object { $_.IsReady -and $_.DriveType -eq 'Fixed' } | ForEach-Object {
-        [ordered]@{ name = $_.Name.TrimEnd('\'); label = $_.VolumeLabel; fs = $_.DriveFormat; totalGB = (Round ($_.TotalSize / 1GB) 0); freeGB = (Round ($_.AvailableFreeSpace / 1GB) 0) }
+        $part = Try-Get { Get-Partition -DriveLetter $_.Name.Substring(0, 1) -ErrorAction Stop | Select-Object -First 1 }
+        [ordered]@{ name = $_.Name.TrimEnd('\'); disk = if ($part) { [string]$part.DiskNumber } else { $null }; label = $_.VolumeLabel; fs = $_.DriveFormat; totalGB = (Round ($_.TotalSize / 1GB) 0); freeGB = (Round ($_.AvailableFreeSpace / 1GB) 0) }
     })
 
     $adapters = @(Try-Get {
