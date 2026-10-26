@@ -13,3 +13,6 @@ android/local.properties
 
 # local toolchains downloaded by the build helper
 .tools/
+
+# editor
+.idea/
