@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0c10">
+  <meta name="color-scheme" content="dark">
+  <title>Self Stream Deck · parear</title>
+  <style>
+    body { margin: 0; padding: max(24px, env(safe-area-inset-top)) 24px 24px; background: #0b0c10; color: #e8e8ee; font: 16px/1.5 system-ui, -apple-system, sans-serif; }
+    main { max-width: 420px; margin: 0 auto; }
+    input, button { width: 100%; box-sizing: border-box; font: inherit; border-radius: 12px; border: 1px solid #2a2e3c; padding: 14px; background: #151821; color: inherit; }
+    button { margin-top: 12px; background: #3b82f6; border-color: #3b82f6; color: #fff; font-weight: 600; }
+    .error { color: #f87171; }
+    small { color: #9aa0b4; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Parear com o PC</h1>
+    <p>Este app ainda não está pareado. No Safari, abra o painel e use <b>⚙ → Código de pareamento</b> para copiar o código; depois cole aqui.</p>
+    <p id="error" class="error" role="alert" hidden>Código não aceito. Confira e tente de novo.</p>
+    <form id="form">
+      <input id="code" name="code" type="text" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Cole o código aqui" aria-label="Código de pareamento">
+      <button type="submit">Parear</button>
+    </form>
+    <p><small>O código também pode ser o link completo de pareamento do PC.</small></p>
+  </main>
+  <script src="/pair.js"></script>
+</body>
+</html>

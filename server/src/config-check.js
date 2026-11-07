@@ -4,8 +4,8 @@
 // problem is in, so a save can refuse only the setting it is changing and leave older problems to a warning at start-up.
 
 const REPLACEMENT_CHAR = '�'; // what a wrong text encoding leaves behind ("�rea de trabalho")
-const BOOLEANS = ['lan', 'powerControls', 'miniPlayer', 'editor'];
-const PORTS = ['port', 'httpsPort'];
+const BOOLEANS = ['lan', 'ios', 'powerControls', 'miniPlayer', 'editor'];
+const PORTS = ['port', 'httpsPort', 'iosPort', 'iosCaPort'];
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isText = (value) => typeof value === 'string';

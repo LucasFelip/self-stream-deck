@@ -62,15 +62,24 @@
     await goOnline();
   }
 
-  // Keep the phone awake while the deck is visible (needs a secure context, e.g. 127.0.0.1 over USB).
+  // Keep the phone awake while the deck is visible (needs a secure context, e.g. 127.0.0.1 over USB or the HTTPS port).
+  // The system lets the lock go when the page is hidden (and iOS also on low battery), so it is asked for again when the page
+  // comes back or when it is released while visible. A browser that wants a touch first (iOS) gets one more try on the first tap.
+  let wakeLock = null;
+  let wakeBusy = false;
   async function keepAwake() {
-    if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+    if (!('wakeLock' in navigator) || document.visibilityState !== 'visible' || wakeBusy || (wakeLock && !wakeLock.released)) return;
+    wakeBusy = true;
     try {
-      await navigator.wakeLock.request('screen');
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { if (document.visibilityState === 'visible') setTimeout(keepAwake, 1000); });
     } catch {
       // denied or unsupported: the screen just follows the system timeout
+    } finally {
+      wakeBusy = false;
     }
   }
+  document.addEventListener('pointerdown', () => { if (!wakeLock || wakeLock.released) keepAwake(); }, { capture: true, passive: true });
   document.addEventListener('visibilitychange', () => {
     keepAwake();
     // the visible page's polling stops with the screen and starts again, fresh, when it comes back

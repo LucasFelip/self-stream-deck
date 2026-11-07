@@ -19,6 +19,12 @@ const DEFAULTS = {
   // httpsPort (self-signed certificate that the phone app pins, firewall rule for the local subnet only). See `npm run lan`.
   lan: false,
   httpsPort: 7879,
+  // true: an iPhone (Safari) can also reach the deck. It gets its own HTTPS port (iosPort), because Safari checks the names in the
+  // certificate and trusts a certificate authority you install once, plus a plain-HTTP port (iosCaPort) that only hands out that
+  // authority's public certificate. See `npm run lan -- ios`.
+  ios: false,
+  iosPort: 7880,
+  iosCaPort: 7881,
   // false removes the shutdown/restart/sleep/... actions from the API entirely
   powerControls: true,
   // the header's play/pause button for whatever is playing. It keeps the media helper running (~90 MB); false turns it off.

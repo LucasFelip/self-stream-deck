@@ -3,7 +3,7 @@
 // src/http.js against a real local server: security headers, static file rules (no traversal, known types only), ETag/304, body limits.
 const assert = require('node:assert');
 const http = require('node:http');
-const { sendJson, serveStatic, readJson, readBuffer, isStaticPath } = require('../src/http');
+const { sendJson, serveStatic, readJson, readBuffer, isStaticPath, isPublicAsset } = require('../src/http');
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -64,6 +64,12 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.ok(isStaticPath('/js/live.js'));
       assert.ok(!isStaticPath('/api/state'));
       assert.ok(!isStaticPath('/config.json'));
+    });
+
+    await test('only the manifest, the icons and the pairing script are open without the token', async () => {
+      for (const open of ['/manifest.webmanifest', '/pair.js', '/icons/icon-192.png', '/icons/apple-touch-icon.png']) assert.ok(isPublicAsset(open), open);
+      for (const closed of ['/', '/app.js', '/deck.js', '/pair.html', '/icons/', '/icons/a/b.png', '/icons/../deck.js', '/icons/x.svg', '/api/state', '/manifest.webmanifest/x']) assert.ok(!isPublicAsset(closed), closed);
+      assert.ok(isStaticPath('/manifest.webmanifest'), 'and the manifest is a known file type');
     });
 
     await test('readJson parses a body, treats an empty one as {}, and rejects invalid JSON with 400', async () => {

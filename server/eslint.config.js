@@ -8,7 +8,7 @@ module.exports = [
   js.configs.recommended,
   {
     // the server and the tests: Node, CommonJS
-    files: ['src/**/*.js', 'test/**/*.js', 'eslint.config.js'],
+    files: ['src/**/*.js', 'test/**/*.js', 'scripts/**/*.js', 'eslint.config.js'],
     languageOptions: { sourceType: 'commonjs', ecmaVersion: 2023, globals: globals.node },
     rules: {
       // an ignored error must say why (a comment inside the block) so nothing disappears without a trace

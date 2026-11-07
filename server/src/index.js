@@ -5,7 +5,7 @@ const https = require('node:https');
 const { load } = require('./config');
 const { createGuard } = require('./security');
 const { createRoutes } = require('./routes');
-const { sendJson, serveStatic, isStaticPath } = require('./http');
+const { sendJson, serveStatic, isStaticPath, isPublicAsset } = require('./http');
 const system = require('./system');
 const media = require('./media');
 const notifications = require('./notifications');
@@ -14,6 +14,8 @@ const camera = require('./camera');
 const vcam = require('./vcam');
 const events = require('./events');
 const tls = require('./tls');
+const tlsIos = require('./tls-ios');
+const ios = require('./ios');
 const firewall = require('./firewall');
 const { homeAddresses } = require('./addresses');
 
@@ -32,7 +34,18 @@ async function handle(req, res) {
   if (!guard.isAllowedHost(req.headers.host)) return sendJson(res, 421, { error: 'unexpected host' });
   if (guard.isLockedOut(ip)) return sendJson(res, 429, { error: 'too many attempts, try again in a minute' });
 
+  // the manifest, icons and the pairing page's script hold nothing private (see http.js)
+  if (req.method === 'GET' && isPublicAsset(url.pathname)) return serveStatic(req, res, url.pathname);
+
   if (!guard.isAuthenticated(req, url)) {
+    // A browser opening the deck without a (valid) token gets the pairing page instead of a bare 401: a Home Screen app on iPhone
+    // keeps its cookies apart from Safari, so it has to be paired once. Only a wrong token counts as a failed attempt.
+    if (req.method === 'GET' && url.pathname === '/' && String(req.headers.accept || '').includes('text/html')) {
+      if (!url.searchParams.has('token')) return serveStatic(req, res, '/pair.html');
+      guard.recordFailure(ip);
+      res.writeHead(302, { Location: '/?error=1' });
+      return res.end();
+    }
     guard.recordFailure(ip);
     return sendJson(res, 401, { error: 'unauthorized' });
   }
@@ -116,6 +129,48 @@ async function startLan() {
   }
 }
 
+// iPhone (Safari): HTTPS on iosPort with this PC's names and addresses in the certificate (Safari checks them; the authority that
+// signed it is installed on the iPhone once), and a plain-HTTP port that only hands out that authority's PUBLIC certificate.
+// The addresses are looked at again every few minutes: when they change the certificate is made again and swapped in live.
+async function startIos() {
+  if (!config.ios) return;
+  try {
+    let material = await tlsIos.ensure();
+    const secure = harden(https.createServer({ pfx: material.pfx, passphrase: material.passphrase, minVersion: 'TLSv1.2' }, onRequest));
+    secure.on('clientError', () => {});
+    const caServer = ios.createCaServer(() => material);
+    for (const [instance, port] of [[secure, config.iosPort], [caServer, config.iosCaPort]]) {
+      await new Promise((resolve, reject) => {
+        instance.once('error', reject);
+        instance.listen(port, '0.0.0.0', resolve);
+      });
+    }
+    firewall.ensure([config.iosPort, config.iosCaPort], firewall.RULE_IOS);
+
+    setInterval(async () => {
+      try {
+        const next = await tlsIos.ensure();
+        if (JSON.stringify(next.covered) === JSON.stringify(material.covered)) return;
+        secure.setSecureContext({ pfx: next.pfx, passphrase: next.passphrase });
+        material = next;
+        console.log('[tls-ios] the PC addresses changed: new certificate in use');
+      } catch (err) {
+        console.error(`[tls-ios] could not refresh the certificate: ${err.message}`);
+      }
+    }, 5 * 60_000).unref();
+
+    const shown = ios.links(config);
+    console.log(`
+For an iPhone (Safari):
+  1. install the certificate once (fingerprint ${material.caFingerprint}):`);
+    for (const link of shown.install) console.log(`       ${link}`);
+    console.log('  2. open the deck:');
+    for (const link of shown.pair) console.log(`       ${link}`);
+  } catch (err) {
+    console.error(`[ios] could not start the iPhone server: ${err.message}`);
+  }
+}
+
 // Says why the server stopped: a silent exit is what made "the phone shows no connection" hard to explain.
 function shutdown(signal) {
   console.log(`[server] stopping (${signal})`);
@@ -158,6 +213,7 @@ server.listen(config.port, '127.0.0.1', async () => {
     .catch((err) => console.error(`Could not read the taskbar: ${err.message}`));
 
   const links = await startLan();
+  await startIos();
 
   if (process.argv.includes('--phone') || config.autoOpenPhone) {
     console.log('');

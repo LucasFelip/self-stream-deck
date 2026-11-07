@@ -18,7 +18,7 @@ Como o self-stream-deck funciona por dentro. Para usar o painel, veja o [README]
 | `server/src/routes/` | As rotas, um arquivo por assunto (`apps`, `shortcuts`, `macros`, `editor`, `audio`, `media`, `pc`, `windows`, `camera`, `events`). `context.js` guarda o estado compartilhado; `index.js` monta a tabela e despacha. |
 | `server/public/` | A interface web servida pelo próprio servidor (mudar a interface não exige recompilar o APK). |
 | `server/native/` | O C# dos helpers nativos (um só `ssd-helper.exe`). |
-| `server/scripts/` | Os mesmos helpers em PowerShell (plano B), mais `taskbar.ps1`, `tls-cert.ps1` e `autostart.ps1`. |
+| `server/scripts/` | Os mesmos helpers em PowerShell (plano B), mais `taskbar.ps1`, `tls-cert.ps1`, `tls-ios.ps1` (AC e certificado do iPhone) e `autostart.ps1`; `make-icons.js` redesenha os ícones de `public/icons/`. |
 | `server/test/` | Testes (veja abaixo). |
 | `server/data/` | Dados da máquina, fora do git: `config.json` (token), `config.json.bak`, `bin/`, `cache/`, `icons/`, `tls/`, `vcam/`, `server.log`. |
 
@@ -126,7 +126,22 @@ nunca guardando variável de outro. `header.js` precisa vir depois das páginas 
 ## Wi-Fi e segurança de rede
 
 HTTP só em `127.0.0.1`; o Wi-Fi é HTTPS em outra porta, com certificado próprio que o app **fixa pela impressão digital SHA-256**, e uma regra de firewall só para a
-sub-rede local. Token obrigatório em tudo; `Host` validado; `POST` de outra origem recusado; 10 falhas bloqueiam o IP por 1 minuto. Detalhes de uso no README.
+sub-rede local. Token obrigatório em tudo; `Host` validado (IP, `localhost`, o nome do PC e `nome.local`); `POST` de outra origem recusado; 10 falhas bloqueiam o IP por 1 minuto. Detalhes de uso no README.
+
+### iPhone (Safari / PWA)
+
+O Safari valida os nomes do certificado, então o iPhone não usa o certificado fixado do Android. `tls-ios.js` (e `scripts/tls-ios.ps1`) mantém, em `data/tls/ios/`, uma **AC local**
+(`ca.pfx`/`ca.cer`, 10 anos, instalada uma vez no iPhone) e uma **folha** (`leaf.pfx`/`leaf.cer`, 1 ano, SAN = nome do PC, `nome.local`, `localhost` e os `homeAddresses()`, EKU serverAuth).
+`ensure()` refaz só a folha quando os IPs mudam ou faltam 30 dias; `index.js` (`startIos`) confere a cada 5 min e troca o contexto TLS ao vivo (`setSecureContext`), sem reiniciar. O script
+remove da loja do usuário as chaves **e** a cópia pública da AC que o Windows põe em "Autoridades Intermediárias" (o Node trata essa loja como confiável, o que esconderia erros de verificação).
+Duas portas: `iosPort` (HTTPS, a mesma `onRequest` do deck) e `iosCaPort` (HTTP simples, `ios.js`: só `GET /ca.cer` e uma página com a impressão digital da AC; nada de segredo, sem token).
+Regra de firewall própria (`RULE_IOS`, as duas portas, `LocalSubnet`); `firewall.ensure(portas, regra)`.
+
+Front-end: `manifest.webmanifest` e ícones (`public/icons/`) mais as metas `apple-mobile-web-app-*` no `index.html` dão a Tela de Início em tela cheia. `http.js` (`isPublicAsset`) libera sem token só
+o manifest, os ícones e o `pair.js`, porque o Safari os pede sem cookie. Sem token, um navegador que abre `/` recebe `pair.html` (`index.js`; token errado conta como falha e volta com `?error=1`),
+porque o app da Tela de Início guarda cookies separados do Safari: o código vem de `GET /api/pair-code` (`routes/pairing.js`), copiado pelo item de menu "Código de pareamento" de `js/pairing.js` (só no iOS, `Deck.isIOS`).
+`connection.js` pede a Wake Lock de novo ao ser solta ou no primeiro toque; `deck.js` faz o háptico no iOS virando um `<input switch>` escondido (iOS 18+). Testes: `ios.test.js` (AC, folha, troca de IP, porta do certificado, nada
+sobra na loja), `http.test.js`, `routes.test.js`, e os de UI com o UA do iPhone e os viewports 390x844 e 844x390.
 
 ## Câmera
 

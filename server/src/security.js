@@ -60,7 +60,7 @@ function createGuard(config) {
   // this machine's name, so any other Host header is refused.
   const isAllowedHost = (hostHeader = '') => {
     const host = hostHeader.toLowerCase().replace(/:\d+$/, '');
-    return /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host === 'localhost' || host === '[::1]' || host === machineName;
+    return /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host === 'localhost' || host === '[::1]' || host === machineName || host === `${machineName}.local`;
   };
 
   // Browsers attach Origin to cross-site requests; a page on another site must not drive the deck.

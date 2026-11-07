@@ -125,11 +125,39 @@ npm run lan -- status    # mostra a regra de firewall, a impressão digital do c
 - **IP do PC:** reserve o IP no roteador (DHCP fixo) para o endereço não mudar; se mudar, plugue o celular de novo (ou cole o novo link).
 - `npm run lan -- off` desliga e remove a regra de firewall.
 
+### Abrir no iPhone (Safari / app na Tela de Início)
+
+O iPhone não tem o app Android (nem `adb reverse`): ele abre o painel no **Safari** pelo Wi-Fi e pode virar um app em tela cheia na Tela de Início.
+Serve o iOS que roda o Safari com HTTPS (Wake Lock a partir do 16.4; o toque de háptico, a partir do 18).
+
+```powershell
+cd server
+npm run lan -- ios on       # liga (config.json: "ios": true); reinicie o servidor
+npm run lan -- ios          # mostra os links e os passos abaixo (e confere o certificado)
+```
+
+1. **Instale o certificado uma vez.** No Safari do iPhone abra `http://IP-DO-PC:7881/` (ou o `nome-do-pc.local`), confira a impressão digital da página com a
+   do comando acima, toque em *Baixar certificado*, depois *Ajustes → Perfil Baixado → Instalar* e *Ajustes → Geral → Sobre → Ajustes de Confiança do
+   Certificado* → ativar. Esse certificado é só a **autoridade** (AC) do deck: ele não muda quando o IP do PC muda.
+2. **Abra o painel:** `https://IP-DO-PC:7880/?token=…` (o link aparece no comando). Aceite o aviso de *Rede Local*. Depois, *Compartilhar → Adicionar à Tela de Início*.
+3. **Se o app da Tela de Início pedir o código** (ele guarda cookies separados do Safari): no Safari abra ⚙ → *Código de pareamento* (copia o código), abra o
+   app e cole na tela de pareamento (vale também colar o link inteiro).
+
+Como funciona: o Safari confere os nomes dentro do certificado, ao contrário do app Android (que fixa a impressão digital). Por isso o iPhone tem **a sua
+própria porta HTTPS** (`iosPort`, 7880) com um certificado de 1 ano que lista o nome do PC, `nome.local` e os IPs atuais, assinado por uma AC local criada na
+primeira vez em `server/data/tls/ios/`. Quando os IPs mudam, o servidor gera outro certificado sozinho (a cada 5 min ele confere) **sem exigir nada no iPhone**. A porta
+HTTP `7881` (`iosCaPort`) só entrega o certificado público da AC, sem token; a chave privada nunca sai da pasta. A regra de firewall "Self Stream Deck (iPhone)" libera só essas
+duas portas, só para a sub-rede local. O Android e a porta 7879 não mudam. `npm run lan -- ios off` desliga e remove a regra.
+
+Limites no iPhone: sem vibração do navegador (o háptico usa um truque do iOS 18); a tela só fica ligada com a Wake Lock; o escurecimento (⚙ → *Escurecer após…*) é um véu preto,
+sem baixar o brilho. USB: não há equivalente ao `adb reverse`; use o Wi-Fi (ou o *Acesso Pessoal* por USB, com o Apple Devices/iTunes no Windows).
+
 ### Segurança
 
 - **Por padrão só escuta em `127.0.0.1`** (PC e USB). O Wi-Fi é opcional (`npm run lan -- on`) e usa **HTTPS** com certificado fixado pelo app,
   numa porta separada e com firewall só para a sub-rede local; quem estiver na rede ainda precisa do token para controlar o PC.
-- Toda requisição exige o token (cookie, header `x-token` ou `?token=`); 10 falhas bloqueiam o IP por 1 min.
+- Toda requisição exige o token (cookie, header `x-token` ou `?token=`); 10 falhas bloqueiam o IP por 1 min. Só o manifest, os ícones e o `pair.js` abrem sem token
+  (nada privado), e quem abre `/` sem token no navegador vê a página de pareamento, não um erro. A porta HTTP do iPhone (7881) serve apenas o certificado público da AC.
 - Cabeçalho `Host` é validado (contra DNS rebinding) e `POST` de outra origem é recusado.
 - O cliente só dispara o que está nas listas do servidor, por id: apps da barra de tarefas, atalhos do
   `config.json`, dispositivos de áudio existentes. Nunca caminhos ou teclas arbitrárias.
@@ -141,6 +169,8 @@ npm run lan -- status    # mostra a regra de firewall, a impressão digital do c
 | `port` | Porta (padrão `7878`; `SSD_PORT` sobrescreve só naquela execução). |
 | `lan` | `true` liga o acesso pelo Wi-Fi (HTTPS na `httpsPort`, padrão 7879). Use `npm run lan -- on/off/status`. Padrão `false`. |
 | `httpsPort` | Porta do HTTPS da rede local (padrão `7879`). |
+| `ios` | `true` liga o acesso do iPhone (HTTPS na `iosPort`, padrão 7880, e a porta HTTP `iosCaPort`, padrão 7881, que só entrega o certificado da AC). Use `npm run lan -- ios on/off`. Padrão `false`. |
+| `iosPort` / `iosCaPort` | Portas do iPhone (padrão `7880` e `7881`). |
 | `hidden` | Ids de apps a esconder (veja `GET /api/apps`). |
 | `editor` | `false` desliga o editor de botões do app (atalhos, macros e apps só mudam aqui no arquivo). Padrão: `true`. |
 | `macros` | Macros criadas no editor: `{ id, label, page, steps }` (veja "Editor de botões e macros"). |

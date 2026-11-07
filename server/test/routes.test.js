@@ -81,6 +81,12 @@ const names = () => calls.map((call) => call[0]);
 (async () => {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   try {
+    await test('pair-code hands the pairing token to an authenticated browser (the route table is behind the token check)', async () => {
+      const res = await request('GET', '/api/pair-code');
+      assert.strictEqual(res.status, 200);
+      assert.deepStrictEqual(res.json, { code: 't' });
+    });
+
     await test('apps lists the visible taskbar apps only; unknown routes fall through', async () => {
       const { json } = await request('GET', '/api/apps');
       assert.deepStrictEqual(json.apps.map((a) => a.id), ['aaaaaaaa', 'bbbbbbbb']);

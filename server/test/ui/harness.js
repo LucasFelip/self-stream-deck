@@ -95,6 +95,7 @@ async function fakeDeck() {
     if (key === 'GET /api/macros') return sendJson(res, 200, { macros: [] });
     if (key === 'GET /api/editor') return sendJson(res, 200, { shortcuts, macros: [], apps: model.apps.map((app) => ({ ...app, hidden: false, canPlace: true })), devices: { playback: [], capture: [] }, screens: 1 });
     if (key === 'GET /api/layout') return sendJson(res, 200, model.layout);
+    if (key === 'GET /api/pair-code') return sendJson(res, 200, { code: 'codigo-de-teste' });
     if (key === 'POST /api/layout') {
       model.layout = { ...model.layout, [body.page]: body.order };
       return sendJson(res, 200, model.layout);
@@ -145,10 +146,32 @@ async function fakeDeck() {
   return { model, url: `http://127.0.0.1:${server.address().port}`, close: () => server.close() };
 }
 
+/** Removes profiles (and the browsers still using them) left by an earlier run that was killed before it could clean up. */
+function sweepStaleProfiles(maxAgeMs = 10 * 60 * 1000) {
+  const stale = [];
+  try {
+    for (const entry of fs.readdirSync(os.tmpdir(), { withFileTypes: true })) {
+      if (!entry.isDirectory() || !entry.name.startsWith('ssd-ui-')) continue;
+      const dir = path.join(os.tmpdir(), entry.name);
+      try { if (Date.now() - fs.statSync(dir).mtimeMs > maxAgeMs) stale.push(dir); } catch { /* gone already */ }
+    }
+  } catch { return; }
+  if (!stale.length) return;
+  if (process.platform === 'win32') {
+    const names = stale.map((dir) => `'*${path.basename(dir)}*'`).join(',');
+    const script = `$n = @(${names}); Get-CimInstance Win32_Process | Where-Object { $c = $_.CommandLine; $c -and ($n | Where-Object { $c -like $_ }) } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
+    spawnSync('powershell', ['-NoProfile', '-Command', script], { stdio: 'ignore' });
+  }
+  for (const dir of stale) {
+    try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); } catch { /* still locked */ }
+  }
+}
+
 /** Starts the browser, returns { open(url) -> page, close() }. A page has eval, click, touch helpers, waitFor, errors. */
 async function launchBrowser({ width = 412, height = 915 } = {}) {
   const exe = findBrowser();
   if (!exe) return null;
+  sweepStaleProfiles();
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'ssd-ui-'));
   const proc = spawn(exe, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--disable-gpu', '--disable-extensions', '--mute-audio', 'about:blank'], { stdio: 'ignore' });
 

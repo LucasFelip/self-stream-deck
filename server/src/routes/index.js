@@ -7,7 +7,7 @@ const { sendJson } = require('../http');
 const { createContext } = require('./context');
 const { log } = require('../log');
 
-const MODULES = ['apps', 'shortcuts', 'macros', 'editor', 'audio', 'media', 'pc', 'windows', 'camera', 'events'];
+const MODULES = ['apps', 'shortcuts', 'macros', 'editor', 'audio', 'media', 'pc', 'windows', 'camera', 'pairing', 'events'];
 
 function createRoutes(config, overrides = {}) {
   const ctx = createContext(config, overrides);

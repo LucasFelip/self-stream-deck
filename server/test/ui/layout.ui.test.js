@@ -21,6 +21,9 @@ const VIEWPORTS = [
   { name: 'paisagem', width: 836, height: 387, landscape: true },
   { name: 'retrato', width: 411, height: 914, landscape: false },
   { name: 'retrato estreito', width: 360, height: 740, landscape: false },
+  // iPhone 12 (Safari / Home Screen app): 390x844 upright, 844x390 on its side
+  { name: 'iphone retrato', width: 390, height: 844, landscape: false },
+  { name: 'iphone paisagem', width: 844, height: 390, landscape: true },
 ];
 const SECTIONS = ['apps', 'shortcuts', 'windows', 'sound', 'pc', 'power'];
 const TOUCH = 48;

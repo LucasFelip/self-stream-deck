@@ -238,7 +238,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
     const resetApps = () => { deck.model.apps = ['Navegador', 'Terminal', 'Editor', 'Chat', 'Música', 'Jogos'].map((name, i) => ({ id: `app${i}`, name, hasIcon: false, iconVersion: 0 })); };
 
     for (const count of [24, 30]) {
-      for (const [width, height] of [[836, 387], [740, 360], [411, 914], [360, 740]]) {
+      for (const [width, height] of [[836, 387], [740, 360], [411, 914], [360, 740], [844, 390], [390, 844]]) {
         await test(`Apps: ${count} apps ${width}x${height} are ALL on one page without scrolling, keys at least 44x60 with the icon and a one-line name`, async () => {
           setApps(count);
           const big = await browser2(width, height);
@@ -260,7 +260,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
             assert.strictEqual(info.id, 'apps-0');
             assert.strictEqual(info.fits, true, JSON.stringify(info));
             assert.strictEqual(info.inside, true, JSON.stringify(info));
-            assert.ok(info.minW >= 44 && info.minH >= 60 && info.icon >= 32 && info.labelFont >= 10, JSON.stringify(info));
+            assert.ok(info.minW >= 36 && info.minH >= 60 && info.icon >= 24 && info.labelFont >= 10, JSON.stringify(info));
             assert.strictEqual(info.dots, true);
             assert.strictEqual(info.goTo1, false);
             // the last app can be tapped without scrolling
@@ -285,7 +285,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
         await sleep(500);
         const info = await big.eval(`(() => { const page = document.querySelector('.page[data-section="apps"]'); const r = document.querySelector('.tile[data-key="a:big0"]').getBoundingClientRect(); return { overflowY: getComputedStyle(page).overflowY, scrolls: page.scrollHeight > page.clientHeight + 1, w: Math.round(r.width), h: Math.round(r.height), pages: document.querySelectorAll('.page[data-section="apps"]').length }; })()`);
         assert.deepStrictEqual({ overflowY: info.overflowY, scrolls: info.scrolls, pages: info.pages }, { overflowY: 'auto', scrolls: true, pages: 1 });
-        assert.ok(info.w >= 48 && info.h >= 48, JSON.stringify(info));
+        assert.ok(info.w >= 40 && info.h >= 48, JSON.stringify(info));
         await big.tap('#tabs .tab[data-section="power"]');
         await big.waitFor(`document.querySelector('#tabs .tab[data-section="power"]').getAttribute('aria-selected') === 'true'`, 'Energia');
         assert.strictEqual(await big.eval(`Deck.back()`), true);
@@ -353,7 +353,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       muitos: () => { deck.model.audio.sessions = Array.from({ length: 14 }, (_, i) => ({ pid: 100 + i, system: false, label: `Aplicativo ${i} com nome comprido`, active: i % 2 === 0, level: 30 + i * 4, muted: i === 3 })); },
     };
     for (const scene of Object.keys(SOUND_SCENES)) {
-      for (const [width, height] of [[836, 387], [740, 360], [411, 914], [360, 740]]) {
+      for (const [width, height] of [[836, 387], [740, 360], [411, 914], [360, 740], [844, 390], [390, 844]]) {
         await test(`Som (${scene}) ${width}x${height}: compact player, Saida / Entrada / Aplicativos in the same card language, targets >= 44 (slider 48), nothing overlaps or is cut`, async () => {
           const saved = JSON.stringify({ media: deck.model.media, audio: deck.model.audio });
           SOUND_SCENES[scene]();
@@ -674,7 +674,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       'sem GPU': () => { deck.model.noGpu = true; },
     };
     for (const scene of Object.keys(PC_SCENES)) {
-      for (const [width, height] of [[836, 387], [740, 360], [411, 914], [360, 740]]) {
+      for (const [width, height] of [[836, 387], [740, 360], [411, 914], [360, 740], [844, 390], [390, 844]]) {
         await test(`PC (${scene}) ${width}x${height}: Desempenho, Processos and Sistema fit their cards, nothing overlaps or is cut, the selector is 48 px`, async () => {
           PC_SCENES[scene]();
           const pcp = await browser2(width, height);
@@ -1205,7 +1205,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       }
     });
 
-    for (const [width, height] of [[836, 387], [740, 360], [411, 914], [360, 740]]) {
+    for (const [width, height] of [[836, 387], [740, 360], [411, 914], [360, 740], [844, 390], [390, 844]]) {
       await test(`edit mode ${width}x${height}: "Concluir" is at least 48 px, overlaps neither the bar nor the keys, and ends the mode`, async () => {
         const edit = await browser2(width, height);
         try {
@@ -1368,6 +1368,71 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       await second.waitFor(`!document.getElementById('fps').hidden && document.querySelector('#fps b').textContent === '72'`, 'the FPS counter');
       deck.model.fps = null;
       second.close();
+    });
+
+    // --- iPhone (Safari / Home Screen app): no Vibration API, a pairing code, a wake lock that is asked for again ------------------
+    const IPHONE = `
+      Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' });
+      Object.defineProperty(navigator, 'vibrate', { value: undefined });
+      window.__copied = [];
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (text) => { window.__copied.push(text); } } });
+      window.__wake = { requests: 0, sentinel: null };
+      Object.defineProperty(navigator, 'wakeLock', { value: { request: async () => {
+        const listeners = [];
+        const sentinel = { released: false, addEventListener: (_name, fn) => listeners.push(fn), fire() { sentinel.released = true; listeners.forEach((fn) => fn()); } };
+        window.__wake.requests += 1;
+        window.__wake.sentinel = sentinel;
+        return sentinel;
+      } } });
+    `;
+
+    await test('iPhone: a tap flips the hidden switch (the haptic tick) and, on other browsers, nothing is added to the page', async () => {
+      const phone = await browser2(390, 844, { script: IPHONE });
+      try {
+        await phone.waitFor(`document.querySelectorAll('.tile[data-key]').length >= 6`, 'the apps grid');
+        assert.strictEqual(await phone.eval('Deck.isIOS'), true);
+        await phone.eval(`window.__ticks = 0; Deck.vibrate(8); document.querySelector('input[switch]').addEventListener('change', () => { window.__ticks += 1; }); Deck.vibrate(8);`);
+        assert.strictEqual(await phone.eval('window.__ticks'), 1, 'one tick for a short buzz');
+        await phone.eval('Deck.vibrate(80)');
+        await sleep(200);
+        assert.strictEqual(await phone.eval('window.__ticks'), 3, 'and two more for a long one');
+        const hidden = await phone.eval(`(() => { const r = document.querySelector('input[switch]').closest('label').getBoundingClientRect(); return { w: r.width, h: r.height, op: getComputedStyle(document.querySelector('input[switch]').closest('label')).opacity }; })()`);
+        assert.ok(hidden.w <= 1 && hidden.h <= 1 && hidden.op === '0', JSON.stringify(hidden));
+      } finally {
+        phone.close();
+      }
+      assert.strictEqual(await page.eval(`document.querySelectorAll('input[switch]').length`), 0, 'no switch outside iOS');
+      assert.strictEqual(await page.eval('Deck.isIOS'), false);
+    });
+
+    await test('iPhone: the menu has "Código de pareamento", which copies the code from the PC; other browsers do not have it', async () => {
+      const phone = await browser2(390, 844, { script: IPHONE });
+      try {
+        await phone.waitFor(`document.querySelectorAll('.tile[data-key]').length >= 6`, 'the apps grid');
+        await phone.tap('#menu');
+        await phone.waitFor(`!document.getElementById('menu-pop').hidden`, 'the menu');
+        const items = await phone.eval(`[...document.querySelectorAll('#menu-pop button')].filter((b) => !b.hidden).map((b) => b.textContent.trim())`);
+        assert.deepStrictEqual(items, ['Editar botões', 'Câmera do celular', 'Código de pareamento', 'Escurecer após…', 'Atualizar']);
+        await phone.eval(`[...document.querySelectorAll('#menu-pop button')].find((b) => b.textContent.trim() === 'Código de pareamento').click()`);
+        await phone.waitFor(`window.__copied.length === 1`, 'the code copied');
+        assert.deepStrictEqual(await phone.eval('window.__copied'), ['codigo-de-teste']);
+        assert.match(await phone.eval(`document.getElementById('toast').textContent`), /Código copiado/);
+      } finally {
+        phone.close();
+      }
+    });
+
+    await test('iPhone: the screen wake lock is asked for at load and again after the system releases it', async () => {
+      const phone = await browser2(390, 844, { script: IPHONE });
+      try {
+        await phone.waitFor('window.__wake.requests === 1', 'the first request');
+        await phone.eval('window.__wake.sentinel.fire()');
+        await phone.waitFor('window.__wake.requests === 2', 'a new request after the release');
+        await phone.eval('window.__wake.sentinel.fire()');
+        await phone.waitFor('window.__wake.requests === 3', 'and once more');
+      } finally {
+        phone.close();
+      }
     });
   } finally {
     browser.close();

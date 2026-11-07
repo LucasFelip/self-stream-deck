@@ -131,6 +131,7 @@
     const text = document.createElement('span');
     text.textContent = item.label;
     tile.append(item.visual(), text);
+    if (item.appId) tile.setAttribute('aria-label', item.label);
 
     tile.addEventListener('click', () => {
       if (Deck.arrange.justDropped) return; // the touch that ended a drag is not a tap

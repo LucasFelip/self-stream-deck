@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#0b0c10">
   <meta name="color-scheme" content="dark">
+  <!-- Home Screen app (iPhone: Share > Add to Home Screen; Android Chrome too): full screen, no browser bar. The manifest is fetched
+       with the pairing cookie, and it and the icons are also open without it (http.js), because Safari asks for them cookie-less. -->
+  <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Deck">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Self Stream Deck</title>
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/pages.css">
@@ -71,6 +79,7 @@
   <script src="/js/game.js"></script>
   <script src="/js/power.js"></script>
   <script src="/js/idle.js"></script>
+  <script src="/js/pairing.js"></script>
   <script src="/js/notifications.js"></script>
   <script src="/js/camera.js"></script>
   <script src="/js/editor.js"></script>

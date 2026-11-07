@@ -41,7 +41,11 @@
   const FIT_GAP = 8;
   const FIT_MIN_W = 44;
   const FIT_MIN_H = 60;
-  function appsLayout(count, base) {
+  const APPS_COLS = 7;
+  const APPS_ROWS = 3;
+  // Upright (portrait) the fixed 7 x 3 grid below would make tall slivers (47 x 258 px on a 411 x 914 screen), so there the grid follows the
+  // screen: the normal grid when every key fits, otherwise the column count that gives the biggest keys (the smaller side of a key counts).
+  function appsLayoutUpright(count, base) {
     const need = count + 1; // the free slot after the last key is the "+" of edit mode
     if (need <= base.cols * base.rows) return { mode: 'normal', cols: base.cols, rows: base.rows, icon: base.icon };
     let best = null;
@@ -55,8 +59,20 @@
     if (best.w >= FIT_MIN_W && best.h >= FIT_MIN_H) {
       return { mode: 'fit', cols: best.cols, rows: best.rows, icon: Math.max(32, Math.min(64, best.w - 12, best.h - 28)), w: Math.floor(best.w), h: Math.floor(best.h) };
     }
-    const rows = Math.max(base.rows, Math.ceil(need / base.cols));
-    return { mode: 'scroll', cols: base.cols, rows, icon: base.icon };
+    return { mode: 'scroll', cols: base.cols, rows: Math.max(base.rows, Math.ceil(need / base.cols)), icon: base.icon };
+  }
+
+  function appsLayout(count, base) {
+    if (!vertical()) return appsLayoutUpright(count, base);
+    // landscape: fixed 7 columns x 3 rows; more keys than that add rows (the "+" free slot of edit mode needs one of them, so it only shows while there is room)
+    const cols = APPS_COLS;
+    const rows = Math.max(APPS_ROWS, Math.ceil(count / cols));
+    const w = (base.width - (cols - 1) * FIT_GAP) / cols;
+    const h = (base.height - (rows - 1) * FIT_GAP) / rows;
+    if (w >= FIT_MIN_W && h >= FIT_MIN_H) {
+      return { mode: 'fit', cols, rows, icon: Math.max(24, Math.min(64, w - 12, h - 28)), w: Math.floor(w), h: Math.floor(h) };
+    }
+    return { mode: 'scroll', cols, rows, icon: Math.max(24, Math.min(base.icon, w - 12)) };
   }
   const appsLayoutNow = () => appsLayout(Deck.tiles.sections.apps.items.length, measure());
 

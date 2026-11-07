@@ -61,6 +61,8 @@ test('only IPs, localhost and this machine name are valid Host headers (DNS rebi
   assert.ok(guard.isAllowedHost('localhost:7878'));
   assert.ok(guard.isAllowedHost('[::1]:7878'));
   assert.ok(guard.isAllowedHost(`${os.hostname().toUpperCase()}:7878`));
+  assert.ok(guard.isAllowedHost(`${os.hostname().toUpperCase()}.local:7880`));
+  assert.ok(!guard.isAllowedHost('evil.local'));
   assert.ok(!guard.isAllowedHost('evil.example.com'));
   assert.ok(!guard.isAllowedHost('evil.example.com:7878'));
   assert.ok(!guard.isAllowedHost(undefined));

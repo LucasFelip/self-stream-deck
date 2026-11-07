@@ -33,6 +33,9 @@ html, body {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation; /* no double-tap zoom or tap delay (iOS Safari ignores user-scalable=no) */
+  overscroll-behavior: none;
 }
 
 body {
@@ -148,7 +151,7 @@ body {
   .nav-end { right: calc(4px + var(--safe-right)); }
   /* the menu is a bottom sheet over the bar: full width, rounded top, a grabber to drag them down */
   .menu { left: 0; right: 0; bottom: calc(var(--bar-h) + var(--safe-bottom)); border-bottom: 0; border-radius: 18px 18px 0 0; animation: sheet-up 0.18s ease; }
-  .menu { max-height: calc(100vh - var(--bar-h) - var(--safe-top) - var(--safe-bottom) - 56px); padding: 0 calc(12px + var(--safe-right)) 12px calc(12px + var(--safe-left)); }
+  .menu { max-height: calc(100vh - var(--bar-h) - var(--safe-top) - var(--safe-bottom) - 56px); max-height: calc(100dvh - var(--bar-h) - var(--safe-top) - var(--safe-bottom) - 56px); padding: 0 calc(12px + var(--safe-right)) 12px calc(12px + var(--safe-left)); }
   .menu > .grip { display: flex; justify-content: center; padding: 10px 0 6px; touch-action: none; }
   .grip i { width: 40px; height: 4px; border-radius: 2px; background: var(--muted); opacity: 0.5; }
   .menu-host { touch-action: none; }
@@ -167,6 +170,7 @@ body {
   min-width: 220px;
   /* never taller than the screen (8 px of air from the edges): scrolls inside instead of running off */
   max-height: calc(100vh - var(--safe-top) - var(--safe-bottom) - 16px);
+  max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 16px);
   overflow-y: auto;
   padding: 6px;
   border: 1px solid var(--border);
@@ -314,6 +318,9 @@ body[data-state="offline"] .offline { display: flex; }
   text-align: center;
   overflow-wrap: break-word;
 }
+/* app keys (and the camera key) are the icon alone: the name is only for screen readers, see makeTile */
+.tile[data-app-id] > span { display: none !important; }
+.tile[data-app-id] { gap: 0; padding: 8px 6px; }
 .tile span {
   display: -webkit-box;
   flex: none;

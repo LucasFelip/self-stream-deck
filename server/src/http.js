@@ -13,6 +13,7 @@ const TYPES = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.ico': 'image/x-icon',
+  '.webmanifest': 'application/manifest+json',
 };
 
 // Sent with every response: the page only ever loads its own files, cannot be framed, and nothing is sniffed or leaked.
@@ -136,4 +137,9 @@ function isStaticPath(pathname) {
   return pathname === '/' || Boolean(TYPES[path.extname(pathname).toLowerCase()]);
 }
 
-module.exports = { sendJson, sendBuffer, sendFile, serveStatic, readJson, readBuffer, isStaticPath, uiVersion };
+// Files a browser fetches without the pairing token and that hold nothing private: the app manifest and icons (Safari asks for them
+// without cookies when it adds the deck to the Home Screen) and the pairing page's script. Everything else needs the token.
+const PUBLIC_ASSET = /^\/(manifest\.webmanifest|pair\.js|icons\/[\w-]+\.png)$/;
+const isPublicAsset = (pathname) => PUBLIC_ASSET.test(pathname);
+
+module.exports = { isPublicAsset, sendJson, sendBuffer, sendFile, serveStatic, readJson, readBuffer, isStaticPath, uiVersion };
