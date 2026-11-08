@@ -4,6 +4,7 @@ import { PendingPage } from './features/pending/PendingPage';
 import { PcPage } from './features/pc/PcPage';
 import { PowerPage } from './features/power/PowerPage';
 import { SoundPage } from './features/sound/SoundPage';
+import { WindowsPage } from './features/windows/WindowsPage';
 import { runBack } from './lib/back';
 import { vibrate } from './lib/haptics';
 import { useConnection, useWakeLock } from './shell/connection';
@@ -39,7 +40,7 @@ function Shell() {
       pages={{
         apps: <PendingPage section="apps" />,
         shortcuts: <PendingPage section="shortcuts" />,
-        windows: <PendingPage section="windows" />,
+        windows: <WindowsPage />,
         sound: <SoundPage />,
         pc: <PcPage />,
         power: <PowerPage />,

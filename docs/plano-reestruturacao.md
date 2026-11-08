@@ -101,7 +101,7 @@ Pronto quando: o teste de contrato passa 100% no Node e falha ao quebrar de prop
 
 Pronto quando: `tools/check.js` verde e o painel roda de `legacy/server` igual a antes (verde: lint, unitários e contrato em 18 s).
 
-### Fase 2: Interface React + TypeScript (≈ 3 a 4 semanas) — **em andamento (2.1 pronta; 3 de 6 páginas)**
+### Fase 2: Interface React + TypeScript (≈ 3 a 4 semanas) — **em andamento (2.1 pronta; 4 de 6 páginas)**
 
 Backend intacto (Node). A UI nova é servida em `/v2/` ao lado da antiga (`/`), com "Interface antiga" no menu ⚙ da nova. Quando houver paridade, `/` aponta para a nova.
 Detalhes e comandos em [web/README.md](../web/README.md).
@@ -118,7 +118,7 @@ Detalhes e comandos em [web/README.md](../web/README.md).
 1. [x] **Energia** (`features/power`): teclas, linha de estado, contagem do agendamento, folha de confirmação, segurar para confirmar, atraso e forçar. 10 casos em navegador (portados da antiga + o novo "o toque do segure não clica na aba de baixo").
 2. [x] **Som** (`features/sound`): player com capa, linha do tempo contada na página entre as respostas, "Nada tocando", troca de player; Saída, Entrada e mixer com `RangeSlider` (no máximo um pedido em voo, só vale a última posição; não briga com o dedo). 24 casos em navegador: as 18 cenas de layout da antiga (tocando, vazio, 14 apps × 6 viewports) e o que cada controle envia ao PC. Build agora com 224 kB de JS (73 kB gzip).
 3. [x] **PC** (`features/pc`): Desempenho (CPU com barras por núcleo, memória, GPU, disco, rede, faixa do FPS do jogo), Processos e Sistema (armazenamento por disco físico, uptime que anda), seletor de 48 px; só o painel visível assina o fluxo / consulta o PC. Gráficos em SVG próprio (sem biblioteca). 23 casos em navegador (as 18 cenas da antiga: normal, 8 discos, sem GPU × 6 viewports) e 10 unitários das regras (níveis, histórico, caminhos do gráfico, blocos de armazenamento). O contrato ganhou `source` no FPS e os tipos de `Sistema` (armazenamento, rede, placa-mãe). `paneStore` já deixa o detector de jogo abrir Desempenho de qualquer página (falta o detector, em "Overlays e extras"). Build: 236 kB de JS (77 kB gzip).
-4. [ ] **Janelas** (`windows.js`, `geometry.js`): lista + mapa; `geometry` vira módulo puro com os testes portados para Vitest.
+4. [x] **Janelas** (`features/windows`): lista com botões de 48 px, mapa de telas a escala (arrastar para mover, até a borda para encaixar, até o topo para maximizar), painel da janela selecionada, brilho por tela, projeção, seletor Lista | Mapa em retrato. `geometry` virou módulo puro (`geometry.ts`) com os 14 testes da antiga portados e `model.ts` (layout, zonas, ordem das linhas) com mais 12. A ação muda a imagem na hora e as respostas seguintes confirmam ou corrigem; enquanto há arrasto ou ação em voo o que o PC diz não é desenhado. O mapa não se refaz no meio do gesto (os elementos são chaveados por janela, então nada é substituído sob o dedo) e o capture solto por redimensionamento é retomado. 11 casos em navegador: os da antiga (lista, seletor, seleção compartilhada, paisagem lado a lado, tocar no mapa sem redesenhar, arrastar com redimensionamento no meio, painel com 6 botões de 48 px) + borda/topo, fechar com dois toques, telas, brilho. Build: 251 kB de JS (82 kB gzip).
 5. [ ] **Apps e Atalhos** (`pager.js`, `tiles.js`, `arrange.js`, `edit.js`): grade medida, arrastar para reordenar, modo Editar.
 6. [ ] Overlays e extras: Câmera, Editor, Escurecer, notificações, pareamento, game/FPS.
 
