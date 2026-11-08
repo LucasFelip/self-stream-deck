@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { PendingPage } from './features/pending/PendingPage';
+import { Arranger } from './features/deck/Arranger';
+import { useAppsRevWatch } from './features/deck/data';
+import { AppsPage, ShortcutsPages } from './features/deck/DeckPages';
 import { PcPage } from './features/pc/PcPage';
 import { PowerPage } from './features/power/PowerPage';
 import { SoundPage } from './features/sound/SoundPage';
@@ -19,6 +21,7 @@ function Shell() {
   const [menuOpen, setMenuOpen] = useState(false);
   const connection = useConnection();
   useWakeLock();
+  useAppsRevWatch();
 
   // what MainActivity calls (the Android Back button)
   useEffect(() => {
@@ -37,18 +40,21 @@ function Shell() {
 
   return (
     <Pager
-      pages={{
-        apps: <PendingPage section="apps" />,
-        shortcuts: <PendingPage section="shortcuts" />,
-        windows: <WindowsPage />,
-        sound: <SoundPage />,
-        pc: <PcPage />,
-        power: <PowerPage />,
-      }}
+      pages={(
+        <>
+          <AppsPage />
+          <ShortcutsPages />
+          <WindowsPage />
+          <SoundPage />
+          <PcPage />
+          <PowerPage />
+        </>
+      )}
       nav={(pager) => <Nav pager={pager} menuOpen={menuOpen} onMenu={() => setMenuOpen((open) => !open)} />}
       aboveMain={<Offline connection={connection} />}
     >
       <Menu open={menuOpen} onClose={() => setMenuOpen(false)} />
+      <Arranger />
     </Pager>
   );
 }

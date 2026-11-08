@@ -90,7 +90,9 @@ async function fakeDeck() {
   const streams = new Set(); // open event streams that asked for the game topic
   const sendGame = (res) => res.write(`event: game\ndata: ${JSON.stringify(model.fps)}\n\n`);
   model.pushGame = () => { for (const res of streams) sendGame(res); };
-  const shortcuts = [{ id: 'copy', label: 'Copiar', keys: 'ctrl+c', display: 'Ctrl+C' }, { id: 'paste', label: 'Colar', keys: 'ctrl+v', display: 'Ctrl+V' }];
+  // a test can replace them (before opening a page) to get several pages of Atalhos or macros on the pages
+  model.shortcuts = [{ id: 'copy', label: 'Copiar', keys: 'ctrl+c', display: 'Ctrl+C' }, { id: 'paste', label: 'Colar', keys: 'ctrl+v', display: 'Ctrl+V' }];
+  model.macros = [];
 
   const sampleReply = () => ({
     cpu: { usage: 23, freqMHz: 4200, temp: 51, tempSource: 'fake', power: 40, processes: 210, threads: 3100, cores: [10, 20, 30, 40] },
@@ -126,9 +128,9 @@ async function fakeDeck() {
     const key = `${req.method} ${url.pathname}`;
     if (key === 'GET /api/apps') return sendJson(res, 200, { host: 'PC-TESTE', apps: model.apps });
     if (key === 'GET /api/state') return model.down ? sendJson(res, 503, { error: 'down' }) : sendJson(res, 200, model.state);
-    if (key === 'GET /api/shortcuts') return sendJson(res, 200, { shortcuts });
-    if (key === 'GET /api/macros') return sendJson(res, 200, { macros: [] });
-    if (key === 'GET /api/editor') return sendJson(res, 200, { shortcuts, macros: [], apps: model.apps.map((app) => ({ ...app, hidden: false, canPlace: true })), devices: { playback: [], capture: [] }, screens: 1 });
+    if (key === 'GET /api/shortcuts') return sendJson(res, 200, { shortcuts: model.shortcuts.map(({ id, label, display }) => ({ id, label, display })) });
+    if (key === 'GET /api/macros') return sendJson(res, 200, { macros: model.macros });
+    if (key === 'GET /api/editor') return sendJson(res, 200, { shortcuts: model.shortcuts, macros: [], apps: model.apps.map((app) => ({ ...app, hidden: false, canPlace: true })), devices: { playback: [], capture: [] }, screens: 1 });
     if (key === 'GET /api/layout') return sendJson(res, 200, model.layout);
     if (key === 'GET /api/pair-code') return sendJson(res, 200, { code: 'codigo-de-teste' });
     if (key === 'POST /api/layout') {
@@ -174,6 +176,10 @@ async function fakeDeck() {
       model.state.volume = { level: body.level ?? now.level, muted: body.muted === 'toggle' ? !now.muted : (body.muted ?? (body.level === undefined ? now.muted : false)) };
       return sendJson(res, 200, model.state.volume);
     }
+    // the answers the real agent gives (contracts/openapi.yaml), so a page that reads them is tested against the truth
+    if (req.method === 'POST' && url.pathname.startsWith('/api/launch/')) return sendJson(res, 200, { ok: true, name: model.apps.find((app) => app.id === url.pathname.split('/').pop())?.name || 'App', action: 'launched' });
+    if (req.method === 'POST' && url.pathname.startsWith('/api/shortcut/')) return sendJson(res, 200, { ok: true, label: model.shortcuts.find((item) => item.id === url.pathname.split('/').pop())?.label || '' });
+    if (req.method === 'POST' && url.pathname.startsWith('/api/macro/')) return sendJson(res, 200, { ok: true, label: 'Macro', steps: [{ type: 'volume', ok: true }], client: [] });
     if (req.method === 'POST') return sendJson(res, 200, { ok: true });
     return sendJson(res, 404, { error: 'not in the fake deck' });
   });

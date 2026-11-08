@@ -3,8 +3,3 @@
 /* React's mount point must not be a box of its own: the nav and .main are flex children of the body, as before */
 #root { display: contents; }
 
-.pending-page { display: flex; align-items: center; justify-content: center; }
-.pending-note { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px; text-align: center; color: var(--muted); }
-.pending-note b { color: var(--text); font-size: 1rem; }
-.pending-note p { margin: 0; font-size: 0.85rem; }
-.pending-link { display: inline-flex; align-items: center; min-height: 48px; padding: 0 18px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font-weight: 600; font-size: 0.85rem; text-decoration: none; }
