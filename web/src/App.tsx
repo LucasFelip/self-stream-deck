@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { PendingPage } from './features/pending/PendingPage';
+import { PcPage } from './features/pc/PcPage';
 import { PowerPage } from './features/power/PowerPage';
 import { SoundPage } from './features/sound/SoundPage';
 import { runBack } from './lib/back';
@@ -40,7 +41,7 @@ function Shell() {
         shortcuts: <PendingPage section="shortcuts" />,
         windows: <PendingPage section="windows" />,
         sound: <SoundPage />,
-        pc: <PendingPage section="pc" />,
+        pc: <PcPage />,
         power: <PowerPage />,
       }}
       nav={(pager) => <Nav pager={pager} menuOpen={menuOpen} onMenu={() => setMenuOpen((open) => !open)} />}

@@ -101,7 +101,7 @@ Pronto quando: o teste de contrato passa 100% no Node e falha ao quebrar de prop
 
 Pronto quando: `tools/check.js` verde e o painel roda de `legacy/server` igual a antes (verde: lint, unitários e contrato em 18 s).
 
-### Fase 2: Interface React + TypeScript (≈ 3 a 4 semanas) — **em andamento (2.1 pronta; 2 de 6 páginas)**
+### Fase 2: Interface React + TypeScript (≈ 3 a 4 semanas) — **em andamento (2.1 pronta; 3 de 6 páginas)**
 
 Backend intacto (Node). A UI nova é servida em `/v2/` ao lado da antiga (`/`), com "Interface antiga" no menu ⚙ da nova. Quando houver paridade, `/` aponta para a nova.
 Detalhes e comandos em [web/README.md](../web/README.md).
@@ -117,7 +117,7 @@ Detalhes e comandos em [web/README.md](../web/README.md).
 **2.2 Páginas**
 1. [x] **Energia** (`features/power`): teclas, linha de estado, contagem do agendamento, folha de confirmação, segurar para confirmar, atraso e forçar. 10 casos em navegador (portados da antiga + o novo "o toque do segure não clica na aba de baixo").
 2. [x] **Som** (`features/sound`): player com capa, linha do tempo contada na página entre as respostas, "Nada tocando", troca de player; Saída, Entrada e mixer com `RangeSlider` (no máximo um pedido em voo, só vale a última posição; não briga com o dedo). 24 casos em navegador: as 18 cenas de layout da antiga (tocando, vazio, 14 apps × 6 viewports) e o que cada controle envia ao PC. Build agora com 224 kB de JS (73 kB gzip).
-3. [ ] **PC** (`monitor.js`): Desempenho/Processos/Sistema, gráficos leves.
+3. [x] **PC** (`features/pc`): Desempenho (CPU com barras por núcleo, memória, GPU, disco, rede, faixa do FPS do jogo), Processos e Sistema (armazenamento por disco físico, uptime que anda), seletor de 48 px; só o painel visível assina o fluxo / consulta o PC. Gráficos em SVG próprio (sem biblioteca). 23 casos em navegador (as 18 cenas da antiga: normal, 8 discos, sem GPU × 6 viewports) e 10 unitários das regras (níveis, histórico, caminhos do gráfico, blocos de armazenamento). O contrato ganhou `source` no FPS e os tipos de `Sistema` (armazenamento, rede, placa-mãe). `paneStore` já deixa o detector de jogo abrir Desempenho de qualquer página (falta o detector, em "Overlays e extras"). Build: 236 kB de JS (77 kB gzip).
 4. [ ] **Janelas** (`windows.js`, `geometry.js`): lista + mapa; `geometry` vira módulo puro com os testes portados para Vitest.
 5. [ ] **Apps e Atalhos** (`pager.js`, `tiles.js`, `arrange.js`, `edit.js`): grade medida, arrastar para reordenar, modo Editar.
 6. [ ] Overlays e extras: Câmera, Editor, Escurecer, notificações, pareamento, game/FPS.

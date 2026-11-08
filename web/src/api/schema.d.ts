@@ -1197,7 +1197,14 @@ export interface components {
         GameFps: null | {
             fps: number;
             frameMs?: number;
-            app?: string;
+            /** @description the game, when the source knows it (RTSS does; Afterburner does not) */
+            app?: string | null;
+            /**
+             * @description where the number comes from
+             * @example RTSS
+             * @example MSI Afterburner
+             */
+            source?: string;
         };
         ProcessGroup: {
             name: string;
@@ -1230,16 +1237,47 @@ export interface components {
             };
             memory: {
                 totalGB: number;
-                modules: Record<string, never>[];
+                modules: {
+                    slot: string;
+                    sizeGB: number;
+                    type?: string;
+                    speed?: number;
+                }[];
             };
             gpus: {
                 name: string;
                 vramGB?: number;
                 driver?: string;
             }[];
-            board: Record<string, never>;
-            storage: Record<string, never>[];
-            network: Record<string, never>[];
+            board: {
+                maker?: string;
+                model?: string;
+                bios?: string;
+                biosDate?: string;
+            };
+            storage: {
+                /** @description matches `drive.disk` of the partitions on it */
+                id?: number | string;
+                model: string;
+                sizeGB: number;
+                /**
+                 * @example SSD
+                 * @example HDD
+                 * @example Unspecified
+                 */
+                type?: string;
+                /**
+                 * @example NVMe
+                 * @example SATA
+                 */
+                bus?: string;
+            }[];
+            network: {
+                name: string;
+                ip?: string;
+                speed?: string;
+                mac?: string;
+            }[];
             monitors: {
                 name: string;
                 primary?: boolean;
@@ -1252,6 +1290,8 @@ export interface components {
                 fs?: string;
                 totalGB: number;
                 freeGB: number;
+                /** @description the physical disk (`storage[].id`) the partition is on */
+                disk?: number | string | null;
             }[];
         };
         Power: {

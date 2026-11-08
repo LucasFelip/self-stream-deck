@@ -1267,7 +1267,8 @@ components:
           properties:
             fps: { type: number }
             frameMs: { type: number }
-            app: { type: string }
+            app: { type: [string, 'null'], description: 'the game, when the source knows it (RTSS does; Afterburner does not)' }
+            source: { type: string, description: 'where the number comes from', examples: [RTSS, MSI Afterburner] }
     ProcessGroup:
       type: object
       required: [name, cpu, memMB, count]
@@ -1299,13 +1300,23 @@ components:
             installed: { type: string }
             lastBoot: { type: string }
         cpu: { type: object, required: [name, cores, threads], properties: { name: { type: string }, cores: { type: integer }, threads: { type: integer }, maxMHz: { type: number }, l2KB: { type: number }, l3KB: { type: number } } }
-        memory: { type: object, required: [totalGB, modules], properties: { totalGB: { type: number }, modules: { type: array, items: { type: object } } } }
+        memory: { type: object, required: [totalGB, modules], properties: { totalGB: { type: number }, modules: { type: array, items: { type: object, required: [slot, sizeGB], properties: { slot: { type: string }, sizeGB: { type: number }, type: { type: string }, speed: { type: number } } } } } }
         gpus: { type: array, items: { type: object, required: [name], properties: { name: { type: string }, vramGB: { type: number }, driver: { type: string } } } }
-        board: { type: object }
-        storage: { type: array, items: { type: object } }
-        network: { type: array, items: { type: object } }
+        board: { type: object, properties: { maker: { type: string }, model: { type: string }, bios: { type: string }, biosDate: { type: string } } }
+        storage:
+          type: array
+          items:
+            type: object
+            required: [model, sizeGB]
+            properties:
+              id: { type: [integer, string], description: 'matches `drive.disk` of the partitions on it' }
+              model: { type: string }
+              sizeGB: { type: number }
+              type: { type: string, examples: [SSD, HDD, Unspecified] }
+              bus: { type: string, examples: [NVMe, SATA] }
+        network: { type: array, items: { type: object, required: [name], properties: { name: { type: string }, ip: { type: string }, speed: { type: string }, mac: { type: string } } } }
         monitors: { type: array, items: { type: object, required: [name, width, height], properties: { name: { type: string }, primary: { type: boolean }, width: { type: integer }, height: { type: integer } } } }
-        drives: { type: array, items: { type: object, required: [name, totalGB, freeGB], properties: { name: { type: string }, label: { type: string }, fs: { type: string }, totalGB: { type: number }, freeGB: { type: number } } } }
+        drives: { type: array, items: { type: object, required: [name, totalGB, freeGB], properties: { name: { type: string }, label: { type: string }, fs: { type: string }, totalGB: { type: number }, freeGB: { type: number }, disk: { type: [integer, string, 'null'], description: 'the physical disk (`storage[].id`) the partition is on' } } } }
 
     Power:
       type: object
