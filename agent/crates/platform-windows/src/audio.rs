@@ -75,7 +75,7 @@ fn failed(error: windows::core::Error) -> PortError {
 }
 
 /// COM must be initialised once on every thread that calls it; the API calls this crate from a pool of blocking threads.
-fn com() {
+pub(crate) fn com() {
     thread_local! { static INIT: () = unsafe { let _ = CoInitializeEx(None, COINIT_MULTITHREADED); }; }
     INIT.with(|_| {});
 }

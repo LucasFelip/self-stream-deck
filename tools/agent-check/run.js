@@ -157,6 +157,43 @@ const step = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.deepStrictEqual([audio.capture[0].level, audio.capture[0].muted], [10, true]);
       assert.deepStrictEqual([audio.sessions[1].level, audio.sessions[1].muted], [20, true]);
     });
+    await step('media module (fake platform): now playing, control, seek validation, cover art', async () => {
+      const send = (route, body) => new Promise((resolve, reject) => {
+        const req = http.request({ host: '127.0.0.1', port: PORT, path: route, method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' } }, (res) => {
+          const chunks = [];
+          res.on('data', (c) => chunks.push(c));
+          res.on('end', () => resolve({ status: res.statusCode, json: (() => { try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return null; } })() }));
+        });
+        req.on('error', reject);
+        req.end(JSON.stringify(body));
+      });
+      const state = JSON.parse((await request('/api/media', { headers: auth })).body);
+      assert.strictEqual(state.current, 's1');
+      assert.strictEqual(state.sessions[0].app, 'Spotify');
+      assert.deepStrictEqual((await send('/api/media/control', { session: 's1', action: 'toggle' })).json, { ok: true, accepted: true });
+      assert.strictEqual((await send('/api/media/control', { session: 's1', action: 'seek', position: 90 })).status, 200);
+      assert.strictEqual(JSON.parse((await request('/api/media', { headers: auth })).body).sessions[0].position, 90);
+      for (const bad of [{ session: '', action: 'play' }, { session: 's1', action: 'explode' }, { session: 's1', action: 'seek' }, { session: 's1', action: 'seek', position: -1 }]) {
+        assert.strictEqual((await send('/api/media/control', bad)).status, 400, JSON.stringify(bad));
+      }
+      const art = await request('/api/media/art?session=s1&key=0123456789ab', { headers: auth });
+      assert.strictEqual(art.status, 200);
+      assert.strictEqual(art.headers['content-type'], 'image/png');
+      assert.match(art.headers['cache-control'], /immutable/);
+      assert.strictEqual((await request('/api/media/art?session=s1&key=nope', { headers: auth })).status, 400);
+    });
+    await step('shortcuts and media keys (fake keyboard): the list, unknown ids, the global media keys', async () => {
+      const list = JSON.parse((await request('/api/shortcuts', { headers: auth })).body).shortcuts;
+      assert.ok(list.length >= 9 && list.every((s) => s.id && s.label && s.display), JSON.stringify(list).slice(0, 200));
+      assert.strictEqual(list.find((s) => s.id === 'task-manager').display, 'Ctrl+Shift+Esc');
+      const post = (route) => request(route, { method: 'POST', headers: auth });
+      const copied = await post('/api/shortcut/copy');
+      assert.strictEqual(copied.status, 200);
+      assert.deepStrictEqual(JSON.parse(copied.body), { ok: true, label: 'Copiar' });
+      assert.strictEqual((await post('/api/shortcut/nope')).status, 404);
+      assert.strictEqual((await post('/api/mediakey/playpause')).status, 200);
+      assert.strictEqual((await post('/api/mediakey/explode')).status, 404);
+    });
     await step('/api/requests counts the routes (static files as one)', async () => {
       const r = JSON.parse((await request('/api/requests', { headers: auth })).body);
       assert.ok(r.counts['GET static'] >= 1 && r.counts['GET /api/ping'] >= 1, JSON.stringify(r.counts));

@@ -7,7 +7,8 @@ use std::sync::Arc;
 use axum::http::{Method, StatusCode};
 use axum::response::Response;
 use serde_json::{json, Map, Value};
-use ssd_core::ports::{AudioPort, Mute, Percent, PortError};
+use ssd_core::media::{is_art_key, sniff_mime};
+use ssd_core::ports::{AudioPort, MediaAction, Mute, Percent, PortError};
 
 use crate::{json, AppState};
 
@@ -68,19 +69,41 @@ pub fn is_ported(state: &AppState, method: &Method, path: &str) -> bool {
         | (
             &Method::POST,
             "/api/mic" | "/api/audio/default" | "/api/audio/device" | "/api/audio/session",
-        ) => state.audio.is_some(),
+        ) => state.platform.audio.is_some(),
+        (&Method::GET, "/api/media" | "/api/media/art") | (&Method::POST, "/api/media/control") => {
+            state.platform.media.is_some()
+        }
+        (&Method::GET, "/api/shortcuts") => true,
+        (&Method::POST, p)
+            if p.starts_with("/api/shortcut/") || p.starts_with("/api/mediakey/") =>
+        {
+            state.platform.input.is_some()
+        }
         _ => false,
     }
 }
 
-pub async fn answer(state: &Arc<AppState>, method: &Method, path: &str, body: &[u8]) -> Response {
+pub async fn answer(
+    state: &Arc<AppState>,
+    method: &Method,
+    path: &str,
+    query: &str,
+    body: &[u8],
+) -> Response {
     match (method, path) {
         (&Method::GET, "/api/pair-code") => {
             json(StatusCode::OK, json!({ "code": state.guard.token() }))
         }
         (&Method::GET, "/api/layout") => json(StatusCode::OK, tile_order(state)),
         (&Method::POST, "/api/layout") => save_layout(state, body),
-        _ => match &state.audio {
+        _ if path == "/api/shortcuts"
+            || path.starts_with("/api/shortcut/")
+            || path.starts_with("/api/mediakey/") =>
+        {
+            shortcut_route(state, method, path).await
+        }
+        _ if path.starts_with("/api/media") => media_route(state, path, query, body).await,
+        _ => match &state.platform.audio {
             Some(audio) => {
                 let (audio, path, body) = (audio.clone(), path.to_owned(), body.to_vec());
                 let post = method == Method::POST;
@@ -288,6 +311,224 @@ fn audio_route(audio: &dyn AudioPort, post: bool, path: &str, body: &[u8]) -> Re
         }
     })();
     result.unwrap_or_else(|response| response)
+}
+
+// ---- media -------------------------------------------------------------------------------------------------------------------------
+
+const MEDIA_ACTIONS: [&str; 6] = ["toggle", "play", "pause", "next", "previous", "seek"];
+
+fn query_value(query: &str, name: &str) -> String {
+    query
+        .split('&')
+        .find_map(|pair| {
+            let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+            (key == name).then(|| {
+                ssd_core::guard::percent_decode(&value.replace('+', " ")).unwrap_or_default()
+            })
+        })
+        .unwrap_or_default()
+}
+
+async fn media_route(state: &Arc<AppState>, path: &str, query: &str, body: &[u8]) -> Response {
+    let Some(media) = state.platform.media.clone() else {
+        return error(StatusCode::NOT_FOUND, "not found");
+    };
+    match path {
+        "/api/media" => match tokio::task::spawn_blocking(move || media.state()).await {
+            Ok(Ok(media_state)) => json(StatusCode::OK, json!(media_state)),
+            Ok(Err(problem)) => port_error(problem),
+            Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "internal error"),
+        },
+        "/api/media/control" => {
+            let Ok(Value::Object(request)) =
+                serde_json::from_slice::<Value>(if body.is_empty() { b"{}" } else { body })
+            else {
+                return error(StatusCode::BAD_REQUEST, "invalid JSON");
+            };
+            let session = match request.get("session").and_then(Value::as_str) {
+                Some(s) if !s.is_empty() && s.chars().count() <= 300 => s.to_owned(),
+                _ => return error(StatusCode::BAD_REQUEST, "invalid session"),
+            };
+            let name = request
+                .get("action")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            if !MEDIA_ACTIONS.contains(&name) {
+                return error(StatusCode::BAD_REQUEST, "invalid action");
+            }
+            let action = match name {
+                "toggle" => MediaAction::Toggle,
+                "play" => MediaAction::Play,
+                "pause" => MediaAction::Pause,
+                "next" => MediaAction::Next,
+                "previous" => MediaAction::Previous,
+                _ => {
+                    let Some(position) = js_number(request.get("position")) else {
+                        return error(StatusCode::BAD_REQUEST, "position must be a number");
+                    };
+                    if !(0.0..=7.0 * 24.0 * 3600.0).contains(&position) {
+                        return error(StatusCode::BAD_REQUEST, "invalid position");
+                    }
+                    MediaAction::Seek(position)
+                }
+            };
+            match tokio::task::spawn_blocking(move || media.control(&session, action)).await {
+                Ok(Ok(accepted)) => {
+                    json(StatusCode::OK, json!({ "ok": true, "accepted": accepted }))
+                }
+                Ok(Err(problem)) => port_error(problem),
+                Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "internal error"),
+            }
+        }
+        _ => media_art(state, media, query).await,
+    }
+}
+
+/// Cover art is fetched once per track (the key changes with title, artist and album) and kept in memory.
+async fn media_art(
+    state: &Arc<AppState>,
+    media: Arc<dyn ssd_core::ports::MediaPort>,
+    query: &str,
+) -> Response {
+    let (session, key) = (query_value(query, "session"), query_value(query, "key"));
+    if session.is_empty() || !is_art_key(&key) {
+        return error(StatusCode::BAD_REQUEST, "invalid art request");
+    }
+    let cached = state.art.lock().unwrap().get(&key).cloned();
+    let entry = match cached {
+        Some(entry) => entry,
+        None => {
+            let wanted = session.clone();
+            let art = match tokio::task::spawn_blocking(move || media.art(&wanted)).await {
+                Ok(Ok(art)) => art,
+                Ok(Err(problem)) => return port_error(problem),
+                Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "internal error"),
+            };
+            let entry = art.filter(|a| !a.data.is_empty()).map(|a| {
+                (
+                    a.mime.unwrap_or_else(|| sniff_mime(&a.data).to_owned()),
+                    a.data,
+                )
+            });
+            state.art.lock().unwrap().remember(&key, entry.clone());
+            entry
+        }
+    };
+    let Some((mime, data)) = entry else {
+        return error(StatusCode::NOT_FOUND, "no artwork");
+    };
+    let mut response = Response::new(axum::body::Body::from(data));
+    if let Ok(value) = axum::http::HeaderValue::from_str(&mime) {
+        response
+            .headers_mut()
+            .insert(axum::http::header::CONTENT_TYPE, value);
+    }
+    // the key changes per track, so the phone may keep the image for good
+    response.headers_mut().insert(
+        axum::http::header::CACHE_CONTROL,
+        axum::http::HeaderValue::from_static("max-age=31536000, immutable"),
+    );
+    crate::with_security(response)
+}
+
+// ---- shortcuts and media keys ------------------------------------------------------------------------------------------------------
+
+struct Shortcut {
+    id: String,
+    label: String,
+    display: String,
+    vks: Vec<u8>,
+}
+
+/// What JavaScript's `String(value)` gives for what a config file can hold.
+fn js_string(value: &Value) -> Option<String> {
+    match value {
+        Value::String(s) => Some(s.clone()),
+        Value::Number(n) => Some(n.to_string()),
+        Value::Bool(b) => Some(b.to_string()),
+        _ => None,
+    }
+}
+
+/// The shortcuts of `config.json` (or of the editor, which validates them); one that does not parse is left out, like the Node agent does.
+fn shortcuts(state: &AppState) -> Vec<Shortcut> {
+    let config = state.config.lock().unwrap();
+    let Some(Value::Array(entries)) = config.get("shortcuts") else {
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .enumerate()
+        .filter_map(|(index, entry)| {
+            let keys = js_string(entry.get("keys")?)?;
+            let id = entry
+                .get("id")
+                .and_then(js_string)
+                .unwrap_or_else(|| format!("shortcut-{index}"));
+            let label = entry
+                .get("label")
+                .and_then(js_string)
+                .unwrap_or_else(|| keys.clone());
+            Some(Shortcut {
+                id,
+                label,
+                display: ssd_core::keys::display(&keys).ok()?,
+                vks: ssd_core::keys::parse(&keys).ok()?,
+            })
+        })
+        .collect()
+}
+
+/// The global media keys (what the strip buttons send); the Media page talks to a specific player instead.
+fn media_key(name: &str) -> Option<u8> {
+    match name {
+        "prev" => Some(0xb1),
+        "playpause" => Some(0xb3),
+        "next" => Some(0xb0),
+        _ => None,
+    }
+}
+
+async fn press(state: &Arc<AppState>, vks: Vec<u8>) -> Result<(), Response> {
+    let Some(input) = state.platform.input.clone() else {
+        return Err(error(StatusCode::NOT_FOUND, "not found"));
+    };
+    match tokio::task::spawn_blocking(move || input.press_keys(&vks)).await {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(problem)) => Err(port_error(problem)),
+        Err(_) => Err(error(StatusCode::INTERNAL_SERVER_ERROR, "internal error")),
+    }
+}
+
+async fn shortcut_route(state: &Arc<AppState>, method: &Method, path: &str) -> Response {
+    if method == Method::GET {
+        let list: Vec<Value> = shortcuts(state)
+            .iter()
+            .map(|s| json!({ "id": s.id, "label": s.label, "display": s.display }))
+            .collect();
+        return json(StatusCode::OK, json!({ "shortcuts": list }));
+    }
+    let param = |prefix: &str| {
+        path.strip_prefix(prefix)
+            .and_then(ssd_core::guard::percent_decode)
+            .filter(|p| !p.contains('/'))
+    };
+    if let Some(id) = param("/api/shortcut/") {
+        let Some(found) = shortcuts(state).into_iter().find(|s| s.id == id) else {
+            return error(StatusCode::NOT_FOUND, "unknown shortcut");
+        };
+        return match press(state, found.vks).await {
+            Ok(()) => json(StatusCode::OK, json!({ "ok": true, "label": found.label })),
+            Err(response) => response,
+        };
+    }
+    let Some(vk) = param("/api/mediakey/").and_then(|key| media_key(&key)) else {
+        return error(StatusCode::NOT_FOUND, "unknown media key");
+    };
+    match press(state, vec![vk]).await {
+        Ok(()) => json(StatusCode::OK, json!({ "ok": true })),
+        Err(response) => response,
+    }
 }
 
 #[cfg(test)]

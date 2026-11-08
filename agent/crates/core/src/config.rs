@@ -43,7 +43,17 @@ fn defaults() -> Map<String, Value> {
         "editor": true,
         "macros": [],
         "tileOrder": { "apps": [], "shortcuts": [] },
-        "shortcuts": []
+        "shortcuts": [
+            { "id": "desktop", "label": "Área de trabalho", "keys": "win+d" },
+            { "id": "task-manager", "label": "Gerenciador de tarefas", "keys": "ctrl+shift+esc" },
+            { "id": "switch-window", "label": "Alternar janela", "keys": "alt+tab" },
+            { "id": "task-view", "label": "Visão de tarefas", "keys": "win+tab" },
+            { "id": "screenshot", "label": "Captura de tela", "keys": "win+shift+s" },
+            { "id": "lock", "label": "Bloquear PC", "keys": "win+l" },
+            { "id": "copy", "label": "Copiar", "keys": "ctrl+c" },
+            { "id": "paste", "label": "Colar", "keys": "ctrl+v" },
+            { "id": "undo", "label": "Desfazer", "keys": "ctrl+z" }
+        ]
     }) else {
         unreachable!()
     };

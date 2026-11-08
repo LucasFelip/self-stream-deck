@@ -134,7 +134,7 @@ Portado da antiga durante a migração (bug que existia nas duas): ao completar 
 - [x] **Android real (A31, no app):** páginas Apps, Janelas, Som e PC, menu (popover em paisagem, folha em retrato), folha da câmera, Voltar e rotação, sem erros de script no log. Ainda por testar no aparelho: escurecer, notificações e Atualizar.
 - [ ] **Adiado:** iPhone no Safari e na Tela de Início. 
 
-### Fase 3: Agente em Rust (≈ 5 a 7 semanas) — **3.0 e 3.1 feitas; 3.2 em andamento (10 de 51 operações: layout, pareamento e todo o áudio); 3.3 pendente**
+### Fase 3: Agente em Rust (≈ 5 a 7 semanas) — **3.0 e 3.1 feitas; 3.2 em andamento (16 de 51 operações: layout, pareamento, áudio, mídia e atalhos); 3.3 pendente**
 
 **3.0 Spike de viabilidade (3 a 5 dias), com portão de decisão — feito, passou ([ADR 0008](adr/0008-spike-rust-windows.md))**
 Provar em Rust, fora do produto, os três pontos de maior risco: (a) Core Audio (volume, mudo, mixer por app, troca de dispositivo padrão), (b) SMTC via WinRT (leitura e controle de mídia), (c) `SetWinEventHook` empurrando mudanças de janelas. Se algum for inviável ou muito frágil, aplicar a alternativa da D1 e registrar no ADR.
@@ -155,11 +155,11 @@ Cada item: porta em `core`, implementação em `platform-windows`, adaptador fal
 |---|---|---|---|
 | 1 | Estado e ping | `/api/ping`, `/api/state`, `/api/layout`, `/api/pair-code` | **`/api/layout` e `/api/pair-code` portadas**; `ping` e `state` dependem dos módulos de PC |
 | 2 | Energia | `/api/power` | desligar, reiniciar, agendar, hibernar |
-| 3 | Teclas e macros | `/api/shortcut/:id`, `/api/macro/:id`, `/api/mediakey/:key`, `/api/shortcuts`, `/api/macros` | `SendInput`; manter a lista fechada de teclas |
+| 3 | Teclas e macros | `/api/shortcut/:id`, `/api/macro/:id`, `/api/mediakey/:key`, `/api/shortcuts`, `/api/macros` | **atalhos e teclas de mídia portados** (`keybd_event`, mesma lista fechada de teclas em `core/keys.rs`); macros dependem de apps/janelas e ficam no Node |
 | 4 | Editor | `/api/editor*` | validação já existe no desenho de `validate.js` |
 | 5 | Apps e barra de tarefas | `/api/apps`, `/api/launch/:id`, `/api/icon/:id`, `/api/refresh` | ícones, cache |
 | 6 | Áudio | `/api/audio*`, `/api/volume`, `/api/mic` | **portado** (`platform-windows/audio.rs`: volume, mudo, microfone, dispositivos, mixer por app e troca do padrão por `IPolicyConfig`, conferido contra o Node neste PC: mesmas listas; o rótulo do app às vezes sai melhor, porque o Rust lê a descrição do exe também de processos protegidos) |
-| 7 | Mídia | `/api/media*` | SMTC; capa em `/api/media/art` |
+| 7 | Mídia | `/api/media*` | **portado** (`platform-windows/media.rs`, SMTC tipado; capa com cache de 40 e MIME pela assinatura; chave da capa por FNV-1a em vez de SHA-1) |
 | 8 | Monitor | `/api/monitor/*` | PDH, `nvidia-smi`, RTSS/Afterburner, WMI |
 | 9 | Janelas e telas | `/api/windows*`, `/api/screens*` | `SetWinEventHook` empurra para o SSE; brilho DDC/CI |
 | 10 | Notificações do Windows | `notifications.js` | o que a UI usa hoje |

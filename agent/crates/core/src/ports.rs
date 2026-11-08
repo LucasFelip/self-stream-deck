@@ -83,6 +83,155 @@ pub trait AudioPort: Send + Sync {
     fn set_session_mute(&self, pid: u32, system: bool, muted: bool) -> PortResult<()>;
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaSession {
+    pub id: String,
+    pub app: String,
+    pub status: String,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    /// seconds; null while the player does not say
+    pub duration: Option<f64>,
+    pub position: Option<f64>,
+    pub can_play: bool,
+    pub can_pause: bool,
+    pub can_prev: bool,
+    pub can_next: bool,
+    pub can_seek: bool,
+    pub has_art: bool,
+    pub art_key: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct MediaState {
+    pub current: Option<String>,
+    pub sessions: Vec<MediaSession>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MediaAction {
+    Toggle,
+    Play,
+    Pause,
+    Next,
+    Previous,
+    /// seconds from the start of the track
+    Seek(f64),
+}
+
+/// The image of a track: the bytes and, when Windows says so, their type (often empty: the API looks at the signature).
+pub struct Art {
+    pub mime: Option<String>,
+    pub data: Vec<u8>,
+}
+
+/// SMTC: what the volume flyout shows (Spotify, a YouTube tab, VLC...).
+pub trait MediaPort: Send + Sync {
+    fn state(&self) -> PortResult<MediaState>;
+    /// Whether the player accepted the command.
+    fn control(&self, session: &str, action: MediaAction) -> PortResult<bool>;
+    fn art(&self, session: &str) -> PortResult<Option<Art>>;
+}
+
+/// A player of mentira with one track, like `contracts/fixtures/fake-pc.json`.
+pub struct FakeMedia {
+    session: Mutex<MediaSession>,
+}
+
+impl Default for FakeMedia {
+    fn default() -> Self {
+        Self {
+            session: Mutex::new(MediaSession {
+                id: "s1".into(),
+                app: "Spotify".into(),
+                status: "playing".into(),
+                title: "Uma faixa".into(),
+                artist: "Banda".into(),
+                album: "Disco".into(),
+                duration: Some(215.0),
+                position: Some(42.0),
+                can_play: true,
+                can_pause: true,
+                can_prev: true,
+                can_next: true,
+                can_seek: true,
+                has_art: true,
+                art_key: "0123456789ab".into(),
+            }),
+        }
+    }
+}
+
+impl MediaPort for FakeMedia {
+    fn state(&self) -> PortResult<MediaState> {
+        let session = self.session.lock().unwrap().clone();
+        Ok(MediaState {
+            current: Some(session.id.clone()),
+            sessions: vec![session],
+        })
+    }
+
+    fn control(&self, session: &str, action: MediaAction) -> PortResult<bool> {
+        let mut current = self.session.lock().unwrap();
+        if current.id != session {
+            return Err(PortError::Failed("media session not found".into()));
+        }
+        match action {
+            MediaAction::Toggle => {
+                current.status = if current.status == "playing" {
+                    "paused"
+                } else {
+                    "playing"
+                }
+                .into()
+            }
+            MediaAction::Play => current.status = "playing".into(),
+            MediaAction::Pause => current.status = "paused".into(),
+            MediaAction::Seek(seconds) => current.position = Some(seconds),
+            MediaAction::Next | MediaAction::Previous => current.position = Some(0.0),
+        }
+        Ok(true)
+    }
+
+    fn art(&self, session: &str) -> PortResult<Option<Art>> {
+        if self.session.lock().unwrap().id != session {
+            return Err(PortError::Failed("media session not found".into()));
+        }
+        // a 1x1 PNG, no content type: the API has to sniff it
+        const PNG: [u8; 12] = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0];
+        Ok(Some(Art {
+            mime: None,
+            data: PNG.to_vec(),
+        }))
+    }
+}
+
+/// The keyboard: presses a combination (every key in order, then released in reverse, like a person's hand does).
+pub trait InputPort: Send + Sync {
+    fn press_keys(&self, vks: &[u8]) -> PortResult<()>;
+}
+
+/// A keyboard that only remembers what was pressed.
+#[derive(Default)]
+pub struct FakeInput {
+    pressed: Mutex<Vec<Vec<u8>>>,
+}
+
+impl FakeInput {
+    pub fn pressed(&self) -> Vec<Vec<u8>> {
+        self.pressed.lock().unwrap().clone()
+    }
+}
+
+impl InputPort for FakeInput {
+    fn press_keys(&self, vks: &[u8]) -> PortResult<()> {
+        self.pressed.lock().unwrap().push(vks.to_vec());
+        Ok(())
+    }
+}
+
 /// An in-memory PC for the tests and `--fake-platform`: the same shape as `contracts/fixtures/fake-pc.json`.
 pub struct FakeAudio {
     state: Mutex<FakeState>,

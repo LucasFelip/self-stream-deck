@@ -10,9 +10,8 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ssd_api::{router, AppState};
+use ssd_api::{router, AppState, Platform};
 use ssd_core::config::Config;
-use ssd_core::ports::AudioPort;
 
 struct Args {
     data_dir: PathBuf,
@@ -81,15 +80,23 @@ fn children_end_with_me() {
 #[cfg(not(windows))]
 fn children_end_with_me() {}
 
-/// The PC's audio: Core Audio on Windows, an in-memory PC with `--fake-platform` (and everywhere else, for now).
-fn audio_port(fake: bool) -> Option<Arc<dyn AudioPort>> {
+/// The PC: Windows' own APIs, or an in-memory PC with `--fake-platform` (and everywhere that is not Windows, for now nothing).
+fn platform(fake: bool) -> Platform {
     if fake {
-        return Some(Arc::new(ssd_core::ports::FakeAudio::default()));
+        return Platform {
+            audio: Some(Arc::new(ssd_core::ports::FakeAudio::default())),
+            media: Some(Arc::new(ssd_core::ports::FakeMedia::default())),
+            input: Some(Arc::new(ssd_core::ports::FakeInput::default())),
+        };
     }
     #[cfg(windows)]
-    return Some(Arc::new(ssd_platform_windows::WindowsAudio));
+    return Platform {
+        audio: Some(Arc::new(ssd_platform_windows::WindowsAudio)),
+        media: Some(Arc::new(ssd_platform_windows::WindowsMedia)),
+        input: Some(Arc::new(ssd_platform_windows::WindowsInput)),
+    };
     #[cfg(not(windows))]
-    None
+    Platform::default()
 }
 
 #[tokio::main]
@@ -139,7 +146,7 @@ async fn run() -> Result<(), String> {
         &machine,
         args.web_dir.clone(),
         upstream,
-        audio_port(args.fake_platform),
+        platform(args.fake_platform),
     );
     let address = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = tokio::net::TcpListener::bind(address)

@@ -20,4 +20,9 @@ windows = { version = "0.58", features = [
   "Win32_Storage_FileSystem",
   "Win32_UI_Shell_PropertiesSystem",
   "Win32_Devices_FunctionDiscovery",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Media_Control",
+  "Foundation",
+  "Foundation_Collections",
+  "Storage_Streams",
 ] }

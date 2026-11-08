@@ -18,7 +18,8 @@ use axum::response::Response;
 use axum::Router;
 use ssd_core::config::Config;
 use ssd_core::guard::{percent_decode, Guard};
-use ssd_core::ports::AudioPort;
+use ssd_core::media::ArtCache;
+use ssd_core::ports::{AudioPort, InputPort, MediaPort};
 
 /// Sent with every response: the page only ever loads its own files, cannot be framed, and nothing is sniffed or leaked.
 pub const SECURITY_HEADERS: [(&str, &str); 5] = [
@@ -29,6 +30,14 @@ pub const SECURITY_HEADERS: [(&str, &str); 5] = [
     ("cross-origin-resource-policy", "same-origin"),
 ];
 
+/// The ports of the PC. `None` leaves that module to the Node agent behind this one.
+#[derive(Clone, Default)]
+pub struct Platform {
+    pub audio: Option<Arc<dyn AudioPort>>,
+    pub media: Option<Arc<dyn MediaPort>>,
+    pub input: Option<Arc<dyn InputPort>>,
+}
+
 pub struct AppState {
     pub guard: Guard,
     /// config.json, shared by the routes that read or write it
@@ -37,8 +46,10 @@ pub struct AppState {
     pub web_dir: PathBuf,
     /// where the Node agent listens while it still serves the routes that are not ported
     pub upstream: Option<SocketAddr>,
-    /// Core Audio (or a fake): without it the audio routes stay with the Node agent
-    pub audio: Option<Arc<dyn AudioPort>>,
+    /// what the PC offers (or fakes of it): a module without its port stays with the Node agent
+    pub platform: Platform,
+    /// cover art of the tracks already fetched
+    pub art: Mutex<ArtCache>,
     counts: Mutex<HashMap<String, u64>>,
     since: String,
 }
@@ -49,7 +60,7 @@ impl AppState {
         machine_name: &str,
         web_dir: PathBuf,
         upstream: Option<SocketAddr>,
-        audio: Option<Arc<dyn AudioPort>>,
+        platform: Platform,
     ) -> Arc<Self> {
         let guard = Guard::new(config.token(), machine_name);
         Arc::new(Self {
@@ -57,7 +68,8 @@ impl AppState {
             config: Mutex::new(config),
             web_dir,
             upstream,
-            audio,
+            platform,
+            art: Mutex::new(ArtCache::default()),
             counts: Mutex::new(HashMap::new()),
             since: stats::iso_now(),
         })
@@ -238,7 +250,7 @@ async fn handle(State(state): State<Arc<AppState>>, request: Request) -> Respons
                 }
             }
         };
-        return routes::answer(&state, &method, &path, &body).await;
+        return routes::answer(&state, &method, &path, &query, &body).await;
     }
     match state.upstream {
         Some(upstream) => proxy::forward(upstream, guard.token(), request).await,
@@ -259,6 +271,18 @@ mod tests {
     }
 
     fn app_with(audio: Option<Arc<dyn AudioPort>>) -> (Router, PathBuf) {
+        app_on(Platform {
+            audio,
+            media: None,
+            input: None,
+        })
+    }
+
+    fn app_on(platform: Platform) -> (Router, PathBuf) {
+        app_configured(platform, r#"{"token":"tok"}"#)
+    }
+
+    fn app_configured(platform: Platform, config_json: &str) -> (Router, PathBuf) {
         static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         // one folder per test: they run in parallel and each writes its own config.json
         let dir = std::env::temp_dir().join(format!(
@@ -273,10 +297,10 @@ mod tests {
         std::fs::write(dir.join("manifest.webmanifest"), "{}").unwrap();
         let config_dir = dir.join("data");
         std::fs::create_dir_all(&config_dir).unwrap();
-        std::fs::write(config_dir.join("config.json"), r#"{"token":"tok"}"#).unwrap();
+        std::fs::write(config_dir.join("config.json"), config_json).unwrap();
         let config = Config::load(&config_dir).unwrap();
         (
-            router(AppState::new(config, "PC", dir.clone(), None, audio)),
+            router(AppState::new(config, "PC", dir.clone(), None, platform)),
             dir,
         )
     }
@@ -584,5 +608,134 @@ mod tests {
         let sessions = body_of(call(&app, "GET", "/api/audio", &auth).await).await;
         assert_eq!(sessions["sessions"][1]["level"], 20);
         assert_eq!(sessions["sessions"][1]["muted"], true);
+    }
+
+    #[tokio::test]
+    async fn now_playing_state_control_and_art_work_through_the_media_port() {
+        let (app, _) = app_on(Platform {
+            audio: None,
+            media: Some(Arc::new(ssd_core::ports::FakeMedia::default())),
+            input: None,
+        });
+        let auth = [("x-token", "tok")];
+        let media = body_of(call(&app, "GET", "/api/media", &auth).await).await;
+        assert_eq!(media["current"], "s1");
+        assert_eq!(media["sessions"][0]["canSeek"], true);
+        assert_eq!(media["sessions"][0]["artKey"], "0123456789ab");
+
+        let paused = post(
+            &app,
+            "/api/media/control",
+            r#"{"session":"s1","action":"toggle"}"#,
+        )
+        .await;
+        assert_eq!(
+            body_of(paused).await,
+            serde_json::json!({ "ok": true, "accepted": true })
+        );
+        let seek = post(
+            &app,
+            "/api/media/control",
+            r#"{"session":"s1","action":"seek","position":"90"}"#,
+        )
+        .await;
+        assert_eq!(seek.status(), StatusCode::OK);
+        let after = body_of(call(&app, "GET", "/api/media", &auth).await).await;
+        assert_eq!(after["sessions"][0]["status"], "paused");
+        assert_eq!(after["sessions"][0]["position"], 90.0);
+        for (bad, why) in [
+            (r#"{"session":"","action":"play"}"#, "empty session"),
+            (r#"{"action":"play"}"#, "no session"),
+            (r#"{"session":"s1","action":"explode"}"#, "unknown action"),
+            (
+                r#"{"session":"s1","action":"seek"}"#,
+                "seek needs a position",
+            ),
+            (
+                r#"{"session":"s1","action":"seek","position":-1}"#,
+                "negative",
+            ),
+            (
+                r#"{"session":"s1","action":"seek","position":999999999}"#,
+                "too far",
+            ),
+        ] {
+            assert_eq!(
+                post(&app, "/api/media/control", bad).await.status(),
+                StatusCode::BAD_REQUEST,
+                "{why}"
+            );
+        }
+
+        let art = call(
+            &app,
+            "GET",
+            "/api/media/art?session=s1&key=0123456789ab",
+            &auth,
+        )
+        .await;
+        assert_eq!(art.status(), StatusCode::OK);
+        assert_eq!(art.headers()["content-type"], "image/png");
+        assert_eq!(
+            art.headers()["cache-control"],
+            "max-age=31536000, immutable"
+        );
+        for bad in [
+            "/api/media/art?session=s1&key=NOPE",
+            "/api/media/art?key=0123456789ab",
+        ] {
+            assert_eq!(
+                call(&app, "GET", bad, &auth).await.status(),
+                StatusCode::BAD_REQUEST,
+                "{bad}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn shortcuts_and_media_keys_press_the_right_virtual_keys() {
+        let input = Arc::new(ssd_core::ports::FakeInput::default());
+        let (app, _) = app_configured(
+            Platform {
+                audio: None,
+                media: None,
+                input: Some(input.clone()),
+            },
+            r#"{"token":"tok","shortcuts":[{"id":"tm","label":"Gerenciador","keys":"ctrl+shift+esc"},{"keys":"alt+f4"},{"id":"bad","keys":"ctrl+nope"}]}"#,
+        );
+        let auth = [("x-token", "tok")];
+        let list = body_of(call(&app, "GET", "/api/shortcuts", &auth).await).await;
+        assert_eq!(
+            list,
+            serde_json::json!({ "shortcuts": [
+                { "id": "tm", "label": "Gerenciador", "display": "Ctrl+Shift+Esc" },
+                { "id": "shortcut-1", "label": "alt+f4", "display": "Alt+F4" }
+            ] })
+        );
+        let pressed = post(&app, "/api/shortcut/tm", "").await;
+        assert_eq!(
+            body_of(pressed).await,
+            serde_json::json!({ "ok": true, "label": "Gerenciador" })
+        );
+        assert_eq!(
+            post(&app, "/api/shortcut/shortcut-1", "").await.status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            post(&app, "/api/shortcut/bad", "").await.status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            post(&app, "/api/mediakey/playpause", "").await.status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            post(&app, "/api/mediakey/explode", "").await.status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            input.pressed(),
+            vec![vec![0x11, 0x10, 0x1b], vec![0x12, 0x73], vec![0xb3]]
+        );
     }
 }
