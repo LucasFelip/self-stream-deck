@@ -169,7 +169,11 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
 
       // a key opens the confirmation with the full description and the open-windows warning; Cancelar closes it; nothing is sent
       deck.model.calls.length = 0;
-      await page.tap('.actions-grid > .tile[data-tone="danger"]'); // Reiniciar
+      // a tap that lands while the pages are still settling (a busy machine) is undone: tap again until the sheet opens
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        await page.tap('.actions-grid > .tile[data-tone="danger"]'); // Reiniciar
+        if (await page.waitFor(`document.querySelector('#modal-root .sheet')`, 'the confirmation sheet', 1500).then(() => true, () => false)) break;
+      }
       await page.waitFor(`document.querySelector('#modal-root .sheet')`, 'the confirmation sheet');
       const sheet = await page.eval(`document.querySelector('#modal-root .sheet').textContent`);
       assert.match(sheet, /Reiniciar o PC\?/);

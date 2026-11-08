@@ -126,7 +126,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
         await sleep(600);
         const save = posts(deck, '/api/layout')[0];
         assert.ok(save, 'POST /api/layout was not called');
-        assert.deepStrictEqual(save.body.order, ['a:app0', 'a:app2', 'a:app3', 'a:app4', 'a:app5', 'a:app1']);
+        assert.deepStrictEqual(save.body.order, ['a:app0', 'a:app2', 'a:app3', 'a:app4', 'a:app5', 'c:camera', 'a:app1']);
       } finally {
         deck.model.layout = { apps: [], shortcuts: [] };
         close();
@@ -138,7 +138,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       const { page, close } = await open(411, 914);
       try {
         const order = await page.eval(`[...document.querySelectorAll('.page[data-section="apps"] .tile[data-key]')].map((t) => t.dataset.key)`);
-        assert.deepStrictEqual(order, ['a:app5', 'a:app0', 'a:app1', 'a:app2', 'a:app3', 'a:app4']);
+        assert.deepStrictEqual(order, ['a:app5', 'a:app0', 'a:app1', 'a:app2', 'a:app3', 'a:app4', 'c:camera']);
       } finally { deck.model.layout = { apps: [], shortcuts: [] }; close(); }
     });
 
@@ -156,13 +156,13 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       } finally { deck.model.macros = []; close(); }
     });
 
-    await test('empty pages say so: no apps, no shortcuts', async () => {
+    await test('empty pages: Atalhos says so; Apps always has the camera key, so it is never empty', async () => {
       deck.model.apps = [];
       deck.model.shortcuts = [];
-      const { page, close } = await open(411, 914, `document.querySelector('.page[data-section="apps"] .empty')`);
+      const { page, close } = await open(411, 914, `document.querySelector('.page[data-section="shortcuts"] .empty')`);
       try {
-        assert.strictEqual(await page.eval(`document.querySelector('.page[data-section="apps"] .empty').textContent`), 'Nenhum app encontrado na barra de tarefas.');
         assert.strictEqual(await page.eval(`document.querySelector('.page[data-section="shortcuts"] .empty').textContent`), 'Nenhum atalho configurado.');
+        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.page[data-section="apps"] .tile[data-key]')].map((t) => t.dataset.key)`), ['c:camera']);
         assert.strictEqual(await page.eval(`document.querySelectorAll('#pager > .page').length`), 6);
       } finally { resetApps(); deck.model.shortcuts = SHORTCUTS; close(); }
     });

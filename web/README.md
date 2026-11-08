@@ -13,7 +13,7 @@ npm run dev          # Vite em http://127.0.0.1:5173/v2/ com /api repassado ao a
 npm run build        # tsc + vite build -> web/dist (o agente serve em /v2/)
 npm run gen:api      # tipos do contrato -> src/api/schema.d.ts
 npm test             # gen:api + tsc --strict + ESLint + Vitest
-npm run test:e2e     # build + testes em navegador sem tela (e2e/shell, apps, sound, pc e windows; mesmo harness da interface antiga)
+npm run test:e2e     # build + testes em navegador sem tela (e2e/shell, apps, sound, pc, windows, extras, editor e camera; mesmo harness da interface antiga)
 ```
 
 `node tools/check.js` (na raiz) roda isso junto com o resto; `--ci`/`--full` incluem o navegador.
@@ -26,7 +26,7 @@ src/
 ├─ lib/        format, haptics, android (ponte tipada), back (pilha do botão Voltar), latestWins (um pedido por vez, vale o último)
 ├─ ui/         Icon, Toast, Sheets (#modal-root), HoldButton, RangeSlider, Segmented
 ├─ shell/      Pager (scroll-snap, retrato/paisagem), Nav (trilho/barra), Menu, Offline, connection
-├─ features/   uma pasta por página: deck/ (Apps e Atalhos), power/, sound/, pc/ e windows/; o que falta migrar está no plano (Fase 2, item 6)
+├─ features/   uma pasta por página: deck/ (Apps e Atalhos), editor/ (modo Editar e editor), camera/, idle/, game/, notices/, power/, sound/, pc/ e windows/
 └─ styles/     style.css e pages.css, copiados sem mudança da interface antiga; v2.css só com o que é novo
 e2e/           testes em navegador (reusam o harness e o servidor falso de legacy/server/test/ui); support.cjs tem os toques repetidos até pegar
 ```
@@ -36,7 +36,7 @@ e2e/           testes em navegador (reusam o harness e o servidor falso de legac
 - **Mesmo DOM, mesmas classes e ids.** O CSS é o da interface antiga, e os testes em navegador são os dela portados: o que a antiga prometia (alvos de 48 px, grade, trilho/barra por orientação) a nova também cumpre, medido pelos mesmos seletores.
 - **Dados do servidor vêm do contrato.** Um caminho ou corpo que o OpenAPI não conhece não compila; `useLiveQuery` junta o evento SSE e a rota GET do mesmo objeto.
 - **Nada global.** O que a antiga pendurava em `Deck` virou módulo ou contexto. Só `window.Deck = { back, vibrate }` continua, porque o `MainActivity` chama `Deck.back()`.
-- **Uma página por vez.** A interface nova ainda não tem o modo Editar, o editor, a câmera, o escurecer, as notificações, o pareamento e o contador de FPS; o menu ⚙ tem "Interface antiga" para o que falta.
+- **Paridade primeiro.** Tudo o que a antiga faz a nova faz (páginas, modo Editar, editor, câmera, escurecer, notificações, FPS, pareamento); a troca de `/` só vem depois do teste no aparelho real. O menu ⚙ mantém "Interface antiga" até lá.
 
 ## Página migrada: Energia
 

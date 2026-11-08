@@ -49,17 +49,12 @@ function Grid({ section, items, cols, rows, compact = false, cells, running, ope
  */
 export function AppsPage() {
   const { metrics } = usePager();
-  const { apps, running, open } = useDeckData();
+  const { ready, apps, running, open } = useDeckData();
   const base = measure(metrics);
   const measured = metrics.width > 0;
 
-  if (!apps.length) {
-    return (
-      <Page section="apps" id="apps-0" title="Aplicativos" className="generated">
-        <p className="empty">Nenhum app encontrado na barra de tarefas.</p>
-      </Page>
-    );
-  }
+  // the camera key is always there, so the page is never empty; before the app list is read it shows nothing rather than the camera alone
+  if (!ready) return <Page section="apps" id="apps-0" title="Aplicativos" className="generated" />;
   const fit = appsLayout(apps.length, base, metrics.landscape);
   const style = { '--icon': px(base.icon), '--tile-h': px(base.tileH), '--apps-icon': px(fit.icon) } as CSSProperties;
   return (

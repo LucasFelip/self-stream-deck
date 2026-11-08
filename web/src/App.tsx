@@ -1,6 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { Arranger } from './features/deck/Arranger';
+import { CameraOverlay } from './features/camera/CameraOverlay';
+import { camera } from './features/camera/controller';
+import { EditMode } from './features/editor/EditMode';
+import { EditorOverlay } from './features/editor/EditorOverlay';
+import { editStore } from './features/editor/editStore';
 import { GameWatcher } from './features/game/GameWatcher';
 import { IdleDimmer } from './features/idle/IdleDimmer';
 import { copyPairingCode } from './features/notices/pairing';
@@ -25,6 +30,8 @@ import { ToastProvider, useToast } from './ui/Toast';
 function Shell() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [idleOpen, setIdleOpen] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const transmitting = useSyncExternalStore(camera.subscribe, () => camera.getState().sending);
   const toast = useToast();
   const connection = useConnection();
   const state = useDeckState();
@@ -35,6 +42,8 @@ function Shell() {
 
   // the menu entries the features add (the order of the old interface: edit, camera, pairing code on iPhone, dimmer)
   const items: MenuItem[] = [
+    { label: 'Editar botões', onClick: () => editStore.enter() },
+    { label: 'Câmera do celular', onClick: () => setCameraOpen(true) },
     ...(isIOS() && !android() ? [{ label: 'Código de pareamento', onClick: () => void copyPairingCode(toast) }] : []),
     { label: 'Escurecer após…', onClick: () => setIdleOpen(true) },
   ];
@@ -67,11 +76,13 @@ function Shell() {
         </>
       )}
       nav={(pager) => <Nav pager={pager} menuOpen={menuOpen} onMenu={() => setMenuOpen((open) => !open)} />}
-      aboveMain={<><GameWatcher /><Offline connection={connection} /></>}
+      aboveMain={<><GameWatcher /><Offline connection={connection} /><EditMode /></>}
     >
       <Menu open={menuOpen} onClose={() => setMenuOpen(false)} items={items} />
-      <IdleDimmer open={idleOpen} onClose={() => setIdleOpen(false)} blocked={Boolean(state.data?.scheduled)} />
+      <IdleDimmer open={idleOpen} onClose={() => setIdleOpen(false)} blocked={Boolean(state.data?.scheduled) || transmitting} />
       <Arranger />
+      <EditorOverlay />
+      <CameraOverlay open={cameraOpen} onClose={() => setCameraOpen(false)} />
     </Pager>
   );
 }

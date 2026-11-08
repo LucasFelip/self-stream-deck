@@ -14,6 +14,8 @@ export function useDeckState() {
 }
 
 export interface DeckData {
+  /** the app list has been read (or has failed): before that the Apps page is empty instead of showing only the camera key */
+  ready: boolean;
   apps: DeckItem[];
   shortcuts: DeckItem[];
   running: ReadonlySet<string>;
@@ -31,6 +33,7 @@ export function useDeckData(): DeckData {
 
   const order = { apps: layout.data?.apps ?? EMPTY, shortcuts: layout.data?.shortcuts ?? EMPTY };
   return {
+    ready: !apps.isPending && !macros.isPending && !layout.isPending,
     apps: arranged(order.apps, appsKeys(apps.data?.apps ?? EMPTY, macros.data?.macros ?? EMPTY)),
     shortcuts: arranged(order.shortcuts, shortcutKeys(shortcuts.data?.shortcuts ?? EMPTY, macros.data?.macros ?? EMPTY)),
     running: new Set(state.data?.running ?? EMPTY),

@@ -1,5 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Icon } from '../../ui/Icon';
+import { useToast } from '../../ui/Toast';
+import { camera } from '../camera/controller';
+import { editStore, useEditing } from '../editor/editStore';
 import { arrangeStore, slotId, useIsLifted, useIsTarget } from './arrangeStore';
 import { keycapText, type DeckItem } from './items';
 
@@ -15,6 +18,7 @@ function Visual({ item }: { item: DeckItem }) {
     return <img src={`/api/icon/${item.id}?v=${item.iconVersion || ''}`} alt="" draggable={false} onError={() => setBroken(true)} />;
   }
   if (item.kind === 'shortcut') return <div className="keycap">{keycapText(item.display)}</div>;
+  if (item.kind === 'camera') return <div className="fallback cam"><Icon name="camera" size={30} /></div>;
   return (
     <div className="keycap macro">
       <Icon name="play" size={22} />
@@ -40,8 +44,17 @@ export function Tile({ item, running, open, onTap }: TileProps) {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => () => clearTimeout(timer.current), []);
 
+  const editing = useEditing();
+  const toast = useToast();
+  // a red dot on the camera key means it is transmitting
+  const live = useSyncExternalStore(camera.subscribe, () => item.kind === 'camera' && camera.getState().sending);
   const press = () => {
     if (arrangeStore.justDropped) return; // the touch that ended a drag is not a tap
+    if (editing) { // edit mode: a tap edits the key, it never launches it
+      if (item.kind === 'camera') toast('A tecla da câmera não tem o que editar');
+      else editStore.openEditor({ key: item.key });
+      return;
+    }
     setLaunched(true);
     clearTimeout(timer.current);
     timer.current = setTimeout(() => setLaunched(false), 250);
@@ -52,9 +65,9 @@ export function Tile({ item, running, open, onTap }: TileProps) {
     }
   };
 
-  const className = ['tile', running && 'running', open && 'open', launched && 'launched', busy && 'busy', lifting && 'lifting', target && 'drop-target'].filter(Boolean).join(' ');
+  const className = ['tile', live && 'live', running && 'running', open && 'open', launched && 'launched', busy && 'busy', lifting && 'lifting', target && 'drop-target'].filter(Boolean).join(' ');
   return (
-    <button type="button" className={className} data-key={item.key} data-app-id={item.kind === 'app' ? item.id : undefined} aria-label={item.kind === 'app' ? item.label : undefined} onClick={press}>
+    <button type="button" className={className} data-key={item.key} data-app-id={item.kind === 'app' || item.kind === 'camera' ? item.id : undefined} aria-label={item.kind === 'app' || item.kind === 'camera' ? item.label : undefined} onClick={press}>
       <Visual item={item} />
       <span>{item.label}</span>
     </button>
@@ -62,7 +75,19 @@ export function Tile({ item, running, open, onTap }: TileProps) {
 }
 
 /** An empty cell of the grid: keeps the page's grid whole, and takes a key dropped on it to the end. */
-export function Slot({ section, index }: { section: string; index: number }) {
+export function Slot({ section, index }: { section: 'apps' | 'shortcuts'; index: number }) {
   const target = useIsTarget(slotId(section, index));
-  return <div className={`slot${target ? ' drop-target' : ''}`} data-slot={slotId(section, index)} />;
+  const editing = useEditing();
+  const create = () => { if (editing && !arrangeStore.justDropped) editStore.openEditor({ create: section }); };
+  // while editing an empty slot is a "+" button (the "+" itself is drawn by CSS)
+  const buttonProps = editing ? { role: 'button', tabIndex: 0, 'aria-label': 'Adicionar botão' } : {};
+  return (
+    <div
+      className={`slot${target ? ' drop-target' : ''}`}
+      data-slot={slotId(section, index)}
+      {...buttonProps}
+      onClick={create}
+      onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); create(); } }}
+    />
+  );
 }
