@@ -76,12 +76,14 @@ Sem ela, as fases 2 e 3 são arriscadas. Detalhes de uso em [contracts/README.md
 - [x] Teste de contrato dos eventos: cada tópico entrega o primeiro valor, no formato documentado.
 - [x] Regras de segurança como casos explícitos: token (3 formas), `Host` (421), `Origin` (403), pareamento, cookie, cabeçalhos, corpo inválido/grande, travessia de caminho, bloqueio (429).
 - [x] O `harness.js` da interface passa a ser conferido contra o contrato (as respostas que a UI recebe nos testes têm de ser válidas) e serve a interface por pasta configurável (`SSD_WEB_DIR`), pronto para apontar para o build do React.
-- [x] Linha de base estática em `tools/baseline/baseline-phase0-static.json` (código, tamanho da interface); `tools/baseline/measure.js --live` mede latência e memória do seu agente (precisa do seu token, por isso não foi rodado aqui).
+- [x] Linha de base estática em `tools/baseline/baseline-phase0-static.json` (código, tamanho da interface); `tools/baseline/measure.js --live` mede latência e memória; rodada ao vivo em `tools/baseline/baseline-phase0-live.json` (servidor Node de `legacy/server`: ~63 MB de working set / 32 MB privados, `/api/state` p50 12 ms, `/api/windows` 15 ms, `/api/audio` 56 ms, `/api/apps` 0,8 ms; a memória dos `ssd-helper` não entra).
 - [x] Refatoração mínima para tornar o servidor testável: o tratamento de pedidos saiu de `src/index.js` para `src/app.js` (sem mudar o comportamento) e `createRoutes` expõe `routeTable()`.
 
 Achados que o contrato registra (detalhes no README): o 413 chega ao cliente como conexão fechada; `iconVersion` era número na interface de teste e texto no servidor; o `harness` não enviava `fastStartup` em `/api/power` (corrigidos).
 
-Linha de base dos testes (esta máquina): `npm test` verde; `layout.ui.test.js` verde (77 casos, 1m35s); `deck.ui.test.js` **já falhava antes da Fase 0**, de forma repetível, em "Janelas: dragging a window on the map moves it..." (`deck.ui.test.js:593`, o `place` não é enviado depois do redimensionamento no meio do arrastar) e por isso para nos 54 primeiros casos (3m21s). Ficou como pendência a corrigir antes da Fase 2, porque é a rede de segurança da interface.
+Linha de base dos testes (esta máquina): `npm test` verde, `layout.ui.test.js` verde (77 casos, ~1m35s) e `deck.ui.test.js` verde depois de corrigir um bug real de `windows.js` (abaixo). Antes da correção ele já falhava, igual, no commit `f0b3d74` limpo (portanto não era efeito da Fase 0).
+
+**Bug corrigido:** se o navegador soltava o `pointer capture` com o dedo ainda na tela (um redimensionamento no meio do arrasto faz isso), `lostpointercapture` cancelava o arrasto e o `pointermove` seguinte lançava `TypeError` (`drag` nulo): a janela nunca era movida. Agora o capture é retomado e o `pointermove` ignora um gesto já encerrado.
 
 Pronto quando: o teste de contrato passa 100% no Node e falha ao quebrar de propósito uma rota ou um tipo (verificado: remover uma rota do contrato e trocar o tipo de `level` quebram o teste).
 
@@ -92,38 +94,37 @@ Pronto quando: o teste de contrato passa 100% no Node e falha ao quebrar de prop
 - [x] Hook `pre-push` em `tools/hooks` (ativado com `git config core.hooksPath tools/hooks`). Workflow do Actions guardado e **desligado** em `docs/ci/github-actions.yml.disabled` (ADR 0006).
 - [x] `docs/adr/0001..0007`: Rust, React/TS PWA, OpenAPI, SSE, Android Kotlin com iPhone PWA, verificação local, migração incremental.
 - [x] `.nvmrc` (24) e `rust-toolchain.toml`. O `.editorconfig` já existia; Prettier fica para a Fase 2 (`web/`), para não reformatar o código legado.
-- [ ] **Pendente:** `server/data/` continua no lugar antigo. Ali está a DLL da câmera virtual registrada no sistema (`vcam/UnityCaptureFilter64.dll`), carregada pelo Brave e pelo Claude, e o Windows não deixa mover a pasta. Enquanto `legacy/server/data` não existir, `config.js` usa `<repo>/server/data` (fallback temporário, comentado). Para concluir: desinstalar a câmera direta no painel, fechar os programas que a usam, mover `server/data` para `legacy/server/data`, apagar o fallback e reinstalar a câmera.
-- [ ] **Pendente (decisão sua):** tirar do git os PNGs de `docs/redesign-*` (~100 capturas) e manter só uma referência por viewport. Não foi feito por ser apagar conteúdo; posso propor a lista.
-- [ ] **Pendente (ação sua):** recriar o autostart a partir de `legacy/server` (`npm run autostart:install`); a tarefa atual aponta para o caminho antigo e quebra no próximo login.
+- [x] `server/data/` movida para `legacy/server/data/` (token, config, certificados, ícones preservados; o painel subiu de lá com os mesmos 20 apps e o mesmo certificado) e o fallback temporário de `config.js` foi removido. Só a pasta `vcam/` ficou fisicamente em `server/data/vcam/`: a DLL da câmera virtual está registrada no sistema com esse caminho e carregada pelo Brave e pelo Claude, e o Windows não deixa mover um arquivo em uso. `legacy/server/data/vcam` é uma junção (`mklink /J`) para ela. O painel vai mostrar a câmera direta como "não instalada" (o registro aponta para o caminho antigo); **reinstalar uma vez pelo painel** registra o novo caminho, e depois dá para apagar `server/`.
+- [x] PNGs de `docs/redesign-*`: ficou só a série mais recente, em `docs/referencia-visual/` (19 capturas, referência da paridade da Fase 2); as outras 7 séries saíram da árvore (continuam no histórico do git).
+- [x] Autostart recriado a partir de `legacy/server` (`npm run autostart:install -- -StartNow`, com UAC): a tarefa "Self Stream Deck" aponta para `legacy\server\scripts\launch-hidden.vbs` e o servidor responde em 7878.
+- [ ] **Resto (não bloqueia a Fase 2):** reinstalar a câmera direta uma vez pelo painel e então apagar `server/` (só sobrou `server/data/vcam/`).
 
 Pronto quando: `tools/check.js` verde e o painel roda de `legacy/server` igual a antes (verde: lint, unitários e contrato em 18 s).
 
-### Fase 2: Interface React + TypeScript (≈ 3 a 4 semanas)
+### Fase 2: Interface React + TypeScript (≈ 3 a 4 semanas) — **em andamento (2.1 pronta; 1 de 6 páginas)**
 
-Backend intacto (Node). A UI nova é servida em `/v2/` ao lado da antiga (`/`), com um botão no menu ⚙ "Testar nova interface". Quando houver paridade, `/` aponta para a nova.
+Backend intacto (Node). A UI nova é servida em `/v2/` ao lado da antiga (`/`), com "Interface antiga" no menu ⚙ da nova. Quando houver paridade, `/` aponta para a nova.
+Detalhes e comandos em [web/README.md](../web/README.md).
 
-**2.1 Esqueleto (3 a 4 dias)**
-- [ ] `web/` com Vite, TS `strict`, ESLint, Vitest, Playwright, PWA (`manifest`, service worker mínimo, ícones atuais).
-- [ ] Cliente da API gerado do OpenAPI; `fetch` com token/cookie igual ao atual, tratamento de 401/offline.
-- [ ] Hook `useEvents(topics)` sobre SSE com o plano B de polling (herdar `live.js`) e `TanStack Query` para o estado do servidor.
-- [ ] Tokens CSS portados de `style.css` (`--touch`, `--rail-w`, `--bar-h`, `--safe-*`); navegação por orientação (trilho/barra) como componente.
-- [ ] `Deck.back()`, pilha de overlays e folhas (`Deck.overlay`) como contexto React; sem globais.
+**2.1 Esqueleto — feito**
+- [x] `web/`: Vite, React 18, TypeScript `strict` (+ `noUncheckedIndexedAccess`), ESLint, Vitest; build de 215 kB de JS (70 kB gzip) + 9,5 kB gzip de CSS.
+- [x] Cliente da API gerado do OpenAPI (`openapi-typescript` + `openapi-fetch`): rota ou corpo fora do contrato não compila. `npm test` regenera os tipos.
+- [x] `LiveHub` + `useLiveQuery`: um `EventSource` para todos os tópicos, fechado com a tela apagada, evento e rota GET como o mesmo objeto, consulta periódica só com o fluxo fechado (6 testes unitários).
+- [x] Tokens e CSS da antiga copiados sem mudança; navegação trilho/barra por orientação, pager com scroll-snap (eixo por orientação, mantém a página ao girar), menu ⚙ (popover/folha com arrastar para fechar), faixa offline com "Tentar agora" e vigia de 45 s de silêncio, wake lock, tique de vibração.
+- [x] Pilha do Voltar (`lib/back.ts`) e `window.Deck.back()` para o `MainActivity`; folhas (`#modal-root`) e `HoldButton` como componentes.
+- [x] Servido pelo agente em `/v2/` (`http.js`: pasta `web/dist`, mesma exigência de token, manifest e ícones públicos como na antiga; coberto pelo teste de contrato de segurança).
 
-**2.2 Páginas, da mais simples para a mais difícil**
-1. [ ] **Energia** (`power.js`): teclas, banner de agendamento, folha de confirmação com `holdButton`.
+**2.2 Páginas**
+1. [x] **Energia** (`features/power`): teclas, linha de estado, contagem do agendamento, folha de confirmação, segurar para confirmar, atraso e forçar. 10 casos em navegador (portados da antiga + o novo "o toque do segure não clica na aba de baixo").
 2. [ ] **Som** (`sound.js`, `media.js`, `audio.js`): player, Saída/Entrada, mixer; sliders com `touch-action: none`.
-3. [ ] **PC** (`monitor.js`): Desempenho/Processos/Sistema, gráficos (canvas ou SVG leve; sem biblioteca grande).
-4. [ ] **Janelas** (`windows.js`, `geometry.js`): lista + mapa de telas; `geometry` vira módulo puro com os testes atuais portados para Vitest.
-5. [ ] **Apps e Atalhos** (`pager.js`, `tiles.js`, `arrange.js`, `edit.js`): o trecho mais delicado (grade medida, scroll-snap, arrastar para reordenar, modo Editar). Portar `appsLayout()` como função pura com testes numéricos (os tamanhos medidos no `ARQUITETURA.md` viram casos).
-6. [ ] Overlays: **Câmera** (`camera.js`, `camera.html`), **Editor** (`editor.js`), **Escurecer** (`idle.js`), **notificações** (`notifications.js`), **pareamento** (`pair.html/js`), **game/FPS** (`game.js`), reconexão (`connection.js`), autoatualização (`reload.js`).
+3. [ ] **PC** (`monitor.js`): Desempenho/Processos/Sistema, gráficos leves.
+4. [ ] **Janelas** (`windows.js`, `geometry.js`): lista + mapa; `geometry` vira módulo puro com os testes portados para Vitest.
+5. [ ] **Apps e Atalhos** (`pager.js`, `tiles.js`, `arrange.js`, `edit.js`): grade medida, arrastar para reordenar, modo Editar.
+6. [ ] Overlays e extras: Câmera, Editor, Escurecer, notificações, pareamento, game/FPS.
 
-**2.3 Paridade e troca**
-- [ ] Os cenários de `deck.ui.test.js` e `layout.ui.test.js` portados para Playwright nos 4 viewports (836x387, 740x360, 411x914, 360x740) e passando na UI nova.
-- [ ] Teste no aparelho real (Android no app, iPhone no Safari e na Tela de Início), incluindo recorte da câmera (`--safe-*`) e rotação.
-- [ ] Medir peso do bundle (meta: < 250 kB gzip) e tempo até interativo no celular.
-- [ ] Trocar `/` para a nova UI; manter a antiga em `/legacy/` por uma versão.
+Portado da antiga durante a migração (bug que existia nas duas): ao completar o "segure", a folha some com o dedo ainda na tela e o toque seguinte clicava na aba da barra (em retrato abria "PC"). Corrigido em `HoldButton` e em `deck.js` (`holdButton`).
 
-Pronto quando: os testes de UI passam nas duas UIs, uso diário de 1 semana sem voltar à antiga.
+**2.3 Paridade e troca** — pendente: rodar `deck.ui.test.js` e `layout.ui.test.js` contra a nova (`SSD_V2_DIR`/`/v2/`) quando as seis páginas existirem, teste no aparelho real (Android no app, iPhone no Safari e na Tela de Início, recorte da câmera, rotação), trocar `/` para a nova e manter a antiga em `/legacy/` por uma versão.
 
 ### Fase 3: Agente em Rust (≈ 5 a 7 semanas)
 

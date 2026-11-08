@@ -1,0 +1,43 @@
+{
+  "name": "self-stream-deck-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Interface do self-stream-deck (React + TypeScript), servida pelo agente como PWA",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "gen:api": "openapi-typescript ../contracts/openapi.yaml -o src/api/schema.d.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "npm run gen:api && npm run typecheck && npm run lint && vitest run",
+    "test:unit": "vitest run",
+    "test:e2e": "vite build && node e2e/shell.e2e.cjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.59.0",
+    "openapi-fetch": "^0.13.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@testing-library/react": "^16.0.1",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.2",
+    "eslint": "^9.39.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "globals": "^15.11.0",
+    "jsdom": "^25.0.1",
+    "openapi-typescript": "^7.4.1",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.10.0",
+    "vite": "^5.4.9",
+    "vitest": "^2.1.3"
+  }
+}

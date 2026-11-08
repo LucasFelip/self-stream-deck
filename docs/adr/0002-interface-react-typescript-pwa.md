@@ -26,3 +26,9 @@ Ela é servida pelo próprio agente, então mudar a interface não exige recompi
 - A interface vira módulos tipados; a API é consumida por um cliente gerado do OpenAPI (ADR 0003).
 - Migração página por página, com a antiga e a nova lado a lado até a paridade (ADR 0007).
 - O comportamento medido hoje (grade do Apps, trilho/barra por orientação, alvos de 48 px) é requisito, protegido pelos testes de layout nos 4 viewports.
+
+## Emenda (Fase 2)
+
+- **Testes em navegador:** em vez de Playwright, a interface nova reaproveita o harness por DevTools Protocol e o servidor falso da antiga (`legacy/server/test/ui/harness.js`), com os mesmos seletores. Assim os casos da antiga são portados quase sem mudança e o contrato valida as respostas do servidor falso. Playwright continua possível depois que a antiga sair.
+- **CSS:** `style.css` e `pages.css` foram copiados sem mudança para `web/src/styles/`; reescrevê-los fica para depois da paridade, para não misturar risco visual com a troca de tecnologia.
+- **Peso medido:** a primeira fatia (casca + Energia) gera 215 kB de JS (70 kB gzip) e 9,5 kB gzip de CSS, dentro da meta de 250 kB gzip.

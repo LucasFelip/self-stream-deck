@@ -1,0 +1,442 @@
+:root {
+  --bg: #0b0c10;
+  --surface: #12141a;
+  --surface-2: #181b22;
+  --border: #1c1f27;
+  --text: #d7dae3;
+  --muted: #7d8394;
+  --accent: #7c9cff;
+  --ok: #4cc38a;
+  --err: #e5646b;
+  --icon: 44px; /* set by app.js from the real tile size */
+  --touch: 48px; /* smallest target for anything in the navigation */
+  --rail-w: 72px; /* the navigation rail (landscape), without the cut-out inset */
+  --bar-h: 56px; /* the navigation bar (portrait), without the bottom inset */
+  --strip-h: 44px; /* portrait: the row at the top that holds the gear */
+  /* the camera cut-out / system bars the window may draw under (viewport-fit=cover); 0 in browsers without any */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation; /* no double-tap zoom or tap delay (iOS Safari ignores user-scalable=no) */
+  overscroll-behavior: none;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* --- navigation: a rail on the left in landscape (the deck's main use), a bar at the bottom in portrait ----------------
+   Chosen by orientation, not by width. The rail/bar itself covers the cut-out / system-bar inset on its side, so inside
+   .main that inset is zeroed (pager.js reads --safe-* from the pager and fits the grid to what is left). */
+
+.nav { position: relative; z-index: 5; display: flex; flex: none; background: var(--bg); }
+
+.icon-btn svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Section tabs: one destination each, icon over a short label. The selected one is lit; the page dots live in .page-dots. */
+.tabs { display: flex; }
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  height: var(--touch);
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.6rem;
+  font-weight: 600;
+  white-space: nowrap;
+  touch-action: manipulation;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.tab .ico { --size: 20px; }
+.tab-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.tab:active { background: var(--surface-2); }
+.tab[aria-selected="true"] { background: var(--surface); color: var(--text); }
+.tab[aria-selected="true"] .ico { color: var(--accent); }
+
+.nav-end { flex: none; }
+.nav-end .icon-btn { width: var(--touch); height: var(--touch); }
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  touch-action: manipulation;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.icon-btn svg { width: 18px; height: 18px; }
+.icon-btn:active { background: var(--surface-2); color: var(--text); }
+.icon-btn.spin svg { animation: spin 0.6s linear; }
+
+.main { position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; padding-top: var(--safe-top); }
+
+/* where you are inside a section with several pages: dots over the bottom padding of the pages, out of the layout */
+.page-dots { position: absolute; left: 0; right: 0; bottom: 3px; z-index: 2; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
+.page-dots[hidden] { display: none; }
+.page-dots i { width: 5px; height: 5px; border-radius: 50%; background: rgba(255, 255, 255, 0.22); }
+.page-dots i.on { background: var(--accent); }
+
+@media (orientation: landscape) {
+  body { flex-direction: row; }
+  .main { --safe-left: 0px; }
+  /* the rail is vertical, so the pages are stacked and swipe up / down in the rail's order */
+  .main > .pager { flex-direction: column; overflow-x: hidden; overflow-y: auto; scroll-snap-type: y mandatory; }
+  .main > .pager > .page { min-height: 0; }
+  .page-dots { left: auto; right: 3px; top: 0; bottom: 0; flex-direction: column; align-items: center; }
+  .nav {
+    flex-direction: column;
+    width: calc(var(--rail-w) + var(--safe-left));
+    padding: var(--safe-top) 0 var(--safe-bottom) var(--safe-left);
+    border-right: 1px solid var(--border);
+  }
+  .tabs { flex-direction: column; padding: 0 1px; }
+  .tab { width: 100%; }
+  .nav-end { display: flex; justify-content: center; height: var(--touch); margin-top: auto; }
+  /* the menu opens beside the rail, from the bottom, 8 px from the screen edge */
+  .menu { left: calc(var(--rail-w) + var(--safe-left) + 6px); bottom: calc(8px + var(--safe-bottom)); }
+}
+
+@media (orientation: portrait) {
+  .main { order: 1; --safe-bottom: 0px; padding-top: calc(var(--safe-top) + var(--strip-h)); } /* the row of the gear (fixed, below) */
+  .nav {
+    order: 2;
+    height: calc(var(--bar-h) + var(--safe-bottom));
+    padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
+    border-top: 1px solid var(--border);
+  }
+  .tabs { flex: 1; min-width: 0; }
+  .tab { flex: 1 1 0; height: auto; margin: 3px 2px; }
+  /* six destinations fill the bar, so the gear rides on a row at the top */
+  .nav-end { position: fixed; top: var(--safe-top); z-index: 6; display: flex; align-items: center; height: var(--strip-h); }
+  .nav-end { right: calc(4px + var(--safe-right)); }
+  /* the menu is a bottom sheet over the bar: full width, rounded top, a grabber to drag them down */
+  .menu { left: 0; right: 0; bottom: calc(var(--bar-h) + var(--safe-bottom)); border-bottom: 0; border-radius: 18px 18px 0 0; animation: sheet-up 0.18s ease; }
+  .menu { max-height: calc(100vh - var(--bar-h) - var(--safe-top) - var(--safe-bottom) - 56px); max-height: calc(100dvh - var(--bar-h) - var(--safe-top) - var(--safe-bottom) - 56px); padding: 0 calc(12px + var(--safe-right)) 12px calc(12px + var(--safe-left)); }
+  .menu > .grip { display: flex; justify-content: center; padding: 10px 0 6px; touch-action: none; }
+  .grip i { width: 40px; height: 4px; border-radius: 2px; background: var(--muted); opacity: 0.5; }
+  .menu-host { touch-action: none; }
+  .nav-end .icon-btn { width: var(--strip-h); height: var(--strip-h); }
+}
+
+/* the quiet buttons (the gear) */
+.icon-btn.quiet { color: var(--muted); }
+.icon-btn[hidden] { display: none; }
+
+.menu {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  /* never taller than the screen (8 px of air from the edges): scrolls inside instead of running off */
+  max-height: calc(100vh - var(--safe-top) - var(--safe-bottom) - 16px);
+  max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 16px);
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+.menu[hidden] { display: none; }
+.grip { display: none; } /* portrait only: the sheet's handle */
+.menu-host { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px 8px; font-size: 0.7rem; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.menu-host b { font-size: 0.82rem; }
+.menu button { display: flex; align-items: center; flex: none; min-height: 48px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font-family: inherit; font-size: 0.8rem; text-align: left; touch-action: manipulation; }
+.menu button:active { background: var(--surface-2); }
+.menu button[hidden] { display: none; }
+
+/* a tap outside an open panel (menu) lands on this and only closes it (header.js) */
+.scrim { position: fixed; inset: 0; z-index: 29; background: transparent; touch-action: none; }
+.scrim[hidden] { display: none; }
+
+@keyframes sheet-up { from { transform: translateY(100%); } }
+
+/* --- overlay: a panel over the deck (camera, button editor). Landscape: full screen. Portrait: a bottom sheet, see the end of the file ---- */
+
+.overlay { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left); background: var(--bg); }
+.overlay[hidden] { display: none; }
+.overlay-bar { position: relative; display: flex; align-items: center; justify-content: space-between; flex: none; height: 56px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+.overlay-bar b { font-size: 0.9rem; }
+.overlay-close { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 48px; min-width: 48px; padding: 0 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); color: var(--text); font-family: inherit; font-size: 0.8rem; font-weight: 600; touch-action: manipulation; }
+.overlay-close:active { background: var(--border); }
+.overlay-body { flex: 1; min-height: 0; padding: 12px 16px; }
+.overlay-body > section { height: 100%; }
+.grabber, .overlay-scrim { display: none; }
+/* --- pager -------------------------------------------------------------- */
+
+.pager {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  transition: opacity 0.2s ease;
+}
+.pager::-webkit-scrollbar { display: none; }
+body[data-state="offline"] .pager { opacity: 0.35; pointer-events: none; }
+
+/* offline notice: a real row above the pager, so the pager shrinks instead of being covered */
+.offline { display: none; align-items: center; justify-content: space-between; gap: 12px; flex: none; min-height: 40px; padding: 4px calc(16px + var(--safe-right)) 4px calc(16px + var(--safe-left)); border-bottom: 1px solid var(--border); background: rgba(229, 100, 107, 0.12); color: var(--err); font-size: 0.8rem; font-weight: 600; }
+body[data-state="offline"] .offline { display: flex; }
+.offline button { height: 32px; padding: 0 14px; border: 1px solid var(--err); border-radius: 10px; background: transparent; color: var(--err); font: inherit; font-size: 0.78rem; font-weight: 600; touch-action: manipulation; }
+.offline button:active { background: rgba(229, 100, 107, 0.2); }
+.offline button:disabled { opacity: 0.5; }
+
+.page {
+  flex: 0 0 100%;
+  min-width: 0;
+  padding: 12px calc(16px + var(--safe-right)) calc(12px + var(--safe-bottom)) calc(16px + var(--safe-left));
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--rows, 2), minmax(0, 1fr));
+  gap: 10px;
+  height: 100%;
+}
+
+.page.scroll { overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: none; }
+.page.scroll::-webkit-scrollbar { display: none; }
+.grid.compact { gap: 8px; --icon: var(--apps-icon, 32px); }
+.grid.compact .tile { gap: 3px; padding: 4px 3px; border-radius: 10px; }
+.grid.compact .tile span { height: 1.25em; font-size: 10px; line-height: 1.25; -webkit-line-clamp: 1; line-clamp: 1; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grid.compact .slot { border-radius: 10px; }
+.page.scroll .grid { height: auto; grid-template-rows: repeat(var(--rows, 2), var(--tile-h, 96px)); }
+
+.slot {
+  border: 1px dashed rgba(255, 255, 255, 0.05);
+  border-radius: 14px;
+}
+
+/* a dot on app tiles: grey = the process is running, green = it has a window open (a tap brings it to the front) */
+.tile.running::after,
+.tile.open::after {
+  content: "";
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.tile.open::after { background: var(--ok); box-shadow: 0 0 6px rgba(76, 195, 138, 0.6); }
+/* the camera key while it transmits */
+.tile.live { border-color: rgba(229, 100, 107, 0.5); }
+.tile.live::after { content: ""; position: absolute; top: 9px; right: 9px; width: 6px; height: 6px; border-radius: 50%; background: var(--err); box-shadow: 0 0 6px rgba(229, 100, 107, 0.6); }
+.tile.live .fallback.cam { background: rgba(229, 100, 107, 0.14); color: var(--err); }
+.tile .fallback.cam .ico svg { stroke-width: 1.5; }
+
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  touch-action: manipulation;
+  transition: transform 0.08s ease, background 0.15s ease, border-color 0.4s ease;
+}
+.tile:active { transform: scale(0.96); background: var(--surface-2); }
+.tile.launched { border-color: var(--accent); transition: border-color 0s; }
+
+.tile img { -webkit-user-drag: none; width: var(--icon); height: var(--icon); object-fit: contain; pointer-events: none; }
+.tile .fallback,
+.tile .keycap {
+  display: grid;
+  place-items: center;
+  width: var(--icon);
+  height: var(--icon);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+/* shortcut tiles show the key combination instead of an icon */
+.tile .keycap {
+  width: 100%;
+  padding: 0 4px;
+  font: 600 0.62rem/1.25 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  text-align: center;
+  overflow-wrap: break-word;
+}
+/* app keys (and the camera key) are the icon alone: the name is only for screen readers, see makeTile */
+.tile[data-app-id] > span { display: none !important; }
+.tile[data-app-id] { gap: 0; padding: 8px 6px; }
+.tile span {
+  display: -webkit-box;
+  flex: none;
+  width: 100%;
+  height: 2.5em; /* always two lines, so icons line up across the row */
+  overflow: hidden;
+  font-size: 0.66rem;
+  line-height: 1.25;
+  text-align: center;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* --- game frame rate pill (js/game.js): floating in the top-right corner on every page but Desempenho, while a game runs ---- */
+
+.fps-float {
+  position: fixed;
+  top: calc(var(--safe-top) + 6px);
+  right: calc(var(--safe-right) + 8px);
+  z-index: 8; /* above the pages, below the menu, the sheets and the overlays */
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(20, 22, 30, 0.72);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  line-height: 22px;
+  pointer-events: none;
+}
+@media (orientation: portrait) { .fps-float { right: calc(var(--safe-right) + 52px); } } /* beside the gear */
+.fps-float[hidden] { display: none; }
+.fps-float b { font-size: 0.86rem; }
+.fps-float small { font-size: 0.58rem; color: var(--muted); }
+@media (orientation: portrait) { .fps-float small { display: none; } } /* portrait: just the number */
+
+/* --- toast -------------------------------------------------------------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  z-index: 60; /* above the panels and sheets */
+  bottom: calc(18px + var(--safe-bottom));
+  max-width: calc(100% - 32px - var(--safe-left) - var(--safe-right));
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 0.78rem;
+  color: var(--text);
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.error { border-color: var(--err); color: var(--err); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* a macro key: runs a list of steps; marked busy while it runs */
+.tile .keycap.macro { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px; color: var(--accent); background: rgba(124, 156, 255, 0.12); }
+.tile .keycap.macro small { font-size: 0.6rem; font-weight: 500; color: var(--muted); }
+.tile.busy { border-color: var(--accent); opacity: 0.7; }
+
+/* rearranging: the lifted key follows the finger, the page does not scroll */
+.pager.arranging { overflow: hidden; scroll-snap-type: none; }
+.tile.lifting { position: relative; z-index: 20; border-color: var(--accent); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55); transition: none !important; will-change: transform; }
+.grid { position: relative; } /* the lifted key is measured against it */
+.tile.drop-target, .slot.drop-target { outline: 2px solid var(--accent); outline-offset: -2px; background: var(--surface-2); }
+
+/* edit mode (js/edit.js): the bar sits in the flow above the pager, so the pager shrinks instead of being covered; keys get a dashed
+   accent outline, empty slots become "+" buttons and "Concluir" is a 48 px chip */
+.edit-bar { display: flex; align-items: center; gap: 10px; flex: none; height: var(--touch); padding: 0 calc(10px + var(--safe-right)) 0 14px; border-block: 1px solid var(--border); background: var(--surface); }
+.edit-bar[hidden] { display: none; }
+.edit-hint { flex: 1; min-width: 0; overflow: hidden; color: var(--muted); font-size: 0.74rem; line-height: 1.2; }
+.edit-done { flex: none; min-width: 96px; height: var(--touch); padding: 0 18px; border: 1px solid var(--accent); border-radius: 999px; background: transparent; color: var(--accent); font: inherit; font-size: 0.85rem; font-weight: 700; touch-action: manipulation; }
+.edit-done:active { background: var(--surface-2); }
+body.editing .tile[data-key] { outline: 1.5px dashed var(--accent); outline-offset: -4px; }
+body.editing .slot { display: grid; place-items: center; border: 1.5px dashed var(--accent); color: var(--accent); touch-action: manipulation; }
+body.editing .slot::before { content: "+"; font-size: 1.8rem; font-weight: 300; line-height: 1; }
+
+
+/* portrait: the toast clears the navigation bar */
+@media (orientation: portrait) { .toast { bottom: calc(var(--bar-h) + 14px + var(--safe-bottom)); } }
+
+/* portrait: the overlays (camera, button editor) are bottom sheets: ~92 % high with a strip of the deck left above, a grabber, rounded top;
+   dragging the bar down closes them (Deck.dragToClose), and so does a tap on the dimmed strip */
+@media (orientation: portrait) {
+  .overlay { top: max(calc(var(--safe-top) + 12px), 8vh); padding-top: 0; border: 1px solid var(--border); border-bottom: 0; border-radius: 18px 18px 0 0; animation: sheet-up 0.2s ease; }
+  .overlay-bar { padding-top: 10px; touch-action: none; }
+  .grabber { position: absolute; top: 6px; left: 50%; display: block; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: var(--muted); opacity: 0.5; }
+  .overlay-scrim:not([hidden]) { position: fixed; inset: 0; z-index: 39; display: block; background: rgba(4, 5, 8, 0.7); touch-action: none; }
+}
+
+/* portrait: the scrim behind the menu sheet dims the deck (after the base rule, or the base would win); it still only closes */
+@media (orientation: portrait) {
+  .scrim { background: rgba(4, 5, 8, 0.45); }
+}
+
+/* idle dimmer (idle.js): a black veil above everything; the first touch only wakes it */
+.idle-veil { position: fixed; inset: 0; z-index: 9999; background: #000; opacity: 0.97; touch-action: none; transition: opacity 0.2s; }
+.idle-veil.waking { opacity: 0; }
+.idle-page { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+.idle-page p { margin: 0; font-size: 0.85rem; }

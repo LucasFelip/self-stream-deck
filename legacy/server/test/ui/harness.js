@@ -12,18 +12,23 @@ const { spawn, spawnSync } = require('node:child_process');
 // No import from src/: the interface under test is whatever folder SSD_WEB_DIR names (default: public/, later the build of web/),
 // and the answers below are checked against contracts/openapi.yaml by tools/contract-test.
 const WEB_DIR = path.resolve(process.env.SSD_WEB_DIR || path.join(__dirname, '..', '..', 'public'));
+// the new interface (web/dist, built with base /v2/) is served under /v2/ exactly as the agent does
+const V2_DIR = path.resolve(process.env.SSD_V2_DIR || path.join(__dirname, '..', '..', '..', '..', 'web', 'dist'));
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2' };
-const isStaticPath = (pathname) => pathname === '/' || Boolean(TYPES[path.extname(pathname).toLowerCase()]);
+const isStaticPath = (pathname) => pathname === '/' || pathname === '/v2/' || Boolean(TYPES[path.extname(pathname).toLowerCase()]);
 function sendJson(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(body));
 }
 function serveStatic(req, res, pathname) {
   let relative;
-  try { relative = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^[/\\]+/, ''); } catch { return sendJson(res, 404, { error: 'not found' }); }
-  const file = path.resolve(WEB_DIR, relative);
+  const isV2 = pathname.startsWith('/v2/');
+  const root = isV2 ? V2_DIR : WEB_DIR;
+  const local = isV2 ? pathname.slice(3) : pathname; // '/v2/x.js' is 'x.js' in the build folder
+  try { relative = local === '/' ? 'index.html' : decodeURIComponent(local).replace(/^[/\\]+/, ''); } catch { return sendJson(res, 404, { error: 'not found' }); }
+  const file = path.resolve(root, relative);
   const type = TYPES[path.extname(file).toLowerCase()];
-  if (!type || !file.startsWith(WEB_DIR + path.sep)) return sendJson(res, 404, { error: 'not found' });
+  if (!type || !file.startsWith(root + path.sep)) return sendJson(res, 404, { error: 'not found' });
   return fs.readFile(file, (err, data) => {
     if (err) return sendJson(res, 404, { error: 'not found' });
     res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
@@ -223,7 +228,7 @@ async function launchBrowser({ width = 412, height = 915 } = {}) {
   process.on('exit', cleanup);
 
   let port = null;
-  for (let i = 0; i < 100 && !port; i += 1) {
+  for (let i = 0; i < 300 && !port; i += 1) { // up to 30 s: a busy machine (several browsers open) can take longer than 10 s
     await sleep(100);
     try { port = Number(fs.readFileSync(path.join(profile, 'DevToolsActivePort'), 'utf8').split('\n')[0]); } catch { /* not written yet */ }
   }

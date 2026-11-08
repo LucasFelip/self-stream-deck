@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0c10">
+  <meta name="color-scheme" content="dark">
+  <!-- Home Screen app (iPhone: Share > Add to Home Screen; Android Chrome too): full screen, no browser bar -->
+  <link rel="manifest" href="./manifest.webmanifest" crossorigin="use-credentials">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Deck">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Self Stream Deck</title>
+</head>
+<body data-state="connecting">
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

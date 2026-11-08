@@ -226,6 +226,7 @@
     drag = { win, el, x: event.clientX, y: event.clientY, moved: false, index: -1, zone: null, at: Date.now(), finishing: false };
 
     el.onpointermove = (move) => {
+      if (!drag || drag.el !== el) return; // the gesture ended (or was dropped) while this event was on its way
       const dx = move.clientX - drag.x;
       const dy = move.clientY - drag.y;
       if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
@@ -242,8 +243,17 @@
     };
     el.onpointerup = (up) => finishDrag(up);
     el.onpointercancel = () => cancelDrag();
-    // the browser took the finger away (the element was replaced, another gesture won): end the drag instead of hanging
-    el.onlostpointercapture = () => { if (drag && drag.el === el && !drag.finishing) cancelDrag(); };
+    // The browser released the capture while the finger is still down (a resize or a layout change under the finger does that):
+    // take it back and the gesture goes on. Only if the element is gone for good is the drag ended instead of left hanging.
+    el.onlostpointercapture = () => {
+      if (!drag || drag.el !== el || drag.finishing) return;
+      if (!el.isConnected) { cancelDrag(); return; }
+      try {
+        el.setPointerCapture(event.pointerId);
+      } catch (err) {
+        cancelDrag(); // the pointer is not active anymore: the finger is already up
+      }
+    };
   }
 
   function cancelDrag() {

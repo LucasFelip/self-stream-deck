@@ -233,6 +233,16 @@ window.Deck = (() => {
 
   // --- hold to confirm ------------------------------------------------------------------------
 
+  // The hold completes while the finger is still down and the sheet goes away; lifting the finger then "clicks" whatever was under it
+  // (in portrait, a tab of the bar). Swallow the click that follows this touch, and only that one.
+  function swallowNextClick() {
+    const block = (event) => { event.stopPropagation(); event.preventDefault(); };
+    document.addEventListener('click', block, true);
+    const release = () => setTimeout(() => document.removeEventListener('click', block, true), 350);
+    document.addEventListener('pointerup', release, { capture: true, once: true });
+    document.addEventListener('pointercancel', release, { capture: true, once: true });
+  }
+
   /** A button that only fires after being held (1.2 s by default), with a fill that shows the progress. */
   function holdButton(label, onDone, { ms = 1200, className = '' } = {}) {
     const button = h('button', { type: 'button', class: `hold ${className}`.trim(), style: `--hold-ms:${ms}ms` }, h('span', { text: label }));
@@ -249,6 +259,7 @@ window.Deck = (() => {
         // the sheet was taken away while held (Back, a rebuild): pointerleave never comes for a removed button, and it must not act
         if (!button.isConnected) return;
         vibrate(80);
+        swallowNextClick();
         onDone();
       }, ms);
     };

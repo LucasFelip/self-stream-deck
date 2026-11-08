@@ -7,12 +7,7 @@ const { validate } = require('./config-check');
 const { log } = require('./log');
 
 // SSD_DATA_DIR lets the tests (and anyone who wants the data elsewhere) keep their files apart from the real ones
-// Temporary (Phase 1): while the folder moves from server/ to legacy/server/, the machine's data may still sit in the old
-// <repo>/server/data (the virtual camera DLL registered there stays locked while a browser or Claude has it loaded).
-// Without legacy/server/data, that old folder is used. Move it (data/ whole) once the camera is unregistered; then this goes away.
-const HOME_DATA = path.join(__dirname, '..', 'data');
-const OLD_DATA = path.join(__dirname, '..', '..', '..', 'server', 'data');
-const DATA_DIR = process.env.SSD_DATA_DIR || (!fs.existsSync(HOME_DATA) && fs.existsSync(path.join(OLD_DATA, 'config.json')) ? OLD_DATA : HOME_DATA);
+const DATA_DIR = process.env.SSD_DATA_DIR || path.join(__dirname, '..', 'data');
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 const ICON_DIR = path.join(DATA_DIR, 'icons');
 

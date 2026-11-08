@@ -6,7 +6,7 @@
 //   node tools/check.js --full      also the interface tests (needs Chrome/Brave/Edge) and the integration tests (needs the real PC)
 //   node tools/check.js --ci        fast + interface tests; no integration (a CI runner is not your PC)
 //
-// Parts are added here as they appear (web/ in Phase 2, agent/ in Phase 3).
+// Parts are added here as they appear (web/ since Phase 2, agent/ in Phase 3).
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -28,8 +28,11 @@ add('contract tests', 'tools/contract-test', npm, ['test']);
 add('legacy: interface tests', 'legacy/server', npm, ['run', 'test:ui'], full || ci);
 add('legacy: integration tests (real PC)', 'legacy/server', npm, ['run', 'test:integration'], full);
 
-// later phases: web/ (Vitest, tsc, Playwright), agent/ (cargo fmt, clippy, test)
-add('web: typecheck + tests', 'web', npm, ['test'], fs.existsSync(path.join(ROOT, 'web', 'package.json')));
+// the new interface: generated API types up to date, tsc --strict, ESLint, Vitest; then its build and browser tests (same harness as the old UI)
+add('web: types + lint + unit tests', 'web', npm, ['test']);
+add('web: build + browser tests', 'web', npm, ['run', 'test:e2e'], full || ci);
+
+// later phase: agent/ (cargo fmt, clippy, test)
 add('agent: cargo test', 'agent', 'cargo', ['test'], fs.existsSync(path.join(ROOT, 'agent', 'Cargo.toml')));
 
 const results = [];
