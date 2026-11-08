@@ -13,7 +13,7 @@ npm run dev          # Vite em http://127.0.0.1:5173/v2/ com /api repassado ao a
 npm run build        # tsc + vite build -> web/dist (o agente serve em /v2/)
 npm run gen:api      # tipos do contrato -> src/api/schema.d.ts
 npm test             # gen:api + tsc --strict + ESLint + Vitest
-npm run test:e2e     # build + testes em navegador sem tela (mesmo harness da interface antiga)
+npm run test:e2e     # build + testes em navegador sem tela (e2e/shell e e2e/sound; mesmo harness da interface antiga)
 ```
 
 `node tools/check.js` (na raiz) roda isso junto com o resto; `--ci`/`--full` incluem o navegador.
@@ -23,12 +23,12 @@ npm run test:e2e     # build + testes em navegador sem tela (mesmo harness da in
 ```
 src/
 ├─ api/        client.ts (openapi-fetch tipado pelo contrato), events.ts (SSE: LiveHub + useLiveQuery), schema.d.ts (gerado)
-├─ lib/        format, haptics, android (ponte tipada), back (pilha do botão Voltar)
-├─ ui/         Icon, Toast, Sheets (#modal-root), HoldButton
+├─ lib/        format, haptics, android (ponte tipada), back (pilha do botão Voltar), latestWins (um pedido por vez, vale o último)
+├─ ui/         Icon, Toast, Sheets (#modal-root), HoldButton, RangeSlider
 ├─ shell/      Pager (scroll-snap, retrato/paisagem), Nav (trilho/barra), Menu, Offline, connection
-├─ features/   uma pasta por página: power/ (pronta), pending/ (as que ainda usam a interface antiga)
+├─ features/   uma pasta por página: power/ e sound/ (prontas), pending/ (as que ainda usam a interface antiga)
 └─ styles/     style.css e pages.css, copiados sem mudança da interface antiga; v2.css só com o que é novo
-e2e/           testes em navegador (reusam o harness e o servidor falso de legacy/server/test/ui)
+e2e/           testes em navegador (reusam o harness e o servidor falso de legacy/server/test/ui); support.cjs tem os toques repetidos até pegar
 ```
 
 ## Regras desta migração

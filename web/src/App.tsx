@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { PendingPage } from './features/pending/PendingPage';
 import { PowerPage } from './features/power/PowerPage';
+import { SoundPage } from './features/sound/SoundPage';
 import { runBack } from './lib/back';
 import { vibrate } from './lib/haptics';
 import { useConnection, useWakeLock } from './shell/connection';
@@ -38,7 +39,7 @@ function Shell() {
         apps: <PendingPage section="apps" />,
         shortcuts: <PendingPage section="shortcuts" />,
         windows: <PendingPage section="windows" />,
-        sound: <PendingPage section="sound" />,
+        sound: <SoundPage />,
         pc: <PendingPage section="pc" />,
         power: <PowerPage />,
       }}
