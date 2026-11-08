@@ -1,0 +1,430 @@
+{
+  "$comment": "The made-up PC every agent implementation must be able to present for the contract tests (in-process fakes for the Node server, a fake-platform mode for the Rust agent). Deterministic: no clock, no randomness.",
+  "host": "PC-TESTE",
+  "token": "contract-token-0123456789abcdef",
+  "config": {
+    "port": 7878,
+    "hidden": [
+      "cccccccc"
+    ],
+    "editor": true,
+    "powerControls": true,
+    "miniPlayer": true,
+    "macros": [
+      {
+        "id": "foco",
+        "label": "Foco",
+        "page": "shortcuts",
+        "steps": [
+          {
+            "type": "volume",
+            "level": 20
+          },
+          {
+            "type": "mute",
+            "muted": false
+          }
+        ]
+      },
+      {
+        "id": "lento",
+        "label": "Lento",
+        "page": "shortcuts",
+        "steps": [
+          {
+            "type": "wait",
+            "ms": 400
+          }
+        ]
+      }
+    ],
+    "shortcuts": [
+      {
+        "id": "copy",
+        "label": "Copiar",
+        "keys": "ctrl+c"
+      },
+      {
+        "id": "paste",
+        "label": "Colar",
+        "keys": "ctrl+v"
+      }
+    ],
+    "tileOrder": {
+      "apps": [],
+      "shortcuts": []
+    }
+  },
+  "apps": [
+    {
+      "id": "aaaaaaaa",
+      "name": "Navegador",
+      "proc": "browser",
+      "hasIcon": false,
+      "iconVersion": ""
+    },
+    {
+      "id": "bbbbbbbb",
+      "name": "Editor",
+      "proc": "editor",
+      "hasIcon": false,
+      "iconVersion": ""
+    },
+    {
+      "id": "cccccccc",
+      "name": "Escondido",
+      "proc": "hidden",
+      "hasIcon": false,
+      "iconVersion": ""
+    },
+    {
+      "id": "dddddddd",
+      "name": "Terminal",
+      "proc": "terminal",
+      "hasIcon": false,
+      "iconVersion": ""
+    }
+  ],
+  "windows": [
+    {
+      "handle": 101,
+      "name": "editor",
+      "title": "Documento - Editor",
+      "state": 0,
+      "monitor": 0,
+      "x": 100,
+      "y": 80,
+      "w": 900,
+      "h": 600
+    },
+    {
+      "handle": 102,
+      "name": "browser",
+      "title": "Pagina",
+      "state": 2,
+      "monitor": 0,
+      "x": 0,
+      "y": 0,
+      "w": 1920,
+      "h": 1040
+    },
+    {
+      "handle": 103,
+      "name": "textinputhost",
+      "title": "Microsoft Text Input Application",
+      "state": 0,
+      "monitor": 0,
+      "x": 0,
+      "y": 0,
+      "w": 10,
+      "h": 10
+    },
+    {
+      "handle": 104,
+      "name": "applicationframehost",
+      "title": "Calculadora",
+      "state": 1,
+      "monitor": 0,
+      "x": 0,
+      "y": 0,
+      "w": 0,
+      "h": 0
+    }
+  ],
+  "screens": [
+    {
+      "device": "DISPLAY1",
+      "left": 0,
+      "top": 0,
+      "width": 1920,
+      "height": 1080,
+      "primary": true,
+      "brightness": 60
+    }
+  ],
+  "volume": {
+    "level": 30,
+    "muted": false
+  },
+  "mic": {
+    "available": true,
+    "muted": false
+  },
+  "audio": {
+    "playback": [
+      {
+        "id": "out1",
+        "name": "Alto-falantes (Realtek)",
+        "adapter": "Realtek",
+        "default": true,
+        "level": 40,
+        "muted": false
+      },
+      {
+        "id": "out2",
+        "name": "Fone Bluetooth",
+        "adapter": "BT",
+        "default": false,
+        "level": 70,
+        "muted": false
+      }
+    ],
+    "capture": [
+      {
+        "id": "in1",
+        "name": "Microfone (USB)",
+        "adapter": "USB",
+        "default": true,
+        "level": 80,
+        "muted": false
+      }
+    ],
+    "sessions": [
+      {
+        "pid": 0,
+        "system": true,
+        "label": "Sons do sistema",
+        "active": false,
+        "level": 100,
+        "muted": false
+      },
+      {
+        "pid": 11,
+        "system": false,
+        "label": "Navegador",
+        "active": true,
+        "level": 55,
+        "muted": false
+      }
+    ]
+  },
+  "media": {
+    "current": "s1",
+    "sessions": [
+      {
+        "id": "s1",
+        "app": "Spotify",
+        "status": "playing",
+        "title": "Uma faixa",
+        "artist": "Banda",
+        "album": "Disco",
+        "duration": 215,
+        "position": 42,
+        "canPlay": true,
+        "canPause": true,
+        "canPrev": true,
+        "canNext": true,
+        "canSeek": true,
+        "hasArt": true,
+        "artKey": "0123456789ab"
+      }
+    ]
+  },
+  "monitor": {
+    "sample": {
+      "cpu": {
+        "usage": 23,
+        "freqMHz": 4200,
+        "temp": 51,
+        "tempSource": "fake",
+        "power": 40,
+        "processes": 210,
+        "threads": 3100,
+        "cores": [
+          10,
+          20,
+          30,
+          40
+        ]
+      },
+      "memory": {
+        "usedPct": 48,
+        "usedMB": 15000,
+        "totalMB": 32000,
+        "commitUsedMB": 20000,
+        "commitLimitMB": 40000
+      },
+      "gpu": {
+        "name": "NVIDIA GeForce RTX 4070",
+        "usage": 35,
+        "memUsedMB": 4000,
+        "memTotalMB": 12000,
+        "temp": 60,
+        "power": 120,
+        "powerLimit": 200,
+        "fan": 40,
+        "clock": 2100
+      },
+      "disk": {
+        "total": {
+          "active": 5,
+          "readBps": 1000,
+          "writeBps": 2000
+        },
+        "drives": [
+          {
+            "name": "C:",
+            "label": "Sistema",
+            "totalGB": 500,
+            "freeGB": 200
+          },
+          {
+            "name": "D:",
+            "label": "Jogos",
+            "totalGB": 730,
+            "freeGB": 195
+          }
+        ]
+      },
+      "network": [
+        {
+          "name": "Ethernet",
+          "downBps": 5000,
+          "upBps": 1000,
+          "speed": "1 Gbps"
+        }
+      ],
+      "fps": null
+    },
+    "fps": null,
+    "processes": {
+      "cpu": [
+        {
+          "name": "Navegador",
+          "cpu": 12,
+          "memMB": 800,
+          "count": 4
+        },
+        {
+          "name": "Editor",
+          "cpu": 8,
+          "memMB": 500,
+          "count": 1
+        }
+      ],
+      "mem": [
+        {
+          "name": "Navegador",
+          "cpu": 12,
+          "memMB": 800,
+          "count": 4
+        },
+        {
+          "name": "Editor",
+          "cpu": 8,
+          "memMB": 500,
+          "count": 1
+        }
+      ]
+    },
+    "info": {
+      "host": "PC-TESTE",
+      "user": "tester",
+      "os": {
+        "name": "Microsoft Windows 11 Pro",
+        "version": "10.0",
+        "build": "26100",
+        "arch": "64-bit",
+        "installed": "2025-01-01T00:00:00",
+        "lastBoot": "2026-10-22T08:00:00"
+      },
+      "cpu": {
+        "name": "CPU de teste",
+        "cores": 8,
+        "threads": 16,
+        "maxMHz": 4500,
+        "l2KB": 8192,
+        "l3KB": 32768
+      },
+      "memory": {
+        "totalGB": 32,
+        "modules": [
+          {
+            "slot": "DIMM1",
+            "sizeGB": 16,
+            "type": "DDR5",
+            "speed": 6000
+          }
+        ]
+      },
+      "gpus": [
+        {
+          "name": "GPU de teste",
+          "vramGB": 12,
+          "driver": "1.0"
+        }
+      ],
+      "board": {
+        "maker": "Fabricante",
+        "model": "Modelo",
+        "bios": "1.0",
+        "biosDate": "2025-01-01T00:00:00"
+      },
+      "storage": [
+        {
+          "model": "NVMe de teste",
+          "sizeGB": 1000,
+          "type": "SSD",
+          "bus": "NVMe"
+        }
+      ],
+      "network": [
+        {
+          "name": "Ethernet",
+          "ip": "192.168.0.2",
+          "speed": "1 Gbps",
+          "mac": "AA:BB:CC:DD:EE:FF"
+        }
+      ],
+      "monitors": [
+        {
+          "name": "Tela 1",
+          "primary": true,
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "drives": [
+        {
+          "name": "C:",
+          "label": "Sistema",
+          "fs": "NTFS",
+          "totalGB": 500,
+          "freeGB": 200
+        }
+      ]
+    }
+  },
+  "power": {
+    "uptimeSec": 10800,
+    "lastBoot": "2026-10-22T08:00:00.000Z",
+    "hibernate": false,
+    "fastStartup": false,
+    "rebootPending": false,
+    "openApps": [
+      {
+        "name": "Navegador",
+        "count": 1
+      },
+      {
+        "name": "Editor",
+        "count": 1
+      }
+    ]
+  },
+  "camera": {
+    "live": false,
+    "fps": 0,
+    "kbps": 0,
+    "viewers": 0,
+    "wanted": false,
+    "ageMs": null
+  },
+  "vcam": {
+    "name": "Self Stream Deck Camera",
+    "installed": false,
+    "inUse": false,
+    "busy": false
+  },
+  "artPngBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+}

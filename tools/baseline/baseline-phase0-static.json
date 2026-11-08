@@ -1,0 +1,22 @@
+{
+  "takenAt": "2026-11-08T13:57:09.351Z",
+  "static": {
+    "loc": {
+      "serverJs": 3349,
+      "webJs": 4529,
+      "webCss": 1123,
+      "nativeCs": 2072,
+      "powershell": 1275,
+      "androidJava": 408,
+      "tests": 3770
+    },
+    "web": {
+      "files": 31,
+      "bytes": 279818,
+      "gzipBytes": 91588
+    },
+    "dependencies": {
+      "server": 0
+    }
+  }
+}

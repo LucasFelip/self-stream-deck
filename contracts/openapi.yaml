@@ -1,0 +1,1354 @@
+openapi: 3.1.0
+info:
+  title: self-stream-deck agent API
+  version: 0.1.0
+  description: |
+    The API the PC-side agent exposes to the phone (web interface, Android WebView, Safari on iPhone).
+    This file is the single source of truth: the web client types are generated from it and every agent
+    implementation (the current Node server, the future Rust agent) is checked against it by `tools/contract-test`.
+
+    **Conventions**
+    - JSON in, JSON out (`Content-Type: application/json`), except the SSE stream, the camera stream and binary bodies.
+    - Every error is `{ "error": "<message>" }` with the status code that says what happened. A 500 never leaks a stack.
+    - Everything that reaches the PC is validated against lists the agent owns (taskbar apps, config shortcuts, live
+      devices, whitelisted macro steps). The client never sends paths, commands or key codes.
+    - Destructive actions need an explicit `confirm: true` in the body.
+    - Static files (the web interface) are served from `/` and are not part of this contract; `/pair.html`,
+      `/manifest.webmanifest`, `/pair.js` and `/icons/*.png` are readable without the token.
+servers:
+  - url: http://127.0.0.1:7878
+    description: this PC (and the USB tunnel, `adb reverse`)
+  - url: https://{host}:{port}
+    description: home network, HTTPS with a certificate the phone pins
+    variables:
+      host: { default: 192.168.0.2 }
+      port: { default: '7879' }
+security:
+  - tokenQuery: []
+  - tokenHeader: []
+  - tokenCookie: []
+
+tags:
+  - { name: apps, description: Taskbar apps, launching and the header state }
+  - { name: keys, description: Shortcuts, macros and media keys }
+  - { name: editor, description: Button editor and key layout }
+  - { name: audio, description: Volume, devices and the per-app mixer }
+  - { name: media, description: Now playing (Windows media session) }
+  - { name: windows, description: Windows and screens }
+  - { name: pc, description: System monitor and power }
+  - { name: camera, description: The phone camera as a webcam }
+  - { name: events, description: Live updates (server-sent events) }
+  - { name: system, description: Health, pairing and diagnostics }
+
+paths:
+  /api/ping:
+    get:
+      tags: [system]
+      operationId: ping
+      summary: Is the agent up and is the token accepted
+      responses:
+        '200': { description: ok, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '421': { $ref: '#/components/responses/BadHost' }
+        '429': { $ref: '#/components/responses/LockedOut' }
+
+  /api/pair-code:
+    get:
+      tags: [system]
+      operationId: getPairCode
+      summary: The pairing code, for an authenticated browser
+      description: The iPhone Home Screen app keeps its own cookies, so the code is copied from Safari and pasted there.
+      responses:
+        '200':
+          description: the code
+          content: { application/json: { schema: { type: object, required: [code], properties: { code: { type: string } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/requests:
+    get:
+      tags: [system]
+      operationId: getRequestCounts
+      summary: How many times each route was used since the agent started
+      responses:
+        '200':
+          description: counters
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [since, counts]
+                properties:
+                  since: { type: string, format: date-time }
+                  counts: { type: object, additionalProperties: { type: integer, minimum: 0 } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/state:
+    get:
+      tags: [apps]
+      operationId: getState
+      summary: Everything the header and the app dots show, in one object
+      description: Also pushed as the `state` event.
+      responses:
+        '200': { description: state, content: { application/json: { schema: { $ref: '#/components/schemas/State' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/apps:
+    get:
+      tags: [apps]
+      operationId: listApps
+      summary: The taskbar apps the deck shows (hidden ones left out)
+      responses:
+        '200': { description: apps, content: { application/json: { schema: { $ref: '#/components/schemas/AppList' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/icon/{id}:
+    get:
+      tags: [apps]
+      operationId: getAppIcon
+      summary: The icon (PNG) of a taskbar app
+      description: The URL carries `?v=<iconVersion>`, so a cached copy is never stale (immutable, one year).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: PNG, content: { image/png: { schema: { type: string, format: binary } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/refresh:
+    post:
+      tags: [apps]
+      operationId: refreshApps
+      summary: Read the taskbar again now
+      responses:
+        '200':
+          description: how many visible apps there are
+          content: { application/json: { schema: { type: object, required: [count], properties: { count: { type: integer, minimum: 0 } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+
+  /api/launch/{id}:
+    post:
+      tags: [apps]
+      operationId: launchApp
+      summary: Start an app, or bring its window to the front when it already has one
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: done
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, name, action]
+                properties:
+                  ok: { const: true }
+                  name: { type: string }
+                  action: { enum: [launched, focused] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/mic:
+    post:
+      tags: [audio]
+      operationId: setMic
+      summary: Mute, unmute or toggle the default microphone
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [muted], properties: { muted: { $ref: '#/components/schemas/Toggle' } } } } }
+      responses:
+        '200': { description: the microphone now, content: { application/json: { schema: { $ref: '#/components/schemas/Mic' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+
+  /api/shortcuts:
+    get:
+      tags: [keys]
+      operationId: listShortcuts
+      summary: Keyboard shortcuts configured on the PC
+      responses:
+        '200':
+          description: shortcuts (the key combination itself stays on the PC)
+          content: { application/json: { schema: { type: object, required: [shortcuts], properties: { shortcuts: { type: array, items: { $ref: '#/components/schemas/Shortcut' } } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/shortcut/{id}:
+    post:
+      tags: [keys]
+      operationId: pressShortcut
+      summary: Press a configured shortcut
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: pressed
+          content: { application/json: { schema: { type: object, required: [ok, label], properties: { ok: { const: true }, label: { type: string } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/mediakey/{key}:
+    post:
+      tags: [keys]
+      operationId: pressMediaKey
+      summary: Press a global media key
+      parameters:
+        - { name: key, in: path, required: true, schema: { enum: [prev, playpause, next] } }
+      responses:
+        '200': { description: pressed, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/macros:
+    get:
+      tags: [keys]
+      operationId: listMacros
+      summary: Macros (only the number of steps, not the steps)
+      responses:
+        '200':
+          description: macros
+          content: { application/json: { schema: { type: object, required: [macros], properties: { macros: { type: array, items: { $ref: '#/components/schemas/MacroSummary' } } } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/macro/{id}:
+    post:
+      tags: [keys]
+      operationId: runMacro
+      summary: Run a macro
+      description: One run of each macro at a time. A failing step is reported and the macro goes on. `camera` steps are handed back in `client` to run on the phone.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: the outcome, content: { application/json: { schema: { $ref: '#/components/schemas/MacroOutcome' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/editor:
+    get:
+      tags: [editor]
+      operationId: getEditor
+      summary: Everything the button editor needs
+      responses:
+        '200': { description: editor data, content: { application/json: { schema: { $ref: '#/components/schemas/EditorData' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/editor/shortcuts:
+    post:
+      tags: [editor]
+      operationId: saveShortcuts
+      summary: Replace the shortcut list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  maxItems: 60
+                  items:
+                    type: object
+                    required: [label, keys]
+                    properties:
+                      id: { type: string, pattern: '^[a-z0-9-]{1,40}$' }
+                      label: { type: string, maxLength: 40 }
+                      keys: { type: string, maxLength: 60, examples: ['ctrl+shift+s'] }
+      responses:
+        '200':
+          description: the saved list
+          content: { application/json: { schema: { type: object, required: [shortcuts], properties: { shortcuts: { type: array, items: { $ref: '#/components/schemas/EditorShortcut' } } } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+
+  /api/editor/macros:
+    post:
+      tags: [editor]
+      operationId: saveMacros
+      summary: Replace the macro list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  maxItems: 40
+                  items:
+                    type: object
+                    required: [label, steps]
+                    properties:
+                      id: { type: string, pattern: '^[a-z0-9-]{1,40}$' }
+                      label: { type: string, maxLength: 40 }
+                      page: { enum: [shortcuts, apps] }
+                      steps: { type: array, minItems: 1, maxItems: 40, items: { $ref: '#/components/schemas/MacroStep' } }
+      responses:
+        '200':
+          description: the saved list
+          content: { application/json: { schema: { type: object, required: [macros], properties: { macros: { type: array, items: { $ref: '#/components/schemas/Macro' } } } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+
+  /api/editor/apps:
+    post:
+      tags: [editor]
+      operationId: saveHiddenApps
+      summary: Replace the list of taskbar apps hidden from the deck
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hidden]
+              properties:
+                hidden: { type: array, maxItems: 200, items: { type: string } }
+      responses:
+        '200': { description: saved, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/layout:
+    get:
+      tags: [editor]
+      operationId: getLayout
+      summary: Where each key sits on the Apps and Shortcuts pages
+      responses:
+        '200': { description: order of keys, content: { application/json: { schema: { $ref: '#/components/schemas/Layout' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [editor]
+      operationId: saveLayout
+      summary: Save the order of one page (duplicates collapse)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [page, order]
+              properties:
+                page: { enum: [apps, shortcuts] }
+                order: { type: array, maxItems: 200, items: { $ref: '#/components/schemas/TileKey' } }
+      responses:
+        '200': { description: the whole layout, content: { application/json: { schema: { $ref: '#/components/schemas/Layout' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/volume:
+    get:
+      tags: [audio]
+      operationId: getVolume
+      summary: Master volume of the default output
+      responses:
+        '200': { description: volume, content: { application/json: { schema: { $ref: '#/components/schemas/Volume' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    post:
+      tags: [audio]
+      operationId: setVolume
+      summary: Set the level (clamped to 0..100) and/or mute, unmute or toggle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                level: { type: number }
+                muted: { $ref: '#/components/schemas/Toggle' }
+      responses:
+        '200': { description: volume now, content: { application/json: { schema: { $ref: '#/components/schemas/Volume' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+
+  /api/audio:
+    get:
+      tags: [audio]
+      operationId: getAudio
+      summary: Output and input devices and the per-app mixer
+      description: Also pushed as the `audio` event.
+      responses:
+        '200': { description: audio, content: { application/json: { schema: { $ref: '#/components/schemas/Audio' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/audio/default:
+    post:
+      tags: [audio]
+      operationId: setDefaultDevice
+      summary: Make a device the default output or input
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [id], properties: { id: { type: string } } } } }
+      responses:
+        '200': { description: done, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/audio/device:
+    post:
+      tags: [audio]
+      operationId: setDeviceVolume
+      summary: Volume and/or mute of one device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+                level: { type: number }
+                muted: { type: boolean }
+      responses:
+        '200': { description: done, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/audio/session:
+    post:
+      tags: [audio]
+      operationId: setSessionVolume
+      summary: Volume and/or mute of one application in the mixer
+      description: 'Name the app by `pid` (a non-negative integer) or send `system: true` for the system sounds.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pid: { type: integer, minimum: 0 }
+                system: { type: boolean }
+                level: { type: number }
+                muted: { type: boolean }
+      responses:
+        '200': { description: done, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+
+  /api/media:
+    get:
+      tags: [media]
+      operationId: getMedia
+      summary: Players with a media session and what each is playing
+      description: Also pushed as the `media` event.
+      responses:
+        '200': { description: media, content: { application/json: { schema: { $ref: '#/components/schemas/Media' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/media/control:
+    post:
+      tags: [media]
+      operationId: controlMedia
+      summary: Send a command to one player
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [session, action]
+              properties:
+                session: { type: string, minLength: 1, maxLength: 300 }
+                action: { enum: [toggle, play, pause, next, previous, seek] }
+                position: { type: number, minimum: 0, maximum: 604800, description: 'seconds; required for seek' }
+      responses:
+        '200':
+          description: whether the player accepted it
+          content: { application/json: { schema: { type: object, required: [ok, accepted], properties: { ok: { const: true }, accepted: { type: boolean } } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+
+  /api/media/art:
+    get:
+      tags: [media]
+      operationId: getMediaArt
+      summary: Cover art of the current track
+      description: '`key` changes per track, so the response is immutable.'
+      parameters:
+        - { name: session, in: query, required: true, schema: { type: string, minLength: 1 } }
+        - { name: key, in: query, required: true, schema: { type: string, pattern: '^[0-9a-f]{12}$' } }
+      responses:
+        '200':
+          description: the image
+          content:
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+            image/gif: { schema: { type: string, format: binary } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/windows:
+    get:
+      tags: [windows]
+      operationId: listWindows
+      summary: Visible top-level windows (shell windows left out)
+      description: Also pushed as the `windows` event (the agent pushes when a window changes).
+      responses:
+        '200': { description: windows, content: { application/json: { schema: { $ref: '#/components/schemas/Windows' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/windows/action:
+    post:
+      tags: [windows]
+      operationId: windowAction
+      summary: Focus, minimize, maximize, restore or close a window
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [handle, action]
+              properties:
+                handle: { type: integer, minimum: 1 }
+                action: { enum: [focus, minimize, maximize, restore, close] }
+      responses:
+        '200': { description: done, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/windows/move:
+    post:
+      tags: [windows]
+      operationId: moveWindow
+      summary: Send a window to another screen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [handle, monitor]
+              properties:
+                handle: { type: integer, minimum: 1 }
+                monitor: { type: integer, minimum: 0, maximum: 15 }
+      responses:
+        '200': { description: done, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/windows/place:
+    post:
+      tags: [windows]
+      operationId: placeWindow
+      summary: Put a window at a position of the virtual desktop (real pixels)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [handle, x, y]
+              properties:
+                handle: { type: integer, minimum: 1 }
+                x: { type: number, minimum: -100000, maximum: 100000 }
+                y: { type: number, minimum: -100000, maximum: 100000 }
+      responses:
+        '200': { description: done, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/windows/snap:
+    post:
+      tags: [windows]
+      operationId: snapWindow
+      summary: Snap a window to the left half, right half or full size of a screen
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [handle, monitor, zone]
+              properties:
+                handle: { type: integer, minimum: 1 }
+                monitor: { type: integer, minimum: 0, maximum: 15 }
+                zone: { enum: [left, right, full] }
+      responses:
+        '200': { description: done, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/screens:
+    get:
+      tags: [windows]
+      operationId: listScreens
+      summary: Screens with their place in the virtual desktop and brightness
+      parameters:
+        - { name: brightness, in: query, required: false, description: '`0` skips the slow DDC/CI brightness reads', schema: { enum: ['0', '1'] } }
+      responses:
+        '200': { description: screens, content: { application/json: { schema: { $ref: '#/components/schemas/Screens' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/screens/brightness:
+    post:
+      tags: [windows]
+      operationId: setBrightness
+      summary: Brightness of one screen (DDC/CI)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [device, level]
+              properties:
+                device: { type: string }
+                level: { type: number }
+      responses:
+        '200': { description: done, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/screens/off:
+    post:
+      tags: [windows]
+      operationId: screensOff
+      summary: Turn the screens off (they wake on input)
+      responses:
+        '200': { description: done, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+
+  /api/screens/project:
+    post:
+      tags: [windows]
+      operationId: projectScreens
+      summary: Windows' projection switcher
+      description: The single-screen modes (`first`, `second`) can leave a monitor black, so they need `confirm`. **Changes the display configuration of the PC.**
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode: { enum: [extend, clone, first, second] }
+                confirm: { type: boolean }
+      responses:
+        '200': { description: done, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+
+  /api/monitor/sample:
+    get:
+      tags: [pc]
+      operationId: getMonitorSample
+      summary: One reading of CPU, memory, GPU, disk and network
+      description: Also pushed as the `monitor` event.
+      responses:
+        '200': { description: sample, content: { application/json: { schema: { $ref: '#/components/schemas/MonitorSample' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/monitor/fps:
+    get:
+      tags: [pc]
+      operationId: getGameFps
+      summary: The running game's frame rate, or null
+      description: Also pushed as the `game` event.
+      responses:
+        '200':
+          description: frame rate
+          content: { application/json: { schema: { $ref: '#/components/schemas/GameFps' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/monitor/processes:
+    get:
+      tags: [pc]
+      operationId: getProcesses
+      summary: Top processes by CPU and by memory (read only)
+      description: Also pushed as the `processes` event.
+      responses:
+        '200': { description: processes, content: { application/json: { schema: { $ref: '#/components/schemas/Processes' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/monitor/info:
+    get:
+      tags: [pc]
+      operationId: getSystemInfo
+      summary: Hardware and system information ("Sistema")
+      responses:
+        '200': { description: info, content: { application/json: { schema: { $ref: '#/components/schemas/SystemInfo' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /api/power:
+    get:
+      tags: [pc]
+      operationId: getPower
+      summary: Uptime, pending reboot, open apps and the scheduled action
+      description: Also pushed as the `power` event.
+      responses:
+        '200': { description: power, content: { application/json: { schema: { $ref: '#/components/schemas/Power' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [pc]
+      operationId: performPower
+      summary: Lock, sleep, hibernate, log off, shut down, restart (optionally delayed) or cancel a scheduled one
+      description: |
+        Every action except `cancel` needs `confirm: true`. A shutdown/restart can be delayed (`delaySec`, up to 24 h) and
+        shows up as `scheduled` afterwards. With `"powerControls": false` in config.json this is 403.
+        **Powers the PC down: never executed against a real PC by the contract tests.**
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { enum: [lock, sleep, hibernate, logoff, shutdown, restart, firmware, advanced, cancel] }
+                confirm: { type: boolean }
+                delaySec: { type: integer, minimum: 0, maximum: 86400 }
+                force: { type: boolean }
+                hybrid: { type: boolean }
+      responses:
+        '200':
+          description: done
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, action]
+                properties:
+                  ok: { const: true }
+                  action: { type: string }
+                  at: { type: [integer, 'null'], description: epoch ms when the scheduled action fires }
+                  cancelled: { type: boolean }
+                  note: { type: [string, 'null'] }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/camera/frame:
+    post:
+      tags: [camera]
+      operationId: pushCameraFrame
+      summary: One JPEG frame from the phone camera
+      requestBody:
+        required: true
+        content: { image/jpeg: { schema: { type: string, format: binary } } }
+      responses:
+        '204':
+          description: accepted
+          headers:
+            X-Camera-Wanted:
+              description: '`1` when somebody uses the picture (send at full speed), `0` otherwise (one frame a second is enough)'
+              schema: { enum: ['0', '1'] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+
+  /api/camera/stream:
+    get:
+      tags: [camera]
+      operationId: getCameraStream
+      summary: The camera as an MJPEG stream (OBS Browser Source)
+      responses:
+        '200':
+          description: multipart/x-mixed-replace stream
+          content: { multipart/x-mixed-replace: { schema: { type: string, format: binary } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/camera/status:
+    get:
+      tags: [camera]
+      operationId: getCameraStatus
+      summary: Is the phone sending, and the state of the direct virtual camera
+      responses:
+        '200': { description: status, content: { application/json: { schema: { $ref: '#/components/schemas/CameraStatus' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/camera/copy-link:
+    post:
+      tags: [camera]
+      operationId: copyCameraLink
+      summary: Put the OBS link on this PC's clipboard
+      description: '**Changes the clipboard of the PC.**'
+      responses:
+        '200': { description: copied, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+
+  /api/camera/direct/install:
+    post:
+      tags: [camera]
+      operationId: installVirtualCamera
+      summary: Register the direct virtual camera (system-wide device)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Confirm' } } }
+      responses:
+        '200': { description: status now, content: { application/json: { schema: { $ref: '#/components/schemas/VirtualCamera' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+
+  /api/camera/direct/uninstall:
+    post:
+      tags: [camera]
+      operationId: uninstallVirtualCamera
+      summary: Remove the direct virtual camera
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Confirm' } } }
+      responses:
+        '200': { description: status now, content: { application/json: { schema: { $ref: '#/components/schemas/VirtualCamera' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+
+  /api/events:
+    get:
+      tags: [events]
+      operationId: subscribeEvents
+      summary: Server-sent events for the topics asked
+      description: |
+        Keeps the response open. A topic's current value arrives as soon as it is subscribed, and then again **only when it
+        changes** (compared by a signature, so a ticking clock does not count). A producer runs only while somebody listens.
+        Each message is `event: <topic>` + `data: <json>`; comment lines (`: keep-alive`) arrive every 20 s; the stream
+        starts with `retry: 2000`. The payload of each topic is described in `x-events` and is the same object the matching
+        GET route returns. If the stream cannot be opened the client polls the GET routes instead.
+      parameters:
+        - name: topics
+          in: query
+          required: true
+          style: form
+          explode: false
+          schema: { type: array, minItems: 1, items: { $ref: '#/components/schemas/EventTopic' } }
+      responses:
+        '200':
+          description: event stream
+          content: { text/event-stream: { schema: { type: string } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+x-events:
+  state: { $ref: '#/components/schemas/State' }
+  audio: { $ref: '#/components/schemas/Audio' }
+  media: { $ref: '#/components/schemas/Media' }
+  windows: { $ref: '#/components/schemas/Windows' }
+  power: { $ref: '#/components/schemas/Power' }
+  monitor: { $ref: '#/components/schemas/MonitorSample' }
+  processes: { $ref: '#/components/schemas/Processes' }
+  game: { $ref: '#/components/schemas/GameFps' }
+  notifications: { type: array, items: { type: object } }
+
+components:
+  securitySchemes:
+    tokenQuery: { type: apiKey, in: query, name: token, description: 'the pairing token (`/?token=...` sets the cookie and drops it from the URL)' }
+    tokenHeader: { type: apiKey, in: header, name: X-Token }
+    tokenCookie: { type: apiKey, in: cookie, name: ssd_token, description: 'set by the pairing link; HttpOnly, SameSite=Lax' }
+
+  responses:
+    BadRequest:
+      description: invalid input
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Unauthorized:
+      description: missing or wrong token (counts as a failed attempt)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: the feature is turned off in config.json (`editor`, `powerControls`)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    CrossOrigin:
+      description: a non-GET request whose `Origin` is not this agent's own host is refused
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotFound:
+      description: unknown id, device, screen or window
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Conflict:
+      description: the action is already running or cannot be done now
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    TooLarge:
+      description: the body is over the limit for this route
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    BadHost:
+      description: the `Host` header is not an IP, `localhost` or this machine's name (DNS rebinding guard)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    LockedOut:
+      description: 10 failed attempts from this address in a minute
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    ServerError:
+      description: a failure on the PC side; the message never carries a stack
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    Ok:
+      type: object
+      required: [ok]
+      properties:
+        ok: { const: true }
+    Confirm:
+      type: object
+      required: [confirm]
+      properties:
+        confirm: { const: true }
+    Toggle:
+      description: 'true, false or the string "toggle"'
+      oneOf:
+        - { type: boolean }
+        - { const: toggle }
+    Percent: { type: integer, minimum: 0, maximum: 100 }
+    TileKey:
+      description: '`a:` app, `s:` shortcut, `m:` macro, `c:` built-in key, then an id'
+      type: string
+      pattern: '^[asmc]:[A-Za-z0-9-]{1,48}$'
+
+    Volume:
+      type: object
+      required: [level, muted]
+      properties:
+        level: { $ref: '#/components/schemas/Percent' }
+        muted: { type: boolean }
+    Mic:
+      type: object
+      required: [available, muted]
+      properties:
+        available: { type: boolean }
+        muted: { type: boolean }
+
+    App:
+      type: object
+      required: [id, name, hasIcon, iconVersion]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        hasIcon: { type: boolean }
+        iconVersion: { type: string, description: 'icon hash; changes when the icon does' }
+    AppList:
+      type: object
+      required: [host, apps]
+      properties:
+        host: { type: string, description: this PC's name }
+        apps: { type: array, items: { $ref: '#/components/schemas/App' } }
+
+    NowPlaying:
+      type: object
+      required: [session, title, artist, app, status, canToggle]
+      properties:
+        session: { type: string }
+        title: { type: string }
+        artist: { type: string }
+        app: { type: string }
+        status: { type: string }
+        canToggle: { type: boolean }
+    PowerSchedule:
+      type: object
+      required: [action, at, force, inSec]
+      properties:
+        action: { type: string }
+        at: { type: integer }
+        force: { type: boolean }
+        inSec: { type: integer, description: 'countdown; clients count from this, not from `at` (the phone clock may differ)' }
+    State:
+      type: object
+      required: [running, open, scheduled, mic, volume, playing, miniPlayer, ui, appsRev]
+      properties:
+        running: { type: array, items: { type: string }, description: ids of apps with a process }
+        open: { type: array, items: { type: string }, description: ids of apps with a window }
+        scheduled: { oneOf: [{ $ref: '#/components/schemas/PowerSchedule' }, { type: 'null' }] }
+        mic: { oneOf: [{ $ref: '#/components/schemas/Mic' }, { type: 'null' }] }
+        volume: { oneOf: [{ $ref: '#/components/schemas/Volume' }, { type: 'null' }] }
+        playing: { oneOf: [{ $ref: '#/components/schemas/NowPlaying' }, { type: 'null' }] }
+        miniPlayer: { type: boolean }
+        ui: { type: integer, description: 'changes whenever a file of the interface changes: the page reloads itself' }
+        appsRev: { type: integer, description: 'goes up when the app list changes: the page reads the apps again' }
+
+    Shortcut:
+      type: object
+      required: [id, label, display]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        display: { type: string, examples: ['Ctrl+C'] }
+    EditorShortcut:
+      allOf:
+        - { $ref: '#/components/schemas/Shortcut' }
+        - type: object
+          required: [keys]
+          properties:
+            keys: { type: string, examples: ['ctrl+c'] }
+    MacroStep:
+      description: A whitelisted step. There is no step that runs a command, opens a path or types text.
+      oneOf:
+        - { type: object, required: [type, app], additionalProperties: false, properties: { type: { const: launch }, app: { type: string } } }
+        - { type: object, required: [type, keys], additionalProperties: false, properties: { type: { const: keys }, keys: { type: string } } }
+        - { type: object, required: [type, key], additionalProperties: false, properties: { type: { const: media }, key: { enum: [prev, playpause, next] } } }
+        - { type: object, required: [type, level], additionalProperties: false, properties: { type: { const: volume }, level: { $ref: '#/components/schemas/Percent' } } }
+        - { type: object, required: [type, muted], additionalProperties: false, properties: { type: { const: mute }, muted: { $ref: '#/components/schemas/Toggle' } } }
+        - { type: object, required: [type, muted], additionalProperties: false, properties: { type: { const: mic }, muted: { $ref: '#/components/schemas/Toggle' } } }
+        - { type: object, required: [type, device], additionalProperties: false, properties: { type: { const: output }, device: { type: string, maxLength: 300 }, name: { type: string, maxLength: 80 } } }
+        - { type: object, required: [type, app, monitor, zone], additionalProperties: false, properties: { type: { const: place }, app: { type: string }, monitor: { type: integer, minimum: 0, maximum: 15 }, zone: { enum: [left, right, full] } } }
+        - { type: object, required: [type, ms], additionalProperties: false, properties: { type: { const: wait }, ms: { type: integer, minimum: 100, maximum: 10000 } } }
+        - { type: object, required: [type, 'on'], additionalProperties: false, properties: { type: { const: camera }, 'on': { type: boolean } } }
+    Macro:
+      type: object
+      required: [id, label, page, steps]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        page: { enum: [shortcuts, apps] }
+        steps: { type: array, minItems: 1, maxItems: 40, items: { $ref: '#/components/schemas/MacroStep' } }
+    MacroSummary:
+      type: object
+      required: [id, label, page, steps]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        page: { enum: [shortcuts, apps] }
+        steps: { type: integer, minimum: 0, description: the number of steps }
+    MacroOutcome:
+      type: object
+      required: [ok, label, steps, client]
+      properties:
+        ok: { type: boolean, description: true when no step failed }
+        label: { type: string }
+        steps:
+          type: array
+          items:
+            type: object
+            required: [type, ok]
+            properties:
+              type: { type: string }
+              ok: { type: boolean }
+              error: { type: string }
+        client: { type: array, items: { $ref: '#/components/schemas/MacroStep' }, description: steps for the phone to run }
+
+    EditorApp:
+      allOf:
+        - { $ref: '#/components/schemas/App' }
+        - type: object
+          required: [hidden, canPlace]
+          properties:
+            hidden: { type: boolean }
+            canPlace: { type: boolean, description: the app has a process the agent can find a window of }
+    DeviceRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+    EditorData:
+      type: object
+      required: [shortcuts, macros, apps, devices, screens]
+      properties:
+        shortcuts: { type: array, items: { $ref: '#/components/schemas/EditorShortcut' } }
+        macros: { type: array, items: { $ref: '#/components/schemas/Macro' } }
+        apps: { type: array, items: { $ref: '#/components/schemas/EditorApp' } }
+        devices:
+          type: object
+          required: [playback, capture]
+          properties:
+            playback: { type: array, items: { $ref: '#/components/schemas/DeviceRef' } }
+            capture: { type: array, items: { $ref: '#/components/schemas/DeviceRef' } }
+        screens: { type: integer, minimum: 1 }
+    Layout:
+      type: object
+      required: [apps, shortcuts]
+      properties:
+        apps: { type: array, items: { $ref: '#/components/schemas/TileKey' } }
+        shortcuts: { type: array, items: { $ref: '#/components/schemas/TileKey' } }
+
+    AudioDevice:
+      type: object
+      required: [id, name, default, level, muted]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        adapter: { type: string }
+        default: { type: boolean }
+        level: { $ref: '#/components/schemas/Percent' }
+        muted: { type: boolean }
+    AudioSession:
+      type: object
+      required: [pid, system, label, active, level, muted]
+      properties:
+        pid: { type: integer, minimum: 0 }
+        system: { type: boolean }
+        label: { type: string }
+        active: { type: boolean }
+        level: { $ref: '#/components/schemas/Percent' }
+        muted: { type: boolean }
+    Audio:
+      type: object
+      required: [playback, capture, sessions]
+      properties:
+        playback: { type: array, items: { $ref: '#/components/schemas/AudioDevice' } }
+        capture: { type: array, items: { $ref: '#/components/schemas/AudioDevice' } }
+        sessions: { type: array, items: { $ref: '#/components/schemas/AudioSession' } }
+
+    MediaSession:
+      type: object
+      required: [id, app, status, title, artist, album, duration, position, canPlay, canPause, canPrev, canNext, canSeek, hasArt, artKey]
+      properties:
+        id: { type: string }
+        app: { type: string }
+        status: { type: string, examples: [playing, paused, stopped] }
+        title: { type: string }
+        artist: { type: string }
+        album: { type: string }
+        duration: { type: number, minimum: 0, description: seconds }
+        position: { type: number, minimum: 0, description: seconds }
+        canPlay: { type: boolean }
+        canPause: { type: boolean }
+        canPrev: { type: boolean }
+        canNext: { type: boolean }
+        canSeek: { type: boolean }
+        hasArt: { type: boolean }
+        artKey: { type: string, description: 'changes per track; use it as `key` in /api/media/art (12 hex characters)' }
+    Media:
+      type: object
+      required: [current, sessions]
+      properties:
+        current: { type: [string, 'null'], description: id of the session Windows considers current }
+        sessions: { type: array, items: { $ref: '#/components/schemas/MediaSession' } }
+
+    Window:
+      type: object
+      required: [handle, title, app, appId, iconVersion, state, monitor, x, y, w, h]
+      properties:
+        handle: { type: integer, minimum: 1 }
+        title: { type: string }
+        app: { type: string, description: 'readable app name; empty for UWP windows (the title is the useful part)' }
+        appId: { type: [string, 'null'], description: id of the taskbar app, when it is one }
+        iconVersion: { type: string }
+        state: { enum: [0, 1, 2], description: '0 normal, 1 minimized, 2 maximized' }
+        monitor: { type: integer, minimum: 0 }
+        x: { type: integer }
+        y: { type: integer }
+        w: { type: integer }
+        h: { type: integer }
+    Windows:
+      type: object
+      required: [windows]
+      properties:
+        windows: { type: array, items: { $ref: '#/components/schemas/Window' } }
+    Screen:
+      type: object
+      required: [device, left, top, width, height, primary]
+      properties:
+        device: { type: string }
+        left: { type: integer }
+        top: { type: integer }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        primary: { type: boolean }
+        brightness: { type: [integer, 'null'], description: 'null when the screen does not support DDC/CI or `?brightness=0` was used' }
+    Screens:
+      type: object
+      required: [monitors]
+      properties:
+        monitors: { type: array, items: { $ref: '#/components/schemas/Screen' } }
+
+    MonitorSample:
+      type: object
+      required: [cpu, memory, gpu, disk, network, fps]
+      properties:
+        cpu:
+          type: object
+          required: [usage, cores]
+          properties:
+            usage: { type: number }
+            freqMHz: { type: number }
+            temp: { type: [number, 'null'] }
+            tempSource: { type: string }
+            power: { type: [number, 'null'] }
+            processes: { type: integer }
+            threads: { type: integer }
+            cores: { type: array, items: { type: number } }
+        memory:
+          type: object
+          required: [usedPct, usedMB, totalMB]
+          properties:
+            usedPct: { type: number }
+            usedMB: { type: number }
+            totalMB: { type: number }
+            commitUsedMB: { type: number }
+            commitLimitMB: { type: number }
+        gpu:
+          description: null when the PC has no readable GPU
+          oneOf:
+            - { type: 'null' }
+            - type: object
+              required: [name, usage]
+              properties:
+                name: { type: string }
+                usage: { type: number }
+                memUsedMB: { type: number }
+                memTotalMB: { type: number }
+                temp: { type: [number, 'null'] }
+                power: { type: [number, 'null'] }
+                powerLimit: { type: [number, 'null'] }
+                fan: { type: [number, 'null'] }
+                clock: { type: [number, 'null'] }
+        disk:
+          type: object
+          required: [total, drives]
+          properties:
+            total:
+              type: object
+              required: [active, readBps, writeBps]
+              properties:
+                active: { type: number }
+                readBps: { type: number }
+                writeBps: { type: number }
+            drives:
+              type: array
+              items:
+                type: object
+                required: [name, totalGB, freeGB]
+                properties:
+                  name: { type: string }
+                  label: { type: string }
+                  totalGB: { type: number }
+                  freeGB: { type: number }
+        network:
+          type: array
+          items:
+            type: object
+            required: [name, downBps, upBps]
+            properties:
+              name: { type: string }
+              downBps: { type: number }
+              upBps: { type: number }
+              speed: { type: string }
+        fps: { $ref: '#/components/schemas/GameFps' }
+    GameFps:
+      oneOf:
+        - { type: 'null' }
+        - type: object
+          required: [fps]
+          properties:
+            fps: { type: number }
+            frameMs: { type: number }
+            app: { type: string }
+    ProcessGroup:
+      type: object
+      required: [name, cpu, memMB, count]
+      properties:
+        name: { type: string }
+        cpu: { type: number }
+        memMB: { type: number }
+        count: { type: integer, minimum: 1 }
+    Processes:
+      type: object
+      required: [cpu, mem]
+      properties:
+        cpu: { type: array, items: { $ref: '#/components/schemas/ProcessGroup' } }
+        mem: { type: array, items: { $ref: '#/components/schemas/ProcessGroup' } }
+    SystemInfo:
+      type: object
+      required: [host, os, cpu, memory, gpus, board, storage, network, monitors, drives]
+      properties:
+        host: { type: string }
+        user: { type: string }
+        os:
+          type: object
+          required: [name, version, build]
+          properties:
+            name: { type: string }
+            version: { type: string }
+            build: { type: string }
+            arch: { type: string }
+            installed: { type: string }
+            lastBoot: { type: string }
+        cpu: { type: object, required: [name, cores, threads], properties: { name: { type: string }, cores: { type: integer }, threads: { type: integer }, maxMHz: { type: number }, l2KB: { type: number }, l3KB: { type: number } } }
+        memory: { type: object, required: [totalGB, modules], properties: { totalGB: { type: number }, modules: { type: array, items: { type: object } } } }
+        gpus: { type: array, items: { type: object, required: [name], properties: { name: { type: string }, vramGB: { type: number }, driver: { type: string } } } }
+        board: { type: object }
+        storage: { type: array, items: { type: object } }
+        network: { type: array, items: { type: object } }
+        monitors: { type: array, items: { type: object, required: [name, width, height], properties: { name: { type: string }, primary: { type: boolean }, width: { type: integer }, height: { type: integer } } } }
+        drives: { type: array, items: { type: object, required: [name, totalGB, freeGB], properties: { name: { type: string }, label: { type: string }, fs: { type: string }, totalGB: { type: number }, freeGB: { type: number } } } }
+
+    Power:
+      type: object
+      required: [enabled, uptimeSec, lastBoot, hibernate, fastStartup, rebootPending, openApps, scheduled]
+      properties:
+        enabled: { type: boolean, description: 'false when `powerControls` is off in config.json' }
+        uptimeSec: { type: integer, minimum: 0 }
+        lastBoot: { type: string }
+        hibernate: { type: boolean }
+        fastStartup: { type: boolean }
+        rebootPending: { type: boolean }
+        openApps:
+          type: array
+          maxItems: 16
+          description: windows that could hold unsaved work, shown in the confirmation
+          items:
+            type: object
+            required: [name, count]
+            properties:
+              name: { type: string }
+              count: { type: integer, minimum: 1 }
+        scheduled: { oneOf: [{ $ref: '#/components/schemas/PowerSchedule' }, { type: 'null' }] }
+
+    VirtualCamera:
+      type: object
+      required: [name, installed, inUse, busy]
+      properties:
+        name: { type: string }
+        installed: { type: boolean }
+        inUse: { type: boolean }
+        busy: { type: boolean }
+    CameraStatus:
+      type: object
+      required: [live, fps, kbps, viewers, wanted, ageMs, link, direct]
+      properties:
+        live: { type: boolean }
+        fps: { type: integer, minimum: 0 }
+        kbps: { type: integer, minimum: 0 }
+        viewers: { type: integer, minimum: 0 }
+        wanted: { type: boolean }
+        ageMs: { type: [integer, 'null'] }
+        link: { type: string, description: 'the OBS Browser Source link' }
+        direct: { $ref: '#/components/schemas/VirtualCamera' }
+
+    EventTopic:
+      enum: [windows, state, audio, media, notifications, monitor, game, processes, power]

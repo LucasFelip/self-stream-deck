@@ -44,7 +44,7 @@ function createRoutes(config, overrides = {}) {
     return false;
   }
 
-  return { dispatch, refreshApps: ctx.refreshApps, appCount: () => ctx.apps().length };
+  return { dispatch, refreshApps: ctx.refreshApps, appCount: () => ctx.apps().length, routeTable: () => table.map(({ method, pattern }) => ({ method, pattern })) };
 }
 
 module.exports = { createRoutes };

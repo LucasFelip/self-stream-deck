@@ -234,8 +234,8 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.strictEqual(await page.eval('Deck.back()'), false, 'on Apps with nothing open there is nothing to undo');
     });
 
-    const setApps = (count) => { deck.model.apps = Array.from({ length: count }, (_, i) => ({ id: `big${i}`, name: `Aplicativo numero ${i}`, hasIcon: false, iconVersion: 0 })); };
-    const resetApps = () => { deck.model.apps = ['Navegador', 'Terminal', 'Editor', 'Chat', 'Música', 'Jogos'].map((name, i) => ({ id: `app${i}`, name, hasIcon: false, iconVersion: 0 })); };
+    const setApps = (count) => { deck.model.apps = Array.from({ length: count }, (_, i) => ({ id: `big${i}`, name: `Aplicativo numero ${i}`, hasIcon: false, iconVersion: '' })); };
+    const resetApps = () => { deck.model.apps = ['Navegador', 'Terminal', 'Editor', 'Chat', 'Música', 'Jogos'].map((name, i) => ({ id: `app${i}`, name, hasIcon: false, iconVersion: '' })); };
 
     for (const count of [24, 30]) {
       for (const [width, height] of [[836, 387], [740, 360], [411, 914], [360, 740], [844, 390], [390, 844]]) {

@@ -16,3 +16,4 @@ android/local.properties
 
 # editor
 .idea/
+tools/baseline/last.json

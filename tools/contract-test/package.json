@@ -1,0 +1,15 @@
+{
+  "name": "contract-test",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Checks an agent implementation (Node today, Rust later) against contracts/openapi.yaml",
+  "scripts": {
+    "test": "node run.js",
+    "lint:spec": "node run.js --spec-only"
+  },
+  "engines": { "node": ">=20" },
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "yaml": "^2.8.1"
+  }
+}

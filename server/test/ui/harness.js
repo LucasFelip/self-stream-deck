@@ -8,7 +8,37 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
-const { sendJson, serveStatic, isStaticPath, readJson } = require('../../src/http');
+
+// No import from src/: the interface under test is whatever folder SSD_WEB_DIR names (default: public/, later the build of web/),
+// and the answers below are checked against contracts/openapi.yaml by tools/contract-test.
+const WEB_DIR = path.resolve(process.env.SSD_WEB_DIR || path.join(__dirname, '..', '..', 'public'));
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2' };
+const isStaticPath = (pathname) => pathname === '/' || Boolean(TYPES[path.extname(pathname).toLowerCase()]);
+function sendJson(res, status, body) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify(body));
+}
+function serveStatic(req, res, pathname) {
+  let relative;
+  try { relative = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^[/\\]+/, ''); } catch { return sendJson(res, 404, { error: 'not found' }); }
+  const file = path.resolve(WEB_DIR, relative);
+  const type = TYPES[path.extname(file).toLowerCase()];
+  if (!type || !file.startsWith(WEB_DIR + path.sep)) return sendJson(res, 404, { error: 'not found' });
+  return fs.readFile(file, (err, data) => {
+    if (err) return sendJson(res, 404, { error: 'not found' });
+    res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
+    return res.end(data);
+  });
+}
+function readJson(req, limit = 4096) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', (chunk) => { size += chunk.length; if (size > limit) { reject(new Error('body too large')); req.destroy(); } else chunks.push(chunk); });
+    req.on('end', () => { try { resolve(chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {}); } catch (err) { reject(err); } });
+    req.on('error', reject);
+  });
+}
 
 const BROWSERS = [
   process.env.CHROME_PATH,
@@ -26,21 +56,21 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** The deck server with canned data. `calls` records every request; `state` can be changed by a test between steps. */
 async function fakeDeck() {
-  const apps = ['Navegador', 'Terminal', 'Editor', 'Chat', 'Música', 'Jogos'].map((name, i) => ({ id: `app${i}`, name, hasIcon: false, iconVersion: 0 }));
+  const apps = ['Navegador', 'Terminal', 'Editor', 'Chat', 'Música', 'Jogos'].map((name, i) => ({ id: `app${i}`, name, hasIcon: false, iconVersion: '' }));
   const model = {
     apps, // a test can replace it (before opening a page) to get an Apps section with several pages
     calls: [],
     down: false, // true: the PC "went away" (the state answers 503)
     layout: { apps: [], shortcuts: [] },
-    power: { enabled: true, hibernate: false, uptimeSec: 3 * 3600, lastBoot: '2026-10-22T08:00:00', rebootPending: false, scheduled: null, openApps: [{ name: 'Navegador', count: 2 }, { name: 'Editor', count: 1 }] },
+    power: { enabled: true, hibernate: false, fastStartup: false, uptimeSec: 3 * 3600, lastBoot: '2026-10-22T08:00:00', rebootPending: false, scheduled: null, openApps: [{ name: 'Navegador', count: 2 }, { name: 'Editor', count: 1 }] },
     // what the Janelas and PC pages ask for: coherent canned answers (a test can change them between steps)
     drives: [{ name: 'C:', label: 'Sistema', totalGB: 500, freeGB: 200 }, { name: 'D:', label: 'Laika', totalGB: 730, freeGB: 195 }, { name: 'E:', label: 'Strelka', totalGB: 466, freeGB: 408 }], // the disk card's drives
     infoFails: false, // true: GET /api/monitor/info answers 500
     noGpu: false, // true: the sample has no GPU
     windows: [
-      { handle: 101, title: 'Documento - Editor', app: 'Editor', appId: null, iconVersion: 0, state: 0, monitor: 0, x: 100, y: 80, w: 900, h: 600 },
-      { handle: 102, title: 'Navegador', app: 'Navegador', appId: null, iconVersion: 0, state: 2, monitor: 0, x: 0, y: 0, w: 1920, h: 1040 },
-      { handle: 103, title: 'Terminal', app: 'Terminal', appId: null, iconVersion: 0, state: 1, monitor: 0, x: 0, y: 0, w: 0, h: 0 },
+      { handle: 101, title: 'Documento - Editor', app: 'Editor', appId: null, iconVersion: '', state: 0, monitor: 0, x: 100, y: 80, w: 900, h: 600 },
+      { handle: 102, title: 'Navegador', app: 'Navegador', appId: null, iconVersion: '', state: 2, monitor: 0, x: 0, y: 0, w: 1920, h: 1040 },
+      { handle: 103, title: 'Terminal', app: 'Terminal', appId: null, iconVersion: '', state: 1, monitor: 0, x: 0, y: 0, w: 0, h: 0 },
     ],
     screens: [{ device: 'DISPLAY1', left: 0, top: 0, width: 1920, height: 1080, primary: true, brightness: 60 }],
     // the Som page: devices and per-app sessions, and what is playing (a test can change them before opening a page)
