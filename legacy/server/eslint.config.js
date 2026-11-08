@@ -16,13 +16,4 @@ module.exports = [
       'no-unused-vars': ['error', { args: 'none', caughtErrors: 'none', varsIgnorePattern: '^_' }],
     },
   },
-  {
-    // the interface: plain scripts sharing the Deck namespace, loaded by index.html in order
-    files: ['public/**/*.js'],
-    languageOptions: { sourceType: 'script', ecmaVersion: 2023, globals: { ...globals.browser, Deck: 'writable', DeckGeometry: 'readonly', Android: 'readonly', module: 'readonly' } }, // module: geometry.js also loads in Node (UMD)
-    rules: {
-      'no-empty': ['error', { allowEmptyCatch: false }],
-      'no-unused-vars': ['error', { args: 'none', caughtErrors: 'none', varsIgnorePattern: '^_' }],
-    },
-  },
 ];

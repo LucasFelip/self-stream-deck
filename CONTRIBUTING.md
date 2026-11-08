@@ -37,11 +37,10 @@ Antes de abrir um commit, `node tools/check.js` (na raiz) precisa passar: roda l
 
 ## Adicionar uma página na interface
 
-1. Crie `legacy/server/public/js/minha.js` com `Deck.addPage({ id, section, title, el, show, hide })`. `show`/`hide` começam e param o que a página consulta.
-   `section` é a aba: uma de `apps`, `shortcuts`, `sound`, `monitor`, `power`, `processes` (as abas ficam em `js/pager.js`).
-2. Inclua o script em `public/index.html`, **antes** de `js/tiles.js` (as páginas se registram antes do deck), e na lista de `test/load-check.js`, na mesma ordem.
-3. Fale com o servidor por `Deck.api` e, se houver tópico ao vivo, por `Deck.live.watch`.
-4. Para algo que vale proteger de regressão, acrescente um caso em `test/ui/deck.ui.test.js` (o servidor falso está em `test/ui/harness.js`).
+1. Crie `web/src/features/<nome>/` com o componente da página (`<Page section="..." id="...">`) e registre a seção em `web/src/shell/sections.ts`. Dados do PC vêm do cliente tipado (`api/client`), dados ao vivo de `useLiveQuery` (tópico do contrato).
+2. Se for uma rota nova, ela entra primeiro em `contracts/openapi.yaml` e `npm run gen:api` regenera os tipos: rota ou corpo fora do contrato não compila.
+3. Regras sem tela (ordem, geometria, formatação) ficam em módulos puros com teste Vitest ao lado.
+4. Para algo que vale proteger de regressão no navegador, acrescente um caso em `web/e2e/*.e2e.cjs` (o servidor falso está em `web/e2e/harness.cjs`).
 
 ## Adicionar uma operação a um helper
 

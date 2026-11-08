@@ -1,0 +1,19 @@
+[package]
+name = "ssd-api"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+ssd-core = { path = "../core" }
+axum = { version = "0.7", default-features = false, features = ["http1", "tokio", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "time", "fs"] }
+hyper = { version = "1", features = ["client", "http1"] }
+hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }
+serde_json = "1"
+tracing = "0.1"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

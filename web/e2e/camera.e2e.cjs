@@ -6,7 +6,7 @@
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const { fakeDeck, launchBrowser, findBrowser, sleep } = require('../../legacy/server/test/ui/harness');
+const { fakeDeck, launchBrowser, findBrowser, sleep } = require('./harness.cjs');
 const { tapTab, tapUntil, posts } = require('./support.cjs');
 
 const DIST = path.join(__dirname, '..', 'dist', 'index.html');
@@ -43,7 +43,7 @@ const BLOCKED_CAMERA = `
   const open = async (script, width = 411, height = 914) => {
     const browser = await launchBrowser({ width, height });
     extra.push(browser);
-    const page = await browser.open(`${deck.url}/v2/`, { script });
+    const page = await browser.open(`${deck.url}/`, { script });
     await page.waitFor(`document.querySelectorAll('.tile[data-key]').length >= 6`, 'the apps grid');
     await page.waitFor(`document.body.dataset.state === 'online'`, 'online', 9000);
     await sleep(400);

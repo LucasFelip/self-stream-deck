@@ -1,7 +1,7 @@
 # web/: a interface nova (React + TypeScript)
 
-Substitui, página por página, a interface de `legacy/server/public/` ([ADR 0002](../docs/adr/0002-interface-react-typescript-pwa.md), [plano](../docs/plano-reestruturacao.md), Fase 2).
-O agente serve o build em **`/v2/`**, ao lado da interface antiga em `/`, até a paridade. Ela é uma PWA e usa a mesma API da antiga, descrita em
+Substituiu, página por página, a interface antiga (já apagada) ([ADR 0002](../docs/adr/0002-interface-react-typescript-pwa.md), [plano](../docs/plano-reestruturacao.md), Fase 2).
+O agente serve o build em **`/`**; a interface antiga foi removida. Ela é uma PWA e usa a mesma API da antiga, descrita em
 [`contracts/openapi.yaml`](../contracts/openapi.yaml).
 
 ## Comandos
@@ -9,11 +9,11 @@ O agente serve o build em **`/v2/`**, ao lado da interface antiga em `/`, até a
 ```bash
 cd web
 npm install
-npm run dev          # Vite em http://127.0.0.1:5173/v2/ com /api repassado ao agente em 127.0.0.1:7878 (o cookie de pareamento vale para o localhost)
-npm run build        # tsc + vite build -> web/dist (o agente serve em /v2/)
+npm run dev          # Vite em http://127.0.0.1:5173/ com /api repassado ao agente em 127.0.0.1:7878 (o cookie de pareamento vale para o localhost)
+npm run build        # tsc + vite build -> web/dist (o agente serve em /)
 npm run gen:api      # tipos do contrato -> src/api/schema.d.ts
 npm test             # gen:api + tsc --strict + ESLint + Vitest
-npm run test:e2e     # build + testes em navegador sem tela (e2e/shell, apps, sound, pc, windows, extras, editor e camera; mesmo harness da interface antiga)
+npm run test:e2e     # build + testes em navegador sem tela (e2e/shell, apps, sound, pc, windows, extras, editor, camera, chrome e layout)
 ```
 
 `node tools/check.js` (na raiz) roda isso junto com o resto; `--ci`/`--full` incluem o navegador.
@@ -28,7 +28,7 @@ src/
 ├─ shell/      Pager (scroll-snap, retrato/paisagem), Nav (trilho/barra), Menu, Offline, connection
 ├─ features/   uma pasta por página: deck/ (Apps e Atalhos), editor/ (modo Editar e editor), camera/, idle/, game/, notices/, power/, sound/, pc/ e windows/
 └─ styles/     style.css e pages.css, copiados sem mudança da interface antiga; v2.css só com o que é novo
-e2e/           testes em navegador (reusam o harness e o servidor falso de legacy/server/test/ui); support.cjs tem os toques repetidos até pegar
+e2e/           testes em navegador (servidor falso e navegador sem tela em harness.cjs); support.cjs tem os toques repetidos até pegar
 ```
 
 ## Regras desta migração

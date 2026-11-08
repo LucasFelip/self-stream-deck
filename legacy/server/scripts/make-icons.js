@@ -1,12 +1,12 @@
 'use strict';
 
-// Draws the app icons (public/icons/*.png) with no dependencies: a dark square with a 3x3 grid of keys, one of them lit.
+// Draws the app icons (web/public/icons/*.png) with no dependencies: a dark square with a 3x3 grid of keys, one of them lit.
 // Run by hand when the design changes: node scripts/make-icons.js
 const fs = require('node:fs');
 const path = require('node:path');
 const zlib = require('node:zlib');
 
-const OUT = path.join(__dirname, '..', 'public', 'icons');
+const OUT = path.join(__dirname, '..', '..', '..', 'web', 'public', 'icons');
 const SIZES = { 'apple-touch-icon.png': 180, 'icon-192.png': 192, 'icon-512.png': 512 };
 
 const BG = [11, 12, 16];

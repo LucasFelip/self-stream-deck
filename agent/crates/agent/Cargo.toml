@@ -1,0 +1,21 @@
+[package]
+name = "ssd-agent"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "ssd"
+path = "src/main.rs"
+
+[dependencies]
+ssd-core = { path = "../core" }
+ssd-api = { path = "../api" }
+axum = { version = "0.7", default-features = false, features = ["http1", "tokio"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "process", "signal", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[target.'cfg(windows)'.dependencies]
+ssd-platform-windows = { path = "../platform-windows" }
+windows = { version = "0.58", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }

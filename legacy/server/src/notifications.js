@@ -3,7 +3,7 @@
 const { Host } = require('./host');
 
 const IDLE_STOP_MS = 3 * 60 * 1000;
-const host = new Host('notifications', 'notifications-host.ps1', { timeoutMs: 12000, idleStopMs: IDLE_STOP_MS, retryOps: ['list'] });
+const host = new Host('notifications', 'notifications-host.ps1', { timeoutMs: 12000, idleStopMs: IDLE_STOP_MS, native: 'notifications', retryOps: ['list'] });
 
 const clean = (text) => String(text || '').toLowerCase();
 

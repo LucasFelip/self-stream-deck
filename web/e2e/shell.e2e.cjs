@@ -1,13 +1,13 @@
 'use strict';
 
-// The new interface (web/dist, served at /v2/) in a real headless browser against the fake deck server of the old interface's
+// The new interface (web/dist, served at /) in a real headless browser against the fake deck server of the old interface's
 // tests (same CDP harness, same canned answers, which tools/contract-test checks against contracts/openapi.yaml). The cases
 // are the old ones, ported: the DOM and the class names are kept on purpose so both interfaces answer to the same selectors.
 // Skipped, not failed, when no Chromium-based browser is installed (CHROME_PATH) or web/dist is not built (npm run build).
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const { fakeDeck, launchBrowser, findBrowser, sleep } = require('../../legacy/server/test/ui/harness');
+const { fakeDeck, launchBrowser, findBrowser, sleep } = require('./harness.cjs');
 const { tapTab, tapUntil, hold } = require('./support.cjs');
 
 const DIST = path.join(__dirname, '..', 'dist', 'index.html');
@@ -25,10 +25,10 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
   const browser2 = async (width, height) => {
     const other = await launchBrowser({ width, height });
     extra.push(other);
-    return other.open(`${deck.url}/v2/`);
+    return other.open(`${deck.url}/`);
   };
   try {
-    const page = await browser.open(`${deck.url}/v2/`);
+    const page = await browser.open(`${deck.url}/`);
     await page.waitFor(`document.body.dataset.state === 'online'`, 'online', 9000);
 
     await test('the navigation: six tabs in order, one selected, a gear, the PC name only in the menu', async () => {

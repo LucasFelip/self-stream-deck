@@ -65,7 +65,6 @@ export function Menu({ open, onClose, items = [] }: MenuProps) {
         {items.map((item) => <button key={item.label} type="button" role="menuitem" onClick={item.onClick}>{item.label}</button>)}
         <button id="settings" type="button" role="menuitem" hidden={!bridge || typeof bridge.openSettings !== 'function'} onClick={() => bridge?.openSettings?.()}>Endereço do PC…</button>
         <button id="refresh" type="button" role="menuitem" className={spin ? 'spin' : ''} onClick={refresh}>Atualizar</button>
-        <button id="legacy-ui" type="button" role="menuitem" onClick={() => window.location.assign('/')}>Interface antiga</button>
       </div>
     </>
   );

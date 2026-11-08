@@ -14,7 +14,7 @@ sistema e controles de energia.
 ```
 
 - `legacy/server/` — servidor no PC. Node 20+, **sem dependências** (não precisa de `npm install`).
-  Serve também a interface web (`legacy/server/public/`), então a lógica do painel fica toda no PC.
+  Serve também a interface web (o build de `web/`, React + TypeScript), então a lógica do painel fica toda no PC.
 - `android/` — app Android fino (Java, sem libs): guarda o endereço do PC, mantém a tela ligada,
   vibra ao toque e mostra a página. Mudar a interface **não exige recompilar o APK**.
 

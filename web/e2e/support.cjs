@@ -1,7 +1,7 @@
 'use strict';
 
-// Helpers shared by the browser tests of the new interface. `page` is a page of legacy/server/test/ui/harness.js (CDP, no dependencies).
-const { sleep } = require('../../legacy/server/test/ui/harness');
+// Helpers shared by the browser tests of the new interface. `page` is a page of web/e2e/harness.cjs (CDP, no dependencies).
+const { sleep } = require('./harness.cjs');
 
 /** opens a section by its tab; a tap during the redraw right after coming online is undone, so it taps again until it sticks */
 async function tapTab(page, section) {

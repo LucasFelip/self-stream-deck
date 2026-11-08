@@ -6,7 +6,7 @@
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const { fakeDeck, launchBrowser, findBrowser, sleep } = require('../../legacy/server/test/ui/harness');
+const { fakeDeck, launchBrowser, findBrowser, sleep } = require('./harness.cjs');
 const { tapTab, tapUntil } = require('./support.cjs');
 
 const DIST = path.join(__dirname, '..', 'dist', 'index.html');
@@ -23,7 +23,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
   const open = async (width, height) => {
     const browser = await launchBrowser({ width, height });
     extra.push(browser);
-    const page = await browser.open(`${deck.url}/v2/`);
+    const page = await browser.open(`${deck.url}/`);
     await page.waitFor(`document.body.dataset.state === 'online'`, 'online', 9000);
     await tapTab(page, 'pc');
     return page;

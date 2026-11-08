@@ -4,11 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { swallow } = require('./log');
 
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
-// The new interface (web/, built with `npm run build` there) is served under /v2/ next to the old one, until it reaches parity (docs/adr/0007).
-// SSD_V2_DIR points the tests at another build folder.
-const V2_DIR = process.env.SSD_V2_DIR ? path.resolve(process.env.SSD_V2_DIR) : path.join(__dirname, '..', '..', '..', 'web', 'dist');
-const V2_PREFIX = '/v2/';
+// The interface is the build of web/ (`npm run build` there), served at /. SSD_WEB_DIST points the tests at another build folder.
+const WEB_DIST = process.env.SSD_WEB_DIST ? path.resolve(process.env.SSD_WEB_DIST) : path.join(__dirname, '..', '..', '..', 'web', 'dist');
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -48,18 +45,16 @@ function sendFile(res, file, type, headers = {}) {
   });
 }
 
-/** Serves files from public/ only: no traversal outside it, and only known web file types. */
+/** Serves files from the build of web/ only: no traversal outside it, and only known web file types. */
 function serveStatic(req, res, pathname) {
-  if (pathname === '/v2') {
-    res.writeHead(302, { ...SECURITY_HEADERS, Location: V2_PREFIX });
+  if (pathname === '/v2' || pathname === '/v2/') { // the address the new interface had while it was being tried
+    res.writeHead(302, { ...SECURITY_HEADERS, Location: '/' });
     return res.end();
   }
-  const isV2 = pathname.startsWith(V2_PREFIX);
-  const root = isV2 ? V2_DIR : PUBLIC_DIR;
+  const root = WEB_DIST;
   let relative;
   try {
-    const local = isV2 ? pathname.slice(V2_PREFIX.length - 1) : pathname; // '/v2/x.js' is 'x.js' in the build folder
-    relative = local === '/' ? 'index.html' : decodeURIComponent(local).replace(/^[/\\]+/, '');
+    relative = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^[/\\]+/, '');
   } catch {
     return sendJson(res, 404, { error: 'not found' });
   }
@@ -136,10 +131,9 @@ function uiVersion() {
     }
   };
   try {
-    walk(PUBLIC_DIR);
-    if (fs.existsSync(V2_DIR)) walk(V2_DIR); // a new build of the new interface also reloads the phone
+    if (fs.existsSync(WEB_DIST)) walk(WEB_DIST); // a new build reloads the phone
   } catch (err) {
-    swallow('[http] could not read public/ for the version', err); // keep the last known value if the folder is being rewritten
+    swallow('[http] could not read the build for the version', err); // keep the last known value if the folder is being rewritten
     return versionCache.value;
   }
   versionCache = { at: Date.now(), value: Math.round(newest) };
@@ -147,12 +141,12 @@ function uiVersion() {
 }
 
 function isStaticPath(pathname) {
-  return pathname === '/' || pathname === '/v2' || pathname === V2_PREFIX || Boolean(TYPES[path.extname(pathname).toLowerCase()]);
+  return pathname === '/' || pathname === '/v2' || pathname === '/v2/' || Boolean(TYPES[path.extname(pathname).toLowerCase()]);
 }
 
 // Files a browser fetches without the pairing token and that hold nothing private: the app manifest and icons (Safari asks for them
 // without cookies when it adds the deck to the Home Screen) and the pairing page's script. Everything else needs the token.
-const PUBLIC_ASSET = /^\/(v2\/)?(manifest\.webmanifest|pair\.js|icons\/[\w-]+\.png)$/;
+const PUBLIC_ASSET = /^\/(manifest\.webmanifest|pair\.js|icons\/[\w-]+\.png)$/;
 const isPublicAsset = (pathname) => PUBLIC_ASSET.test(pathname);
 
 module.exports = { isPublicAsset, sendJson, sendBuffer, sendFile, serveStatic, readJson, readBuffer, isStaticPath, uiVersion };

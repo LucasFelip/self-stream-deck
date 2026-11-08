@@ -101,9 +101,9 @@ Pronto quando: o teste de contrato passa 100% no Node e falha ao quebrar de prop
 
 Pronto quando: `tools/check.js` verde e o painel roda de `legacy/server` igual a antes (verde: lint, unitários e contrato em 18 s).
 
-### Fase 2: Interface React + TypeScript (≈ 3 a 4 semanas) — **2.1 e 2.2 prontas (todas as páginas e extras migrados); falta 2.3 (paridade, aparelho real, troca de `/`)**
+### Fase 2: Interface React + TypeScript (≈ 3 a 4 semanas) — **2.1 e 2.2 prontas (todas as páginas e extras migrados); 2.3: paridade e troca de `/` feitas; Android real testado; falta o iPhone (adiado)**
 
-Backend intacto (Node). A UI nova é servida em `/v2/` ao lado da antiga (`/`), com "Interface antiga" no menu ⚙ da nova. Quando houver paridade, `/` aponta para a nova.
+Backend intacto (Node). A UI nova é servida em `/` e a antiga foi **removida** (`legacy/server/public`, `/legacy/` e os testes dela) assim que a nova passou nos testes e no A31; só o servidor Node continua em `legacy/server/` até a Fase 3.
 Detalhes e comandos em [web/README.md](../web/README.md).
 
 **2.1 Esqueleto — feito**
@@ -128,32 +128,37 @@ Detalhes e comandos em [web/README.md](../web/README.md).
 
 Portado da antiga durante a migração (bug que existia nas duas): ao completar o "segure", a folha some com o dedo ainda na tela e o toque seguinte clicava na aba da barra (em retrato abria "PC"). Corrigido em `HoldButton` e em `deck.js` (`holdButton`).
 
-**2.3 Paridade e troca** — pendente (o que a interface nova ainda não tem: o mesmo `pair.html` no lugar do da antiga, que só é trocado na troca de `/`): rodar `deck.ui.test.js` e `layout.ui.test.js` contra a nova (`SSD_V2_DIR`/`/v2/`) quando as seis páginas existirem, teste no aparelho real (Android no app, iPhone no Safari e na Tela de Início, recorte da câmera, rotação), trocar `/` para a nova e manter a antiga em `/legacy/` por uma versão.
+**2.3 Paridade e troca** — feita, falta o aparelho real
+- [x] **Paridade em navegador:** `layout.ui.test.js` roda contra as duas (`SSD_UI_BASE=/`: 77 de 77) e as demais cenas de `deck.ui.test.js` (111) foram portadas para `web/e2e` (shell, apps, sound, pc, windows, extras, editor, camera e `chrome`: menu, folhas, sobreposições e a matriz "a última coisa termina acima da barra"). Só o teste de vibração do iPhone ficou de fora.
+- [x] **Troca:** `/` serve `web/dist` (`vite base '/'`, manifest com `start_url '/'`); `/v2/` redireciona para `/`; o `pair.html` e o `camera.html` vivem em `web/public`. A interface antiga foi apagada (plano antigo era mantê-la em `/legacy/` por uma versão; o dono dispensou). O servidor falso e o navegador sem tela saíram de `legacy/server/test/ui` para `web/e2e/harness.cjs`; as 77 medições de layout viraram `web/e2e/layout.e2e.cjs`.
+- [x] **Android real (A31, no app):** páginas Apps, Janelas, Som e PC, menu (popover em paisagem, folha em retrato), folha da câmera, Voltar e rotação, sem erros de script no log. Ainda por testar no aparelho: escurecer, notificações e Atualizar.
+- [ ] **Adiado:** iPhone no Safari e na Tela de Início. 
 
-### Fase 3: Agente em Rust (≈ 5 a 7 semanas)
+### Fase 3: Agente em Rust (≈ 5 a 7 semanas) — **3.0 e 3.1 feitas; 3.2 em andamento (10 de 51 operações: layout, pareamento e todo o áudio); 3.3 pendente**
 
-**3.0 Spike de viabilidade (3 a 5 dias), com portão de decisão**
+**3.0 Spike de viabilidade (3 a 5 dias), com portão de decisão — feito, passou ([ADR 0008](adr/0008-spike-rust-windows.md))**
 Provar em Rust, fora do produto, os três pontos de maior risco: (a) Core Audio (volume, mudo, mixer por app, troca de dispositivo padrão), (b) SMTC via WinRT (leitura e controle de mídia), (c) `SetWinEventHook` empurrando mudanças de janelas. Se algum for inviável ou muito frágil, aplicar a alternativa da D1 e registrar no ADR.
+Resultado: os três funcionam em Rust (`agent/spike`: Core Audio 11 ms, SMTC 12 ms, ganchos de janela instalados), com o alvo `x86_64-pc-windows-gnu` (não há Visual Studio aqui). Falta provar só a vtable de `IPolicyConfig` (trocar o dispositivo padrão), no item 6.
 
-**3.1 Esqueleto (1 semana)**
-- [ ] Workspace Cargo: `core` (domínio, traits `AudioPort/MediaPort/InputPort/PowerPort/WindowsPort/MonitorPort/TaskbarPort/VCamPort`, tipos), `platform-windows`, `api`, `app`.
-- [ ] `axum` com: validação de `Host`, bloqueio por falhas, token, origem (paridade com `security.js`), estáticos embutidos (`rust-embed`) com ETag, SSE com produtores "só enquanto alguém escuta" e último valor ao entrar.
-- [ ] Config (`serde` + validação equivalente a `config-check.js`), gravação atômica com `.bak`, nunca sobrescrever arquivo ilegível.
-- [ ] `tracing` com nível por `SSD_LOG`; contadores de `/api/requests`.
-- [ ] **Proxy de transição:** o agente Rust sobe o Node como filho em porta interna e repassa as rotas ainda não portadas (a UI e o celular só enxergam a porta do Rust). A cada rota portada, remove-se do proxy.
-- [ ] Teste de contrato rodando contra o Rust.
+**3.1 Esqueleto (1 semana) — feito, com o que ficou para depois indicado**
+- [x] Workspace Cargo `agent/`: `core` (guard, config, portas `AudioPort/MediaPort/PowerPort`), `api` (axum), `agent` (binário `ssd`) e o `spike`. Faltam as portas `InputPort/WindowsPort/MonitorPort/TaskbarPort/VCamPort` e o crate `platform-windows`, que entram com cada módulo da 3.2.
+- [x] `axum` com validação de `Host`, bloqueio por falhas, token (consulta, cabeçalho, cookie), origem, página de pareamento, manifest/ícones públicos e estáticos com ETag/304 (paridade com `security.js`/`http.js`). [ ] Ainda não: estáticos embutidos no exe (`rust-embed`; hoje lê `web/dist`) e o hub de SSE próprio (o SSE passa pelo proxy; vira próprio com o primeiro tópico portado).
+- [x] Config: mesma `config.json` do Node (chaves desconhecidas preservadas, BOM aceito), gravação atômica com `.bak`, nunca sobrescreve arquivo ilegível. [ ] Falta a validação equivalente a `config-check.js` (hoje só o tipo das chaves editáveis).
+- [x] `tracing` com nível por `SSD_LOG`; contadores de `/api/requests`.
+- [x] **Proxy de transição:** o agente Rust sobe o Node como filho em porta interna e repassa as rotas ainda não portadas (a UI e o celular só enxergam a porta do Rust). A cada rota portada, remove-se do proxy.
+- [~] `tools/agent-check` (10 casos: Host, token, pareamento, Origin, bloqueio, estáticos, proxy JSON e SSE, rotas portadas) roda contra o `ssd` com o Node atrás. O teste de contrato completo (`tools/contract-test`) ainda roda só contra o Node: precisa do modo `--fake-platform` do Rust, que vem junto com as portas.
 
 **3.2 Módulos, do menos arriscado para o mais arriscado**
 Cada item: porta em `core`, implementação em `platform-windows`, adaptador falso para teste, rota no `api`, contrato verde, remoção da rota do proxy.
 
 | Ordem | Módulo | Rotas | Observação |
 |---|---|---|---|
-| 1 | Estado e ping | `/api/ping`, `/api/state`, `/api/layout`, `/api/pair-code` | só config |
+| 1 | Estado e ping | `/api/ping`, `/api/state`, `/api/layout`, `/api/pair-code` | **`/api/layout` e `/api/pair-code` portadas**; `ping` e `state` dependem dos módulos de PC |
 | 2 | Energia | `/api/power` | desligar, reiniciar, agendar, hibernar |
 | 3 | Teclas e macros | `/api/shortcut/:id`, `/api/macro/:id`, `/api/mediakey/:key`, `/api/shortcuts`, `/api/macros` | `SendInput`; manter a lista fechada de teclas |
 | 4 | Editor | `/api/editor*` | validação já existe no desenho de `validate.js` |
 | 5 | Apps e barra de tarefas | `/api/apps`, `/api/launch/:id`, `/api/icon/:id`, `/api/refresh` | ícones, cache |
-| 6 | Áudio | `/api/audio*`, `/api/volume`, `/api/mic` | Core Audio |
+| 6 | Áudio | `/api/audio*`, `/api/volume`, `/api/mic` | **portado** (`platform-windows/audio.rs`: volume, mudo, microfone, dispositivos, mixer por app e troca do padrão por `IPolicyConfig`, conferido contra o Node neste PC: mesmas listas; o rótulo do app às vezes sai melhor, porque o Rust lê a descrição do exe também de processos protegidos) |
 | 7 | Mídia | `/api/media*` | SMTC; capa em `/api/media/art` |
 | 8 | Monitor | `/api/monitor/*` | PDH, `nvidia-smi`, RTSS/Afterburner, WMI |
 | 9 | Janelas e telas | `/api/windows*`, `/api/screens*` | `SetWinEventHook` empurra para o SSE; brilho DDC/CI |
@@ -167,7 +172,7 @@ Cada item: porta em `core`, implementação em `platform-windows`, adaptador fal
 
 Riscos: câmera virtual (ordem 11), SMTC e Core Audio (cobertos pelo spike), diferenças sutis de comportamento que só o uso real mostra (por isso o proxy e as fixtures). Gatilho de saída: se a Fase 3.2 passar de 2x a estimativa sem fechar a ordem 9, reavaliar D1.
 
-### Fase 4: Empacotamento e operação (≈ 1 a 2 semanas)
+### Fase 4: Empacotamento e operação (≈ 1 a 2 semanas) — não começou (depende da 3.3)
 
 - [ ] Instalador MSI (WiX) ou `cargo-dist`: instala em `Program Files`, atalho, desinstalação limpa, regra de firewall opcional.
 - [ ] Config e dados em `%APPDATA%\SelfStreamDeck\`; **migração automática** de `server/data/config.json` (token preservado, para o celular não perder o pareamento), `.bak`, `tls/`, `icons/`.
@@ -179,7 +184,7 @@ Riscos: câmera virtual (ordem 11), SMTC e Core Audio (cobertos pelo spike), dif
 
 Pronto quando: máquina limpa instala, pareia o celular e funciona após reiniciar o PC.
 
-### Fase 5: Android em Kotlin e limpeza (≈ 0,5 a 1 semana)
+### Fase 5: Android em Kotlin e limpeza (≈ 0,5 a 1 semana) — não começou (a parte de remover a interface antiga já foi feita na Fase 2)
 
 - [ ] `MainActivity.java` (407 linhas) → Kotlin, mesma ponte (`openSettings`, `vibrate`, `reconnect`, `setDim`); Gradle com versões em catálogo.
 - [ ] Remover `legacy/server`, `server/native`, scripts PowerShell e a UI antiga; atualizar `README`, `CONTRIBUTING`, `ARQUITETURA.md`.

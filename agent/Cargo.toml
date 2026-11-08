@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/api", "crates/agent", "crates/platform-windows", "spike"]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+publish = false
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+strip = true

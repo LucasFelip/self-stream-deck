@@ -2,7 +2,16 @@
 
 // src/http.js against a real local server: security headers, static file rules (no traversal, known types only), ETag/304, body limits.
 const assert = require('node:assert');
+const fs = require('node:fs');
 const http = require('node:http');
+const os = require('node:os');
+const path = require('node:path');
+
+// a made-up build folder: the test must not depend on web/ having been built
+const dist = fs.mkdtempSync(path.join(os.tmpdir(), 'ssd-dist-'));
+fs.writeFileSync(path.join(dist, 'index.html'), '<!doctype html><title>deck</title>');
+fs.writeFileSync(path.join(dist, 'app.js'), 'console.log(1);');
+process.env.SSD_WEB_DIST = dist;
 const { sendJson, serveStatic, readJson, readBuffer, isStaticPath, isPublicAsset } = require('../src/http');
 
 const server = http.createServer(async (req, res) => {
@@ -52,7 +61,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.strictEqual(second.body, '');
     });
 
-    await test('paths outside public/, unknown types and missing files are 404', async () => {
+    await test('paths outside the build folder, unknown types and missing files are 404', async () => {
       for (const path of ['/../package.json', '/%2e%2e/package.json', '/..%5csrc%5cconfig.js', '/%2e%2e%2fsrc%2fconfig.js', '/nope.js', '/data.json', '/%E0%A4%A.js']) {
         const res = await request(path);
         assert.strictEqual(res.status, 404, path);

@@ -18,3 +18,5 @@ android/local.properties
 # editor
 .idea/
 tools/baseline/last.json
+agent/target/
+agent/**/target/

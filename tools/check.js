@@ -18,6 +18,7 @@ const full = args.has('--full');
 const ci = args.has('--ci');
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
+process.env.PATH = `${path.join(process.env.USERPROFILE || process.env.HOME || '', '.cargo', 'bin')}${path.delimiter}${process.env.PATH}`;
 const steps = [];
 const add = (name, cwd, command, argv, when = true) => { if (when && fs.existsSync(path.join(ROOT, cwd))) steps.push({ name, cwd, command, argv }); };
 
@@ -25,21 +26,25 @@ const add = (name, cwd, command, argv, when = true) => { if (when && fs.existsSy
 add('legacy: lint', 'legacy/server', npm, ['run', 'lint']);
 add('legacy: unit tests', 'legacy/server', npm, ['test']);
 add('contract tests', 'tools/contract-test', npm, ['test']);
-add('legacy: interface tests', 'legacy/server', npm, ['run', 'test:ui'], full || ci);
 add('legacy: integration tests (real PC)', 'legacy/server', npm, ['run', 'test:integration'], full);
 
 // the new interface: generated API types up to date, tsc --strict, ESLint, Vitest; then its build and browser tests (same harness as the old UI)
 add('web: types + lint + unit tests', 'web', npm, ['test']);
 add('web: build + browser tests', 'web', npm, ['run', 'test:e2e'], full || ci);
 
-// later phase: agent/ (cargo fmt, clippy, test)
-add('agent: cargo test', 'agent', 'cargo', ['test'], fs.existsSync(path.join(ROOT, 'agent', 'Cargo.toml')));
+// the Rust agent (agent/): format, lints as errors, unit tests, then the release build checked from outside (security + proxy to Node)
+const hasAgent = fs.existsSync(path.join(ROOT, 'agent', 'Cargo.toml'));
+add('agent: cargo fmt --check', 'agent', 'cargo', ['fmt', '--all', '--check'], hasAgent);
+add('agent: cargo clippy', 'agent', 'cargo', ['clippy', '--workspace', '--all-targets', '--', '-D', 'warnings'], hasAgent);
+add('agent: cargo test', 'agent', 'cargo', ['test', '--workspace'], hasAgent);
+add('agent: release build', 'agent', 'cargo', ['build', '--release', '-p', 'ssd-agent'], hasAgent && (full || ci));
+if (hasAgent && (full || ci)) steps.push({ name: 'agent: conformance (security + proxy to Node)', cwd: 'tools/agent-check', command: process.execPath, argv: ['run.js'] });
 
 const results = [];
 for (const step of steps) {
   console.log(`\n=== ${step.name} (${step.cwd}) ===`);
   const started = Date.now();
-  const run = spawnSync(step.command, step.argv, { cwd: path.join(ROOT, step.cwd), stdio: 'inherit', shell: process.platform === 'win32' });
+  const run = spawnSync(step.command, step.argv, { cwd: path.join(ROOT, step.cwd), stdio: 'inherit', shell: process.platform === 'win32', env: { ...process.env, ...(step.env || {}) } });
   const ok = run.status === 0;
   results.push({ name: step.name, ok, seconds: Math.round((Date.now() - started) / 1000) });
   if (!ok) break; // the first red step is the one to look at

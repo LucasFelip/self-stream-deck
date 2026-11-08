@@ -318,7 +318,6 @@ async function securityCases(target, makeFresh, runLockout) {
     assert.strictEqual((await request(target.url, null, { method: 'GET', path: '/manifest.webmanifest', auth: 'none' })).status, 200);
     assert.strictEqual((await request(target.url, null, { method: 'GET', path: '/pair.js', auth: 'none' })).status, 200);
     assert.strictEqual((await request(target.url, null, { method: 'GET', path: '/index.html', auth: 'none' })).status, 401, 'the interface itself needs the token');
-    assert.strictEqual((await request(target.url, null, { method: 'GET', path: '/v2/', auth: 'none' })).status, 401, 'the new interface needs the token too');
   });
   await step('security: the pairing link sets an HttpOnly, SameSite=Lax cookie and drops the token from the URL', async () => {
     const r = await request(target.url, null, { method: 'GET', path: `/?token=${target.token}`, auth: 'none', headers: { Accept: 'text/html' } });
@@ -342,7 +341,7 @@ async function securityCases(target, makeFresh, runLockout) {
     assert.ok(huge.status === 413 || huge.status === 'closed', `an oversize body gave ${huge.status}`);
   });
   await step('security: static files cannot leave the public folder', async () => {
-    for (const p of ['/..%2f..%2fpackage.json', '/%2e%2e/package.json', '/..%5c..%5cpackage.json', '/js/%2e%2e%2f%2e%2e%2fsrc%2findex.js', '/v2/..%2f..%2fpackage.json', '/v2/%2e%2e/%2e%2e/package.json', '/v2/assets/..%2f..%2f..%2fpackage.json']) {
+    for (const p of ['/..%2f..%2fpackage.json', '/%2e%2e/package.json', '/..%5c..%5cpackage.json', '/js/%2e%2e%2f%2e%2e%2fsrc%2findex.js', '/assets/..%2f..%2f..%2fpackage.json']) {
       const r = await request(target.url, target.token, { method: 'GET', path: p });
       assert.ok(r.status === 404 || r.status === 400, `${p} gave ${r.status}`);
     }
@@ -360,10 +359,10 @@ async function securityCases(target, makeFresh, runLockout) {
 }
 
 
-// The answers the web interface's own tests are fed (legacy/server/test/ui/harness.js) must obey the contract too, or the UI is tested
+// The answers the web interface's own tests are fed (web/e2e/harness.cjs) must obey the contract too, or the UI is tested
 // against a server that does not exist.
 async function uiHarnessChecks() {
-  const { fakeDeck } = require('../../legacy/server/test/ui/harness');
+  const { fakeDeck } = require('../../web/e2e/harness.cjs');
   const deck = await fakeDeck();
   try {
     const routes = ['/api/apps', '/api/state', '/api/shortcuts', '/api/macros', '/api/editor', '/api/layout', '/api/pair-code', '/api/monitor/fps', '/api/windows',

@@ -7,7 +7,7 @@ Estado: **aceito**.
 Interface e agente trocam por partes, atrás do mesmo contrato HTTP:
 
 1. Fase 0: contrato e testes de contrato (feita).
-2. Fase 2: interface nova em `/v2/` ao lado da antiga, até a paridade.
+2. Fase 2: interface nova ao lado da antiga (em `/v2/` durante a migração); com a paridade, `/` passa a ser a nova e a antiga foi apagada (o dono dispensou mantê-la).
 3. Fase 3: o agente Rust sobe o Node como filho e repassa as rotas ainda não portadas; cada rota portada sai do proxy.
 4. Só então o código antigo (`legacy/`) é removido.
 
