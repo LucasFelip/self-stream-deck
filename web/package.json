@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "test": "npm run gen:api && npm run typecheck && npm run lint && vitest run",
     "test:unit": "vitest run",
-    "test:e2e": "vite build && node e2e/shell.e2e.cjs && node e2e/apps.e2e.cjs && node e2e/sound.e2e.cjs && node e2e/pc.e2e.cjs && node e2e/windows.e2e.cjs"
+    "test:e2e": "vite build && node e2e/shell.e2e.cjs && node e2e/apps.e2e.cjs && node e2e/sound.e2e.cjs && node e2e/pc.e2e.cjs && node e2e/windows.e2e.cjs && node e2e/extras.e2e.cjs"
   },
   "engines": {
     "node": ">=20"

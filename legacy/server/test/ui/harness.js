@@ -90,6 +90,16 @@ async function fakeDeck() {
   const streams = new Set(); // open event streams that asked for the game topic
   const sendGame = (res) => res.write(`event: game\ndata: ${JSON.stringify(model.fps)}\n\n`);
   model.pushGame = () => { for (const res of streams) sendGame(res); };
+  // what Windows kept quiet from the chosen apps; a test pushes a new list with model.pushNotifications()
+  model.notifications = { access: 'allowed', notifications: [] };
+  const noticeStreams = new Set();
+  model.pushNotifications = (list) => {
+    if (list) model.notifications = list;
+    for (const res of noticeStreams) res.write(`event: notifications
+data: ${JSON.stringify(model.notifications)}
+
+`);
+  };
   // a test can replace them (before opening a page) to get several pages of Atalhos or macros on the pages
   model.shortcuts = [{ id: 'copy', label: 'Copiar', keys: 'ctrl+c', display: 'Ctrl+C' }, { id: 'paste', label: 'Colar', keys: 'ctrl+v', display: 'Ctrl+V' }];
   model.macros = [];
@@ -162,6 +172,11 @@ async function fakeDeck() {
       if (topics.includes('windows')) push('windows', { windows: model.windows });
       if (topics.includes('monitor')) push('monitor', sampleReply());
       if (topics.includes('processes')) push('processes', processesReply());
+      if (topics.includes('notifications')) {
+        noticeStreams.add(res);
+        res.on('close', () => noticeStreams.delete(res));
+        push('notifications', model.notifications);
+      }
       if (topics.includes('game')) {
         streams.add(res);
         res.on('close', () => streams.delete(res));

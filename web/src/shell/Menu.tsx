@@ -6,16 +6,23 @@ import { registerBack } from '../lib/back';
 import { useToast } from '../ui/Toast';
 import { useDragToClose } from './useDragToClose';
 
+export interface MenuItem {
+  label: string;
+  onClick: () => void;
+}
+
 interface MenuProps {
   open: boolean;
   onClose: () => void;
+  /** the entries the features add (edit buttons, camera, dimmer...), shown before the Android entry and Atualizar */
+  items?: readonly MenuItem[];
 }
 
 /**
  * The settings menu (the gear): a popover beside the rail in landscape, a bottom sheet over the bar in portrait.
  * Outside the nav so it stacks above the scrim. A tap anywhere in it closes it.
  */
-export function Menu({ open, onClose }: MenuProps) {
+export function Menu({ open, onClose, items = [] }: MenuProps) {
   const toast = useToast();
   const queryClient = useQueryClient();
   const panel = useRef<HTMLDivElement | null>(null);
@@ -55,6 +62,7 @@ export function Menu({ open, onClose }: MenuProps) {
       <div id="menu-pop" className="menu" role="menu" hidden={!open} ref={panel} onClick={close}>
         <div className="grip" aria-hidden="true" ref={grip}><i /></div>
         <div className="menu-host" ref={hostRow}><span className="muted">Computador</span><b id="host">{apps.data?.host ?? 'PC'}</b></div>
+        {items.map((item) => <button key={item.label} type="button" role="menuitem" onClick={item.onClick}>{item.label}</button>)}
         <button id="settings" type="button" role="menuitem" hidden={!bridge || typeof bridge.openSettings !== 'function'} onClick={() => bridge?.openSettings?.()}>Endereço do PC…</button>
         <button id="refresh" type="button" role="menuitem" className={spin ? 'spin' : ''} onClick={refresh}>Atualizar</button>
         <button id="legacy-ui" type="button" role="menuitem" onClick={() => window.location.assign('/')}>Interface antiga</button>

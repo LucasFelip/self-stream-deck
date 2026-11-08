@@ -873,7 +873,7 @@ x-events:
   monitor: { $ref: '#/components/schemas/MonitorSample' }
   processes: { $ref: '#/components/schemas/Processes' }
   game: { $ref: '#/components/schemas/GameFps' }
-  notifications: { type: array, items: { type: object } }
+  notifications: { $ref: '#/components/schemas/Notifications' }
 
 components:
   securitySchemes:
@@ -1360,6 +1360,24 @@ components:
         ageMs: { type: [integer, 'null'] }
         link: { type: string, description: 'the OBS Browser Source link' }
         direct: { $ref: '#/components/schemas/VirtualCamera' }
+
+    Notifications:
+      description: What Windows kept quiet from the apps listed in config.notifications.apps, newest last. Only a topic of the event stream (no GET route).
+      type: object
+      required: [access, notifications]
+      properties:
+        access: { type: string, description: 'whether Windows lets the agent read notifications', examples: [allowed] }
+        notifications:
+          type: array
+          items:
+            type: object
+            required: [id, title, body]
+            properties:
+              id: { type: [string, integer] }
+              app: { type: string }
+              title: { type: string }
+              body: { type: string }
+              time: { type: [string, integer] }
 
     EventTopic:
       enum: [windows, state, audio, media, notifications, monitor, game, processes, power]

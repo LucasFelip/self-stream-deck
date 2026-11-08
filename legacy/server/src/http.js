@@ -137,6 +137,7 @@ function uiVersion() {
   };
   try {
     walk(PUBLIC_DIR);
+    if (fs.existsSync(V2_DIR)) walk(V2_DIR); // a new build of the new interface also reloads the phone
   } catch (err) {
     swallow('[http] could not read public/ for the version', err); // keep the last known value if the folder is being rewritten
     return versionCache.value;

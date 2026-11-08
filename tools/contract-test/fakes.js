@@ -108,7 +108,7 @@ function createFakes(pc) {
     stop() {},
   };
 
-  const notifications = { list: async () => [], stop() {} };
+  const notifications = { list: async () => ({ access: 'allowed', notifications: [] }), stop() {} };
 
   return {
     calls,

@@ -1326,6 +1326,21 @@ export interface components {
             link: string;
             direct: components["schemas"]["VirtualCamera"];
         };
+        /** @description What Windows kept quiet from the apps listed in config.notifications.apps, newest last. Only a topic of the event stream (no GET route). */
+        Notifications: {
+            /**
+             * @description whether Windows lets the agent read notifications
+             * @example allowed
+             */
+            access: string;
+            notifications: {
+                id: string | number;
+                app?: string;
+                title: string;
+                body: string;
+                time?: string | number;
+            }[];
+        };
         /** @enum {unknown} */
         EventTopic: "windows" | "state" | "audio" | "media" | "notifications" | "monitor" | "game" | "processes" | "power";
     };
