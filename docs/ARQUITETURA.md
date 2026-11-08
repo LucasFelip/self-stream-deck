@@ -14,13 +14,13 @@ Como o self-stream-deck funciona por dentro. Para usar o painel, veja o [README]
 | Pasta | O que tem |
 |---|---|
 | `android/` | App Android fino (Java, sem bibliotecas): guarda o endereço, mantém a tela ligada, vibra, expõe `Android.openSettings/vibrate/reconnect` à página. |
-| `server/src/` | O servidor. `index.js` (HTTP em 127.0.0.1 e HTTPS na rede local), `supervisor.js`, `security.js`, `http.js`, `config.js` + `config-check.js`, `events.js`, `host.js`, `log.js`, e os módulos que falam com o PC (`system`, `media`, `monitor`, `power`, `taskbar`, `camera`, `vcam`, `macros`, `keys`). |
-| `server/src/routes/` | As rotas, um arquivo por assunto (`apps`, `shortcuts`, `macros`, `editor`, `audio`, `media`, `pc`, `windows`, `camera`, `events`). `context.js` guarda o estado compartilhado; `index.js` monta a tabela e despacha. |
-| `server/public/` | A interface web servida pelo próprio servidor (mudar a interface não exige recompilar o APK). |
-| `server/native/` | O C# dos helpers nativos (um só `ssd-helper.exe`). |
-| `server/scripts/` | Os mesmos helpers em PowerShell (plano B), mais `taskbar.ps1`, `tls-cert.ps1`, `tls-ios.ps1` (AC e certificado do iPhone) e `autostart.ps1`; `make-icons.js` redesenha os ícones de `public/icons/`. |
-| `server/test/` | Testes (veja abaixo). |
-| `server/data/` | Dados da máquina, fora do git: `config.json` (token), `config.json.bak`, `bin/`, `cache/`, `icons/`, `tls/`, `vcam/`, `server.log`. |
+| `legacy/server/src/` | O servidor. `index.js` (HTTP em 127.0.0.1 e HTTPS na rede local), `supervisor.js`, `security.js`, `http.js`, `config.js` + `config-check.js`, `events.js`, `host.js`, `log.js`, e os módulos que falam com o PC (`system`, `media`, `monitor`, `power`, `taskbar`, `camera`, `vcam`, `macros`, `keys`). |
+| `legacy/server/src/routes/` | As rotas, um arquivo por assunto (`apps`, `shortcuts`, `macros`, `editor`, `audio`, `media`, `pc`, `windows`, `camera`, `events`). `context.js` guarda o estado compartilhado; `index.js` monta a tabela e despacha. |
+| `legacy/server/public/` | A interface web servida pelo próprio servidor (mudar a interface não exige recompilar o APK). |
+| `legacy/server/native/` | O C# dos helpers nativos (um só `ssd-helper.exe`). |
+| `legacy/server/scripts/` | Os mesmos helpers em PowerShell (plano B), mais `taskbar.ps1`, `tls-cert.ps1`, `tls-ios.ps1` (AC e certificado do iPhone) e `autostart.ps1`; `make-icons.js` redesenha os ícones de `public/icons/`. |
+| `legacy/server/test/` | Testes (veja abaixo). |
+| `legacy/server/data/` | Dados da máquina, fora do git: `config.json` (token), `config.json.bak`, `bin/`, `cache/`, `icons/`, `tls/`, `vcam/`, `server.log`. |
 
 ## Servidor
 
@@ -34,7 +34,7 @@ Como o self-stream-deck funciona por dentro. Para usar o painel, veja o [README]
 **Validação.** Tudo que vem do cliente é conferido contra listas do servidor (apps da barra de tarefas, atalhos do `config.json`, dispositivos
 existentes, passos de macro permitidos). Nunca caminhos, teclas ou comandos arbitrários. Os validadores comuns estão em `src/validate.js`.
 
-**Configuração.** `config.js` lê `server/data/config.json` (aceita BOM, nunca sobrescreve um arquivo ilegível, porque isso giraria o token),
+**Configuração.** `config.js` lê `legacy/server/data/config.json` (aceita BOM, nunca sobrescreve um arquivo ilegível, porque isso giraria o token),
 completa com os padrões e valida (`config-check.js`: tipos, portas, ids únicos, caracteres danificados). Problemas antigos viram aviso; ao salvar
 pelo editor, um problema nas chaves alteradas é recusado com 400 e nada é escrito. Cada gravação guarda a versão anterior em `config.json.bak` e
 move o novo arquivo por rename (atômico).
@@ -50,9 +50,9 @@ O motivo de cada parada fica no `server.log`.
 Cada tipo de trabalho tem um **helper de longa duração** que fala JSON por linha (um pedido por linha na entrada, uma resposta por linha na saída,
 com `id`). `host.js` o inicia no primeiro uso e o reinicia se morrer.
 
-- **Nativo (padrão):** `server/native/*.cs` compilados em um único `ssd-helper.exe` com o compilador C# que já vem no Windows (.NET Framework 4,
-  **C# 5**: sem `?.`, interpolação etc.), em `server/data/bin/`, com o nome contendo o hash dos fontes. Modos: `input`, `media`, `monitor`, `vcam`.
-- **PowerShell (plano B):** os scripts `server/scripts/*-host.ps1`, mesmo protocolo. Usados se o exe não puder ser compilado, ou com `SSD_NO_NATIVE=1`.
+- **Nativo (padrão):** `legacy/server/native/*.cs` compilados em um único `ssd-helper.exe` com o compilador C# que já vem no Windows (.NET Framework 4,
+  **C# 5**: sem `?.`, interpolação etc.), em `legacy/server/data/bin/`, com o nome contendo o hash dos fontes. Modos: `input`, `media`, `monitor`, `vcam`.
+- **PowerShell (plano B):** os scripts `legacy/server/scripts/*-host.ps1`, mesmo protocolo. Usados se o exe não puder ser compilado, ou com `SSD_NO_NATIVE=1`.
   O C# de `DeckNative` e `VCam` tem **uma só cópia** (`native/DeckNative.cs`, `native/VCam.cs`): os scripts compilam esses mesmos arquivos
   (`Add-CachedType -Path`). `monitor` e `media` são portes, não cópias, e a paridade é conferida por teste.
 - **Falhas:** um helper nativo que morre antes de ficar pronto duas vezes seguidas é abandonado nesta execução (cai para o PowerShell). Se um
@@ -74,7 +74,7 @@ na hora. `windows` é empurrado pelo próprio helper nativo (`SetWinEventHook`);
 Se a conexão não abre, a interface volta a perguntar de tempos em tempos e espaça os pedidos enquanto nada muda. `GET /api/requests` mostra quantas
 vezes cada rota foi usada.
 
-## Interface (`server/public/`)
+## Interface (`legacy/server/public/`)
 
 Scripts simples que compartilham o namespace global `Deck`, carregados em ordem pelo `index.html` (sem empacotador, sem módulos ES, para o
 carregamento no Android não mudar).

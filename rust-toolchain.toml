@@ -1,0 +1,5 @@
+# Used from Phase 3 (agent/). Pinned so every machine builds with the same compiler.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+targets = ["x86_64-pc-windows-msvc"]

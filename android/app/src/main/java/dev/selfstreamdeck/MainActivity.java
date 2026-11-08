@@ -38,7 +38,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Thin shell around the web UI served by the PC (server/). All the deck logic lives on the
+ * Thin shell around the web UI served by the PC (legacy/server/). All the deck logic lives on the
  * server; this app only stores the pairing addresses, keeps the screen on and renders the page.
  *
  * It knows up to two addresses for the same PC: the USB tunnel (http://127.0.0.1:PORT, tried first because it fails at once

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Enabled with: git config core.hooksPath tools/hooks   (docs/adr/0006)
+# Skip once, knowingly: git push --no-verify
+echo "pre-push: node tools/check.js (fast)"
+exec node "$(git rev-parse --show-toplevel)/tools/check.js"

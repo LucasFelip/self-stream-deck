@@ -114,7 +114,7 @@ function createFakes(pc) {
     calls,
     fakes: {
       system, media, monitor, power, taskbar, camera, vcam, notifications,
-      events: require('../../server/src/events'), // the real SSE hub: it is the thing under test
+      events: require('../../legacy/server/src/events'), // the real SSE hub: it is the thing under test
       update: (config, patch) => { note('update', Object.keys(patch)); Object.assign(config, patch); }, // never writes config.json
       uiVersion: () => 1,
     },

@@ -1,5 +1,7 @@
 # self-stream-deck
 
+> **Estrutura em transição.** O servidor Node atual está em `legacy/server/` (Fase 1 de [docs/plano-reestruturacao.md](docs/plano-reestruturacao.md)). O contrato da API fica em `contracts/`, os verificadores em `tools/` e as decisões em `docs/adr/`. O comando único de verificação é `node tools/check.js`.
+
 Transforma um celular Android (feito para o Galaxy A31) em um painel de controle do PC com Windows:
 abrir/focar aplicativos, atalhos de teclado, volume e áudio avançado, mídia tocando agora, monitor do
 sistema e controles de energia.
@@ -11,8 +13,8 @@ sistema e controles de energia.
 └──────────────┘                                               └──────────────────────────┘
 ```
 
-- `server/` — servidor no PC. Node 20+, **sem dependências** (não precisa de `npm install`).
-  Serve também a interface web (`server/public/`), então a lógica do painel fica toda no PC.
+- `legacy/server/` — servidor no PC. Node 20+, **sem dependências** (não precisa de `npm install`).
+  Serve também a interface web (`legacy/server/public/`), então a lógica do painel fica toda no PC.
 - `android/` — app Android fino (Java, sem libs): guarda o endereço do PC, mantém a tela ligada,
   vibra ao toque e mostra a página. Mudar a interface **não exige recompilar o APK**.
 
@@ -69,12 +71,12 @@ Discreto de propósito: as abas e o menu **⚙** Configurações (nome do PC, Ed
 ## Rodando o servidor
 
 ```powershell
-cd server
+cd legacy/server
 npm run phone      # servidor + abre o painel no celular via USB
 npm start          # só o servidor
 ```
 
-Na primeira execução é gerado um token em `server/data/config.json` e impresso o endereço de pareamento.
+Na primeira execução é gerado um token em `legacy/server/data/config.json` e impresso o endereço de pareamento.
 
 ### Iniciar com o Windows
 
@@ -85,7 +87,7 @@ npm run autostart:uninstall
 ```
 
 A tarefa roda no logon, **sem janela**, como administrador (necessário para os atalhos chegarem a janelas
-elevadas) e escreve em `server/data/server.log` (rotaciona em 2 MB). Pare o servidor manual antes: só uma
+elevadas) e escreve em `legacy/server/data/server.log` (rotaciona em 2 MB). Pare o servidor manual antes: só uma
 instância pode usar a porta.
 
 O log mostra o essencial; `SSD_LOG=debug` (variável de ambiente) mostra também os erros que o servidor ignora de propósito, útil para investigar algo estranho.
@@ -107,13 +109,13 @@ ela mantém a tela ligada sozinha.
 Além do USB, o celular pode falar com o PC pela rede local, sem cabo e sem serviços de terceiros:
 
 ```powershell
-cd server
+cd legacy/server
 npm run lan -- on        # liga (config.json: "lan": true); depois reinicie o servidor (encerre o processo: o supervisor o sobe)
 npm run lan -- status    # mostra a regra de firewall, a impressão digital do certificado e o link de pareamento
 ```
 
 - **HTTPS na porta 7879** (`httpsPort`), só quando `lan` está ligado. O servidor HTTP da porta 7878 continua **só em 127.0.0.1**.
-- **Certificado próprio** (RSA 2048, 5 anos), criado na primeira vez em `server/data/tls/`. O app **fixa a impressão digital (SHA-256)** do
+- **Certificado próprio** (RSA 2048, 5 anos), criado na primeira vez em `legacy/server/data/tls/`. O app **fixa a impressão digital (SHA-256)** do
   certificado: só aceita exatamente aquele, então ninguém na rede consegue se passar pelo servidor, e a câmera do celular funciona (precisa de HTTPS).
   O certificado não contém IPs, então trocar o IP do PC não exige gerar outro.
 - **Firewall:** o servidor cria a regra "Self Stream Deck (rede local)": só TCP 7879, só da **sub-rede local** (não da internet), em qualquer perfil
@@ -131,7 +133,7 @@ O iPhone não tem o app Android (nem `adb reverse`): ele abre o painel no **Safa
 Serve o iOS que roda o Safari com HTTPS (Wake Lock a partir do 16.4; o toque de háptico, a partir do 18).
 
 ```powershell
-cd server
+cd legacy/server
 npm run lan -- ios on       # liga (config.json: "ios": true); reinicie o servidor
 npm run lan -- ios          # mostra os links e os passos abaixo (e confere o certificado)
 ```
@@ -145,7 +147,7 @@ npm run lan -- ios          # mostra os links e os passos abaixo (e confere o ce
 
 Como funciona: o Safari confere os nomes dentro do certificado, ao contrário do app Android (que fixa a impressão digital). Por isso o iPhone tem **a sua
 própria porta HTTPS** (`iosPort`, 7880) com um certificado de 1 ano que lista o nome do PC, `nome.local` e os IPs atuais, assinado por uma AC local criada na
-primeira vez em `server/data/tls/ios/`. Quando os IPs mudam, o servidor gera outro certificado sozinho (a cada 5 min ele confere) **sem exigir nada no iPhone**. A porta
+primeira vez em `legacy/server/data/tls/ios/`. Quando os IPs mudam, o servidor gera outro certificado sozinho (a cada 5 min ele confere) **sem exigir nada no iPhone**. A porta
 HTTP `7881` (`iosCaPort`) só entrega o certificado público da AC, sem token; a chave privada nunca sai da pasta. A regra de firewall "Self Stream Deck (iPhone)" libera só essas
 duas portas, só para a sub-rede local. O Android e a porta 7879 não mudam. `npm run lan -- ios off` desliga e remove a regra.
 
@@ -162,7 +164,7 @@ sem baixar o brilho. USB: não há equivalente ao `adb reverse`; use o Wi-Fi (ou
 - O cliente só dispara o que está nas listas do servidor, por id: apps da barra de tarefas, atalhos do
   `config.json`, dispositivos de áudio existentes. Nunca caminhos ou teclas arbitrárias.
 
-## Configuração (`server/data/config.json`)
+## Configuração (`legacy/server/data/config.json`)
 
 | Campo | Descrição |
 |---|---|
@@ -186,7 +188,7 @@ Ao iniciar, o servidor confere o arquivo e avisa no log de valores errados (tipo
 O editor do app recusa salvar algo assim. **Cada gravação guarda a versão anterior em `config.json.bak`**, e se o `config.json` ficar ilegível o servidor não sobe nem o sobrescreve
 (isso trocaria o token): conserte-o ou copie o `.bak` por cima.
 
-Atalhos: teclas em `server/src/keys.js` (`ctrl`, `shift`, `alt`, `win`, letras, números, `f1`–`f24`, setas,
+Atalhos: teclas em `legacy/server/src/keys.js` (`ctrl`, `shift`, `alt`, `win`, letras, números, `f1`–`f24`, setas,
 `esc`, `tab`, `enter`, `space`, `printscreen`, teclas de mídia…). Atalhos inválidos são ignorados com aviso.
 
 ## Reorganizar os botões e editor de macros

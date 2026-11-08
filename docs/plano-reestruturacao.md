@@ -85,16 +85,18 @@ Linha de base dos testes (esta máquina): `npm test` verde; `layout.ui.test.js` 
 
 Pronto quando: o teste de contrato passa 100% no Node e falha ao quebrar de propósito uma rota ou um tipo (verificado: remover uma rota do contrato e trocar o tipo de `level` quebram o teste).
 
-### Fase 1: Monorepo, ferramentas e documentação (≈ 0,5 a 1 semana)
+### Fase 1: Monorepo, ferramentas e documentação (≈ 0,5 a 1 semana) — **feita**
 
-- [ ] Mover o `server/` para `legacy/server/` (git mv, histórico preservado) e ajustar caminhos de scripts e docs.
-- [ ] Raiz com um `check` único (`tools/check`) que roda lint, testes, contrato e UI; mesmo comando local e, depois, no Actions.
-- [ ] Hook `pre-push` (via `core.hooksPath`) que roda o `check` rápido. Workflow do Actions escrito e guardado, **desligado** (D7).
-- [ ] `docs/adr/0001..0005`: D1 a D5, com o contexto e as alternativas rejeitadas.
-- [ ] Tirar PNGs de `docs/redesign-*` do histórico atual (mover para um release/artefato; manter só 1 baseline por viewport) para encolher o repositório.
-- [ ] `.editorconfig`, `rust-toolchain.toml`, `.nvmrc`, Prettier/ESLint na raiz.
+- [x] `server/` movido para `legacy/server/` com `git mv` (histórico preservado), mais `node_modules`. Ajustados os caminhos de `tools/`, `.gitignore`, `README`, `CONTRIBUTING`, `ARQUITETURA` e o comentário do `MainActivity`.
+- [x] `node tools/check.js` na raiz: lint, testes unitários e de contrato (`--full` inclui interface e integração; `--ci` inclui a interface). Passa a incluir `web/` e `agent/` quando existirem.
+- [x] Hook `pre-push` em `tools/hooks` (ativado com `git config core.hooksPath tools/hooks`). Workflow do Actions guardado e **desligado** em `docs/ci/github-actions.yml.disabled` (ADR 0006).
+- [x] `docs/adr/0001..0007`: Rust, React/TS PWA, OpenAPI, SSE, Android Kotlin com iPhone PWA, verificação local, migração incremental.
+- [x] `.nvmrc` (24) e `rust-toolchain.toml`. O `.editorconfig` já existia; Prettier fica para a Fase 2 (`web/`), para não reformatar o código legado.
+- [ ] **Pendente:** `server/data/` continua no lugar antigo. Ali está a DLL da câmera virtual registrada no sistema (`vcam/UnityCaptureFilter64.dll`), carregada pelo Brave e pelo Claude, e o Windows não deixa mover a pasta. Enquanto `legacy/server/data` não existir, `config.js` usa `<repo>/server/data` (fallback temporário, comentado). Para concluir: desinstalar a câmera direta no painel, fechar os programas que a usam, mover `server/data` para `legacy/server/data`, apagar o fallback e reinstalar a câmera.
+- [ ] **Pendente (decisão sua):** tirar do git os PNGs de `docs/redesign-*` (~100 capturas) e manter só uma referência por viewport. Não foi feito por ser apagar conteúdo; posso propor a lista.
+- [ ] **Pendente (ação sua):** recriar o autostart a partir de `legacy/server` (`npm run autostart:install`); a tarefa atual aponta para o caminho antigo e quebra no próximo login.
 
-Pronto quando: `tools/check` verde, o painel roda de `legacy/server` igual a antes.
+Pronto quando: `tools/check.js` verde e o painel roda de `legacy/server` igual a antes (verde: lint, unitários e contrato em 18 s).
 
 ### Fase 2: Interface React + TypeScript (≈ 3 a 4 semanas)
 

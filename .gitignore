@@ -1,5 +1,6 @@
 # server runtime data (holds the pairing token)
 server/data/
+legacy/server/data/
 node_modules/
 
 # android

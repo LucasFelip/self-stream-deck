@@ -33,7 +33,7 @@ const lines = (file) => fs.readFileSync(file, 'utf8').split('\n').length;
 const sum = (files) => files.reduce((n, f) => n + lines(f), 0);
 
 function staticNumbers() {
-  const server = path.join(ROOT, 'server');
+  const server = path.join(ROOT, 'legacy', 'server');
   const byExt = (dir, exts) => (fs.existsSync(dir) ? walk(dir, (f) => exts.includes(path.extname(f))) : []);
   const publicDir = path.join(server, 'public');
   const web = walk(publicDir, (f) => ['.js', '.css', '.html'].includes(path.extname(f)));

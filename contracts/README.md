@@ -58,7 +58,7 @@ existir um jeito equivalente de injetar falhas.
 
 ## O que a Fase 0 descobriu (e o contrato registra do jeito que é)
 
-- **413 vira conexão fechada.** `readJson`/`readBuffer` (`server/src/http.js`) chamam `req.destroy()` ao passar do limite, então o cliente
+- **413 vira conexão fechada.** `readJson`/`readBuffer` (`legacy/server/src/http.js`) chamam `req.destroy()` ao passar do limite, então o cliente
   recebe `socket hang up` em vez do 413 que o código tenta enviar. O contrato documenta o 413 e os testes aceitam as duas coisas
   (`orClosed`). Um agente novo deve responder 413 de verdade e então fechar a conexão.
 - **`iconVersion` era número na interface de teste, texto no servidor.** O contrato manda texto (o hash do ícone, `""` sem ícone).

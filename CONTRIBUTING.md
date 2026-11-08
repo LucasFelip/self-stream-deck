@@ -5,7 +5,7 @@ Para entender como as peças se encaixam, leia [docs/ARQUITETURA.md](docs/ARQUIT
 ## Rodando
 
 ```powershell
-cd server
+cd legacy/server
 npm install            # só para as ferramentas de desenvolvimento (ESLint); o servidor em si não tem dependências
 npm run dev            # servidor reiniciando a cada mudança
 npm run lint           # ESLint
@@ -15,7 +15,7 @@ npm run test:integration   # helper nativo x PowerShell, no PC real
 npm run check          # tudo isso
 ```
 
-Antes de abrir um commit, `npm run check` precisa passar. Mudou só texto ou documentação: `npm run lint` basta.
+Antes de abrir um commit, `node tools/check.js` (na raiz) precisa passar: roda lint, testes e testes de contrato; `--full` inclui a interface e a integração. O hook de `pre-push` (`git config core.hooksPath tools/hooks`) roda a versão rápida. `npm run check` dentro de `legacy/server` continua valendo para só o servidor. Mudou só texto ou documentação: `npm run lint` basta.
 
 ## Convenções
 
@@ -29,7 +29,7 @@ Antes de abrir um commit, `npm run check` precisa passar. Mudou só texto ou doc
 
 ## Adicionar uma rota
 
-1. Escolha o arquivo de `server/src/routes/` pelo assunto (ou crie um e inclua o nome em `MODULES` em `routes/index.js`).
+1. Escolha o arquivo de `legacy/server/src/routes/` pelo assunto (ou crie um e inclua o nome em `MODULES` em `routes/index.js`).
 2. Registre com `on('POST', '/api/algo/:id', async ({ req, res, params }) => { ... })`. Use `ctx.system`, `ctx.media`... (nunca `require` o módulo do PC direto: é por `ctx` que os testes trocam por falsos).
 3. Valide com `src/validate.js` (`badRequest`, `notFound`, `number`, `percent`) e responda com `sendJson`.
 4. Acrescente os casos em `test/routes.test.js` (entrada inválida, id desconhecido, o que chega ao módulo do PC).
@@ -37,7 +37,7 @@ Antes de abrir um commit, `npm run check` precisa passar. Mudou só texto ou doc
 
 ## Adicionar uma página na interface
 
-1. Crie `server/public/js/minha.js` com `Deck.addPage({ id, section, title, el, show, hide })`. `show`/`hide` começam e param o que a página consulta.
+1. Crie `legacy/server/public/js/minha.js` com `Deck.addPage({ id, section, title, el, show, hide })`. `show`/`hide` começam e param o que a página consulta.
    `section` é a aba: uma de `apps`, `shortcuts`, `sound`, `monitor`, `power`, `processes` (as abas ficam em `js/pager.js`).
 2. Inclua o script em `public/index.html`, **antes** de `js/tiles.js` (as páginas se registram antes do deck), e na lista de `test/load-check.js`, na mesma ordem.
 3. Fale com o servidor por `Deck.api` e, se houver tópico ao vivo, por `Deck.live.watch`.
@@ -45,7 +45,7 @@ Antes de abrir um commit, `npm run check` precisa passar. Mudou só texto ou doc
 
 ## Adicionar uma operação a um helper
 
-1. **Nativo:** escreva a operação em `server/native/` (`InputOps.cs`, `MediaOps.cs` ou `MonitorOps.cs`) e registre com `host.On("nomeDaOp", r => ...)`.
-2. **PowerShell (plano B):** a mesma operação no `switch` do script do helper em `server/scripts/`. O C# de `DeckNative.cs` e `VCam.cs` é o mesmo nos dois lados: mexa só nos arquivos de `native/`.
-3. Exponha em `server/src/system.js` (ou `media.js`/`monitor.js`). Se for **só leitura**, inclua o nome em `retryOps` do `Host` para ser repetida quando o helper morrer no meio. **Ações nunca entram aí.**
+1. **Nativo:** escreva a operação em `legacy/server/native/` (`InputOps.cs`, `MediaOps.cs` ou `MonitorOps.cs`) e registre com `host.On("nomeDaOp", r => ...)`.
+2. **PowerShell (plano B):** a mesma operação no `switch` do script do helper em `legacy/server/scripts/`. O C# de `DeckNative.cs` e `VCam.cs` é o mesmo nos dois lados: mexa só nos arquivos de `native/`.
+3. Exponha em `legacy/server/src/system.js` (ou `media.js`/`monitor.js`). Se for **só leitura**, inclua o nome em `retryOps` do `Host` para ser repetida quando o helper morrer no meio. **Ações nunca entram aí.**
 4. Acrescente a comparação em `test/native-parity.test.js` (leituras e escritas que não mudam nada), com os dois helpers respondendo igual.

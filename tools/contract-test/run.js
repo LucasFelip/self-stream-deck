@@ -104,9 +104,9 @@ function request(base, token, { method, path: target, headers = {}, body, rawBod
 // ---- targets -------------------------------------------------------------------------------------------------------
 
 async function startInProcess() {
-  const { createApp } = require('../../server/src/app');
-  const { createGuard } = require('../../server/src/security');
-  const { createRoutes } = require('../../server/src/routes');
+  const { createApp } = require('../../legacy/server/src/app');
+  const { createGuard } = require('../../legacy/server/src/security');
+  const { createRoutes } = require('../../legacy/server/src/routes');
 
   const make = async (overrides) => {
     const pc = clone(fixture);
@@ -125,7 +125,7 @@ async function startInProcess() {
   // the SSE hub is shared by every createRoutes: the one created last owns the producers, so the full-featured server goes last
   const locked = await make({ editor: false, powerControls: false });
   const main = await make({});
-  return { main, locked, close: () => { main.server.closeAllConnections(); locked.server.closeAllConnections(); main.server.close(); locked.server.close(); require('../../server/src/events').stopAll(); }, routes: main.routes, make };
+  return { main, locked, close: () => { main.server.closeAllConnections(); locked.server.closeAllConnections(); main.server.close(); locked.server.close(); require('../../legacy/server/src/events').stopAll(); }, routes: main.routes, make };
 }
 
 // ---- the groups ----------------------------------------------------------------------------------------------------
@@ -359,10 +359,10 @@ async function securityCases(target, makeFresh, runLockout) {
 }
 
 
-// The answers the web interface's own tests are fed (server/test/ui/harness.js) must obey the contract too, or the UI is tested
+// The answers the web interface's own tests are fed (legacy/server/test/ui/harness.js) must obey the contract too, or the UI is tested
 // against a server that does not exist.
 async function uiHarnessChecks() {
-  const { fakeDeck } = require('../../server/test/ui/harness');
+  const { fakeDeck } = require('../../legacy/server/test/ui/harness');
   const deck = await fakeDeck();
   try {
     const routes = ['/api/apps', '/api/state', '/api/shortcuts', '/api/macros', '/api/editor', '/api/layout', '/api/pair-code', '/api/monitor/fps', '/api/windows',
