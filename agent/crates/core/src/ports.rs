@@ -237,13 +237,28 @@ pub trait TaskbarPort: Send + Sync {
     /// The folder whose changes mean the taskbar changed (`None`: nothing to watch).
     fn folder(&self) -> Option<std::path::PathBuf>;
     fn read(&self, icon_dir: &std::path::Path) -> PortResult<Vec<crate::taskbar::TaskbarItem>>;
+    /// Starts the shortcut exactly like a click on the taskbar (arguments, "start in", elevation and shell: targets included).
+    fn launch(&self, lnk: &str) -> PortResult<()>;
 }
 
 /// A taskbar of mentira: three shortcuts, the last one the Windows Terminal alias.
 #[derive(Default)]
-pub struct FakeTaskbar;
+pub struct FakeTaskbar {
+    launched: Mutex<Vec<String>>,
+}
+
+impl FakeTaskbar {
+    pub fn launched(&self) -> Vec<String> {
+        self.launched.lock().unwrap().clone()
+    }
+}
 
 impl TaskbarPort for FakeTaskbar {
+    fn launch(&self, lnk: &str) -> PortResult<()> {
+        self.launched.lock().unwrap().push(lnk.to_owned());
+        Ok(())
+    }
+
     fn folder(&self) -> Option<std::path::PathBuf> {
         None
     }
@@ -273,6 +288,182 @@ impl TaskbarPort for FakeTaskbar {
             item("02 Code.lnk", "C:\\Code\\Code.exe"),
             item("03 Terminal.lnk", "C:\\Users\\x\\wt.exe"),
         ])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Monitor {
+    /// `\\.\DISPLAY1`; monitors are always sorted by it, so an index means the same thing everywhere
+    pub device: String,
+    pub left: i32,
+    pub top: i32,
+    pub width: i32,
+    pub height: i32,
+    pub primary: bool,
+    /// 0 to 100 from DDC/CI, or null when it was not asked for or the screen cannot tell
+    pub brightness: Option<Percent>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowAction {
+    Focus,
+    Minimize,
+    Maximize,
+    Restore,
+    Close,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Zone {
+    Left,
+    Right,
+    Full,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Projection {
+    Extend,
+    Clone,
+    FirstOnly,
+    SecondOnly,
+}
+
+/// The windows and the screens. Every action names a window by handle, and the platform only acts on a handle that is in the live list
+/// (otherwise `NotFound("window not found")`): the phone cannot make this process touch an arbitrary window.
+pub trait WindowsPort: Send + Sync {
+    fn snapshot(&self) -> PortResult<crate::windows::WindowsSnapshot>;
+    fn action(&self, handle: i64, action: WindowAction) -> PortResult<()>;
+    fn move_to_monitor(&self, handle: i64, monitor: usize) -> PortResult<()>;
+    fn place(&self, handle: i64, x: i32, y: i32) -> PortResult<()>;
+    fn snap(&self, handle: i64, monitor: usize, zone: Zone) -> PortResult<()>;
+    /// Brings the first window of a running program to the front; false when it has none.
+    fn focus_process(&self, name: &str) -> PortResult<bool>;
+    fn monitors(&self, brightness: bool) -> PortResult<Vec<Monitor>>;
+    fn set_brightness(&self, device: &str, level: Percent) -> PortResult<()>;
+    fn screens_off(&self) -> PortResult<()>;
+    /// Windows' own projection switcher.
+    fn project(&self, mode: Projection) -> PortResult<()>;
+}
+
+/// Two windows on two screens; remembers what it was asked to do.
+pub struct FakeWindows {
+    log: Mutex<Vec<String>>,
+}
+
+impl Default for FakeWindows {
+    fn default() -> Self {
+        Self {
+            log: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl FakeWindows {
+    pub fn log(&self) -> Vec<String> {
+        self.log.lock().unwrap().clone()
+    }
+
+    fn known(&self, handle: i64) -> PortResult<()> {
+        if self.snapshot()?.windows.iter().any(|w| w.handle == handle) {
+            Ok(())
+        } else {
+            Err(PortError::NotFound("window not found".into()))
+        }
+    }
+
+    fn note(&self, line: String) {
+        self.log.lock().unwrap().push(line);
+    }
+}
+
+impl WindowsPort for FakeWindows {
+    fn snapshot(&self) -> PortResult<crate::windows::WindowsSnapshot> {
+        use crate::windows::WindowInfo;
+        let window = |handle: i64, name: &str, title: &str, monitor: i32| WindowInfo {
+            handle,
+            pid: handle as u32,
+            title: title.into(),
+            state: 0,
+            monitor,
+            x: 100,
+            y: 100,
+            w: 800,
+            h: 600,
+            name: name.into(),
+        };
+        Ok(crate::windows::WindowsSnapshot {
+            running: vec!["brave".into(), "notepad".into(), "explorer".into()],
+            windows: vec![
+                window(101, "brave", "Nova guia - Brave", 0),
+                window(102, "notepad", "a.txt - Bloco de Notas", 1),
+            ],
+        })
+    }
+
+    fn action(&self, handle: i64, action: WindowAction) -> PortResult<()> {
+        self.known(handle)?;
+        self.note(format!("{action:?} {handle}"));
+        Ok(())
+    }
+
+    fn move_to_monitor(&self, handle: i64, monitor: usize) -> PortResult<()> {
+        self.known(handle)?;
+        if monitor >= 2 {
+            return Err(PortError::Failed("unknown monitor index".into()));
+        }
+        self.note(format!("move {handle} {monitor}"));
+        Ok(())
+    }
+
+    fn place(&self, handle: i64, x: i32, y: i32) -> PortResult<()> {
+        self.known(handle)?;
+        self.note(format!("place {handle} {x},{y}"));
+        Ok(())
+    }
+
+    fn snap(&self, handle: i64, monitor: usize, zone: Zone) -> PortResult<()> {
+        self.known(handle)?;
+        self.note(format!("snap {handle} {monitor} {zone:?}"));
+        Ok(())
+    }
+
+    fn focus_process(&self, name: &str) -> PortResult<bool> {
+        let found = self.snapshot()?.windows.iter().any(|w| w.name == name);
+        if found {
+            self.note(format!("focus-process {name}"));
+        }
+        Ok(found)
+    }
+
+    fn monitors(&self, brightness: bool) -> PortResult<Vec<Monitor>> {
+        let monitor = |device: &str, left: i32, primary: bool| Monitor {
+            device: device.into(),
+            left,
+            top: 0,
+            width: 1920,
+            height: 1080,
+            primary,
+            brightness: brightness.then_some(60),
+        };
+        Ok(vec![
+            monitor("\\\\.\\DISPLAY1", 0, true),
+            monitor("\\\\.\\DISPLAY2", 1920, false),
+        ])
+    }
+
+    fn set_brightness(&self, device: &str, level: Percent) -> PortResult<()> {
+        self.note(format!("brightness {device} {level}"));
+        Ok(())
+    }
+
+    fn screens_off(&self) -> PortResult<()> {
+        self.note("screens-off".into());
+        Ok(())
+    }
+
+    fn project(&self, mode: Projection) -> PortResult<()> {
+        self.note(format!("project {mode:?}"));
+        Ok(())
     }
 }
 

@@ -6,6 +6,7 @@ mod proxy;
 mod routes;
 mod statics;
 mod stats;
+mod winroutes;
 
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
@@ -20,7 +21,7 @@ use axum::Router;
 use ssd_core::config::Config;
 use ssd_core::guard::{percent_decode, Guard};
 use ssd_core::media::ArtCache;
-use ssd_core::ports::{AudioPort, InputPort, MediaPort, TaskbarPort};
+use ssd_core::ports::{AudioPort, InputPort, MediaPort, TaskbarPort, WindowsPort};
 
 /// Sent with every response: the page only ever loads its own files, cannot be framed, and nothing is sniffed or leaked.
 pub const SECURITY_HEADERS: [(&str, &str); 5] = [
@@ -38,6 +39,7 @@ pub struct Platform {
     pub media: Option<Arc<dyn MediaPort>>,
     pub input: Option<Arc<dyn InputPort>>,
     pub taskbar: Option<Arc<dyn TaskbarPort>>,
+    pub windows: Option<Arc<dyn WindowsPort>>,
 }
 
 pub struct AppState {
@@ -305,6 +307,7 @@ mod tests {
             media: None,
             input: None,
             taskbar: None,
+            windows: None,
         })
     }
 
@@ -647,6 +650,7 @@ mod tests {
             media: Some(Arc::new(ssd_core::ports::FakeMedia::default())),
             input: None,
             taskbar: None,
+            windows: None,
         });
         let auth = [("x-token", "tok")];
         let media = body_of(call(&app, "GET", "/api/media", &auth).await).await;
@@ -732,6 +736,7 @@ mod tests {
                 media: None,
                 input: Some(input.clone()),
                 taskbar: None,
+                windows: None,
             },
             r#"{"token":"tok","shortcuts":[{"id":"tm","label":"Gerenciador","keys":"ctrl+shift+esc"},{"keys":"alt+f4"},{"id":"bad","keys":"ctrl+nope"}]}"#,
         );
@@ -776,7 +781,7 @@ mod tests {
         let hidden_id = ssd_core::taskbar::id_of("02 Code.lnk");
         let (app, _) = app_configured(
             Platform {
-                taskbar: Some(Arc::new(ssd_core::ports::FakeTaskbar)),
+                taskbar: Some(Arc::new(ssd_core::ports::FakeTaskbar::default())),
                 ..Platform::default()
             },
             &format!(r#"{{"token":"tok","hidden":["{hidden_id}"]}}"#),
@@ -822,5 +827,187 @@ mod tests {
                 "{bad}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn windows_screens_and_launching_an_app() {
+        let windows = Arc::new(ssd_core::ports::FakeWindows::default());
+        let taskbar = Arc::new(ssd_core::ports::FakeTaskbar::default());
+        let (app, _) = app_on(Platform {
+            windows: Some(windows.clone()),
+            taskbar: Some(taskbar.clone()),
+            ..Platform::default()
+        });
+        let auth = [("x-token", "tok")];
+        post(&app, "/api/refresh", "").await;
+
+        let listed = body_of(call(&app, "GET", "/api/windows", &auth).await).await;
+        assert_eq!(listed["windows"][0]["app"], "Brave");
+        assert!(listed["windows"][0]["appId"].is_string());
+        assert_eq!(listed["windows"][1]["app"], "Notepad");
+        assert!(listed["windows"][1]["appId"].is_null());
+
+        let act = |body: &'static str| post(&app, "/api/windows/action", body);
+        assert_eq!(
+            act(r#"{"handle":101,"action":"minimize"}"#).await.status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            act(r#"{"handle":999,"action":"close"}"#).await.status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            act(r#"{"handle":101,"action":"explode"}"#).await.status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            act(r#"{"handle":-5,"action":"close"}"#).await.status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            post(&app, "/api/windows/move", r#"{"handle":101,"monitor":1}"#)
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            post(&app, "/api/windows/move", r#"{"handle":101,"monitor":16}"#)
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            post(
+                &app,
+                "/api/windows/place",
+                r#"{"handle":102,"x":10.6,"y":"20"}"#
+            )
+            .await
+            .status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            post(
+                &app,
+                "/api/windows/place",
+                r#"{"handle":102,"x":1e9,"y":0}"#
+            )
+            .await
+            .status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            post(
+                &app,
+                "/api/windows/snap",
+                r#"{"handle":102,"monitor":0,"zone":"left"}"#
+            )
+            .await
+            .status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            post(
+                &app,
+                "/api/windows/snap",
+                r#"{"handle":102,"monitor":0,"zone":"top"}"#
+            )
+            .await
+            .status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            windows.log(),
+            [
+                "Minimize 101",
+                "move 101 1",
+                "place 102 11,20",
+                "snap 102 0 Left"
+            ]
+        );
+
+        let screens = body_of(call(&app, "GET", "/api/screens", &auth).await).await;
+        assert_eq!(screens["monitors"][0]["device"], "\\\\.\\DISPLAY1");
+        assert_eq!(screens["monitors"][0]["brightness"], 60);
+        let flat = body_of(call(&app, "GET", "/api/screens?brightness=0", &auth).await).await;
+        assert!(flat["monitors"][1]["brightness"].is_null());
+        assert_eq!(
+            post(
+                &app,
+                "/api/screens/brightness",
+                r#"{"device":"\\\\.\\DISPLAY2","level":"35"}"#
+            )
+            .await
+            .status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            post(
+                &app,
+                "/api/screens/brightness",
+                r#"{"device":"nope","level":35}"#
+            )
+            .await
+            .status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            post(&app, "/api/screens/off", "").await.status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            post(&app, "/api/screens/project", r#"{"mode":"first"}"#)
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            post(
+                &app,
+                "/api/screens/project",
+                r#"{"mode":"first","confirm":true}"#
+            )
+            .await
+            .status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            post(&app, "/api/screens/project", r#"{"mode":"extend"}"#)
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            post(&app, "/api/screens/project", r#"{"mode":"sideways"}"#)
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+
+        // an app with a window is brought to the front; one without is started; an unknown id is refused
+        let apps = body_of(call(&app, "GET", "/api/apps", &auth).await).await;
+        let id_of = |name: &str| {
+            apps["apps"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|a| a["name"] == name)
+                .unwrap()["id"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        };
+        let focused = post(&app, &format!("/api/launch/{}", id_of("Brave")), "").await;
+        assert_eq!(
+            body_of(focused).await,
+            serde_json::json!({ "ok": true, "name": "Brave", "action": "focused" })
+        );
+        let started = post(&app, &format!("/api/launch/{}", id_of("Code")), "").await;
+        assert_eq!(body_of(started).await["action"], "launched");
+        assert_eq!(taskbar.launched(), ["C:\\TaskBar\\02 Code.lnk"]);
+        assert_eq!(
+            post(&app, "/api/launch/nope", "").await.status(),
+            StatusCode::NOT_FOUND
+        );
     }
 }

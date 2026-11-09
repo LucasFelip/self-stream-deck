@@ -49,11 +49,11 @@ fn tile_order(state: &AppState) -> Value {
     Value::Object(order)
 }
 
-fn error(status: StatusCode, message: &str) -> Response {
+pub(crate) fn error(status: StatusCode, message: &str) -> Response {
     json(status, json!({ "error": message }))
 }
 
-fn port_error(error_: PortError) -> Response {
+pub(crate) fn port_error(error_: PortError) -> Response {
     match error_ {
         PortError::NotFound(message) => error(StatusCode::NOT_FOUND, &message),
         PortError::Failed(message) => error(StatusCode::INTERNAL_SERVER_ERROR, &message),
@@ -74,6 +74,20 @@ pub fn is_ported(state: &AppState, method: &Method, path: &str) -> bool {
             state.platform.media.is_some()
         }
         (&Method::GET, "/api/shortcuts") => true,
+        (&Method::GET, "/api/windows" | "/api/screens")
+        | (
+            &Method::POST,
+            "/api/windows/action"
+            | "/api/windows/move"
+            | "/api/windows/place"
+            | "/api/windows/snap"
+            | "/api/screens/brightness"
+            | "/api/screens/off"
+            | "/api/screens/project",
+        ) => state.platform.windows.is_some(),
+        (&Method::POST, p) if p.starts_with("/api/launch/") => {
+            state.platform.windows.is_some() && state.platform.taskbar.is_some()
+        }
         (&Method::GET, "/api/apps") | (&Method::POST, "/api/refresh") => {
             state.platform.taskbar.is_some()
         }
@@ -105,6 +119,12 @@ pub async fn answer(
             || path.starts_with("/api/mediakey/") =>
         {
             shortcut_route(state, method, path).await
+        }
+        _ if path.starts_with("/api/windows") || path.starts_with("/api/screens") => {
+            crate::winroutes::windows_route(state, method == Method::POST, path, query, body).await
+        }
+        (&Method::POST, p) if p.starts_with("/api/launch/") => {
+            crate::winroutes::launch(state, &p["/api/launch/".len()..]).await
         }
         (&Method::GET, "/api/apps") => crate::apps::list(state),
         (&Method::POST, "/api/refresh") => crate::apps::refresh_route(state).await,
@@ -175,7 +195,7 @@ fn save_layout(state: &Arc<AppState>, body: &[u8]) -> Response {
 // ---- audio -------------------------------------------------------------------------------------------------------------------------
 
 /// JavaScript's `Number(value)` for what a JSON body can hold: a missing field or something that is not a number is `None`.
-fn js_number(value: Option<&Value>) -> Option<f64> {
+pub(crate) fn js_number(value: Option<&Value>) -> Option<f64> {
     let number = match value? {
         Value::Number(n) => n.as_f64()?,
         Value::String(s) => match s.trim() {
@@ -190,7 +210,7 @@ fn js_number(value: Option<&Value>) -> Option<f64> {
 }
 
 /// `percent()` of the Node agent: a number, rounded, held between 0 and 100.
-fn percent(value: Option<&Value>, name: &str) -> Result<Percent, Response> {
+pub(crate) fn percent(value: Option<&Value>, name: &str) -> Result<Percent, Response> {
     js_number(value)
         .map(|n| n.round().clamp(0.0, 100.0) as Percent)
         .ok_or_else(|| error(StatusCode::BAD_REQUEST, &format!("{name} must be a number")))

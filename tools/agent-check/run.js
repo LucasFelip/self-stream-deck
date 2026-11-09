@@ -207,6 +207,34 @@ const step = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.match(icon.headers['cache-control'], /immutable/);
       assert.strictEqual((await request('/api/icon/nope', { headers: auth })).status, 404);
     });
+    await step('windows, screens and launching (fake windows): list, actions, snap, brightness, projection, focus or start', async () => {
+      const send = (route, body) => new Promise((resolve, reject) => {
+        const req = http.request({ host: '127.0.0.1', port: PORT, path: route, method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' } }, (res) => {
+          const chunks = [];
+          res.on('data', (c) => chunks.push(c));
+          res.on('end', () => resolve({ status: res.statusCode, json: (() => { try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return null; } })() }));
+        });
+        req.on('error', reject);
+        req.end(JSON.stringify(body));
+      });
+      const windows = JSON.parse((await request('/api/windows', { headers: auth })).body).windows;
+      assert.deepStrictEqual(windows.map((w) => w.app), ['Brave', 'Notepad']);
+      assert.strictEqual((await send('/api/windows/action', { handle: 101, action: 'minimize' })).status, 200);
+      assert.strictEqual((await send('/api/windows/action', { handle: 999, action: 'close' })).status, 404);
+      assert.strictEqual((await send('/api/windows/action', { handle: 101, action: 'explode' })).status, 400);
+      assert.strictEqual((await send('/api/windows/snap', { handle: 102, monitor: 0, zone: 'left' })).status, 200);
+      assert.strictEqual((await send('/api/windows/place', { handle: 102, x: 1e9, y: 0 })).status, 400);
+      const screens = JSON.parse((await request('/api/screens', { headers: auth })).body).monitors;
+      assert.deepStrictEqual(screens.map((m) => [m.primary, m.brightness]), [[true, 60], [false, 60]]);
+      assert.strictEqual(JSON.parse((await request('/api/screens?brightness=0', { headers: auth })).body).monitors[0].brightness, null);
+      assert.strictEqual((await send('/api/screens/brightness', { device: 'nope', level: 10 })).status, 404);
+      assert.strictEqual((await send('/api/screens/project', { mode: 'first' })).status, 400);
+      const apps = JSON.parse((await request('/api/apps', { headers: auth })).body).apps;
+      const named = (name) => apps.find((a) => a.name === name).id;
+      assert.strictEqual((await send(`/api/launch/${named('Brave')}`, {})).json.action, 'focused');
+      assert.strictEqual((await send(`/api/launch/${named('Code')}`, {})).json.action, 'launched');
+      assert.strictEqual((await send('/api/launch/nope', {})).status, 404);
+    });
     await step('/api/requests counts the routes (static files as one)', async () => {
       const r = JSON.parse((await request('/api/requests', { headers: auth })).body);
       assert.ok(r.counts['GET static'] >= 1 && r.counts['GET /api/ping'] >= 1, JSON.stringify(r.counts));

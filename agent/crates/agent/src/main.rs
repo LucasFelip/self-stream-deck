@@ -87,7 +87,8 @@ fn platform(fake: bool) -> Platform {
             audio: Some(Arc::new(ssd_core::ports::FakeAudio::default())),
             media: Some(Arc::new(ssd_core::ports::FakeMedia::default())),
             input: Some(Arc::new(ssd_core::ports::FakeInput::default())),
-            taskbar: Some(Arc::new(ssd_core::ports::FakeTaskbar)),
+            taskbar: Some(Arc::new(ssd_core::ports::FakeTaskbar::default())),
+            windows: Some(Arc::new(ssd_core::ports::FakeWindows::default())),
         };
     }
     #[cfg(windows)]
@@ -96,6 +97,7 @@ fn platform(fake: bool) -> Platform {
         media: Some(Arc::new(ssd_platform_windows::WindowsMedia)),
         input: Some(Arc::new(ssd_platform_windows::WindowsInput)),
         taskbar: Some(Arc::new(ssd_platform_windows::WindowsTaskbar)),
+        windows: Some(Arc::new(ssd_platform_windows::WindowsWindows)),
     };
     #[cfg(not(windows))]
     Platform::default()

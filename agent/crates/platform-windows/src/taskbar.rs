@@ -217,6 +217,15 @@ fn icon_png(source: &str) -> Option<Vec<u8>> {
 pub struct WindowsTaskbar;
 
 impl TaskbarPort for WindowsTaskbar {
+    fn launch(&self, lnk: &str) -> PortResult<()> {
+        // explorer.exe makes the shortcut behave exactly like a click on the taskbar (arguments, "start in", elevation, shell: targets)
+        std::process::Command::new("explorer.exe")
+            .arg(lnk)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| PortError::Failed(e.to_string()))
+    }
+
     fn folder(&self) -> Option<PathBuf> {
         taskbar_dir()
     }
