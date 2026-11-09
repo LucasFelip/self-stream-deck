@@ -6,6 +6,8 @@ mod audio;
 mod input;
 #[cfg(windows)]
 mod media;
+#[cfg(windows)]
+mod taskbar;
 
 #[cfg(windows)]
 pub use audio::WindowsAudio;
@@ -13,3 +15,5 @@ pub use audio::WindowsAudio;
 pub use input::WindowsInput;
 #[cfg(windows)]
 pub use media::WindowsMedia;
+#[cfg(windows)]
+pub use taskbar::WindowsTaskbar;

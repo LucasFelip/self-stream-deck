@@ -3,6 +3,7 @@
 //! - `config`: `config.json` (same file and keys as the Node agent, so the pairing token survives the migration)
 //! - `keys`: shortcut specs as virtual-key codes
 //! - `media`: what is shown of the media sessions (names, art type, art cache)
+//! - `taskbar`: the pinned apps (names, duplicates, order, cache) and `sha1` for their ids
 //! - `ports`: what the PC offers (audio, media, input...) as traits that `platform-windows` implements and the tests fake
 
 pub mod config;
@@ -10,3 +11,5 @@ pub mod guard;
 pub mod keys;
 pub mod media;
 pub mod ports;
+pub mod sha1;
+pub mod taskbar;

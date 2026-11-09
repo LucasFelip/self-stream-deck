@@ -67,3 +67,20 @@ pub async fn forward(upstream: SocketAddr, token: &str, request: Request) -> Res
         }
     }
 }
+
+/// A body-less POST to a route of the Node agent whose answer does not matter (its copy of something learns about a change).
+pub async fn notify(upstream: SocketAddr, token: &str, path: &str) {
+    let Ok(request) = Request::builder()
+        .method("POST")
+        .uri(format!("http://{upstream}{path}"))
+        .header(header::HOST, upstream.to_string())
+        .header("x-token", token)
+        .body(Body::empty())
+    else {
+        return;
+    };
+    let client: Client<_, Body> = Client::builder(TokioExecutor::new()).build_http();
+    if let Err(error) = client.request(request).await {
+        tracing::warn!("could not tell the agent behind this one: {error}");
+    }
+}

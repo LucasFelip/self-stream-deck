@@ -1,6 +1,7 @@
 //! The HTTP side of the agent: the same request flow as `legacy/server/src/app.js` (Host check, lockout, token, Origin, static files, routes),
 //! then a transition proxy that hands every route not yet ported to the Node agent running as a child on an internal port (plan 3.1).
 //! Each route that gets ported is answered here and stops being proxied.
+mod apps;
 mod proxy;
 mod routes;
 mod statics;
@@ -19,7 +20,7 @@ use axum::Router;
 use ssd_core::config::Config;
 use ssd_core::guard::{percent_decode, Guard};
 use ssd_core::media::ArtCache;
-use ssd_core::ports::{AudioPort, InputPort, MediaPort};
+use ssd_core::ports::{AudioPort, InputPort, MediaPort, TaskbarPort};
 
 /// Sent with every response: the page only ever loads its own files, cannot be framed, and nothing is sniffed or leaked.
 pub const SECURITY_HEADERS: [(&str, &str); 5] = [
@@ -36,6 +37,7 @@ pub struct Platform {
     pub audio: Option<Arc<dyn AudioPort>>,
     pub media: Option<Arc<dyn MediaPort>>,
     pub input: Option<Arc<dyn InputPort>>,
+    pub taskbar: Option<Arc<dyn TaskbarPort>>,
 }
 
 pub struct AppState {
@@ -50,6 +52,10 @@ pub struct AppState {
     pub platform: Platform,
     /// cover art of the tracks already fetched
     pub art: Mutex<ArtCache>,
+    /// the taskbar apps
+    pub apps: Mutex<apps::AppsState>,
+    /// this PC's name, as the Apps page shows it
+    pub host: String,
     counts: Mutex<HashMap<String, u64>>,
     since: String,
 }
@@ -63,8 +69,10 @@ impl AppState {
         platform: Platform,
     ) -> Arc<Self> {
         let guard = Guard::new(config.token(), machine_name);
-        Arc::new(Self {
+        let state = Arc::new(Self {
             guard,
+            host: machine_name.to_owned(),
+            apps: Mutex::new(apps::AppsState::default()),
             config: Mutex::new(config),
             web_dir,
             upstream,
@@ -72,7 +80,24 @@ impl AppState {
             art: Mutex::new(ArtCache::default()),
             counts: Mutex::new(HashMap::new()),
             since: stats::iso_now(),
-        })
+        });
+        apps::load_cached(&state);
+        state
+    }
+
+    pub(crate) fn cache_file(&self) -> PathBuf {
+        self.config.lock().unwrap().dir().join("apps-cache.json")
+    }
+
+    pub(crate) fn icon_dir(&self) -> PathBuf {
+        self.config.lock().unwrap().dir().join("icons")
+    }
+
+    /// Reads the taskbar when it changed since the last run (the first start has no list yet). Meant to run in the background at start.
+    pub async fn refresh_apps(self: &Arc<Self>) {
+        if let Err(problem) = apps::refresh(self, false).await {
+            tracing::warn!("could not read the taskbar: {problem}");
+        }
     }
 }
 
@@ -87,6 +112,10 @@ pub(crate) fn with_security(mut response: Response) -> Response {
             .insert(name, HeaderValue::from_static(value));
     }
     response
+}
+
+pub(crate) fn error_json(status: StatusCode, message: &str) -> Response {
+    json(status, serde_json::json!({ "error": message }))
 }
 
 pub(crate) fn json(status: StatusCode, body: serde_json::Value) -> Response {
@@ -275,6 +304,7 @@ mod tests {
             audio,
             media: None,
             input: None,
+            taskbar: None,
         })
     }
 
@@ -616,6 +646,7 @@ mod tests {
             audio: None,
             media: Some(Arc::new(ssd_core::ports::FakeMedia::default())),
             input: None,
+            taskbar: None,
         });
         let auth = [("x-token", "tok")];
         let media = body_of(call(&app, "GET", "/api/media", &auth).await).await;
@@ -700,6 +731,7 @@ mod tests {
                 audio: None,
                 media: None,
                 input: Some(input.clone()),
+                taskbar: None,
             },
             r#"{"token":"tok","shortcuts":[{"id":"tm","label":"Gerenciador","keys":"ctrl+shift+esc"},{"keys":"alt+f4"},{"id":"bad","keys":"ctrl+nope"}]}"#,
         );
@@ -737,5 +769,58 @@ mod tests {
             input.pressed(),
             vec![vec![0x11, 0x10, 0x1b], vec![0x12, 0x73], vec![0xb3]]
         );
+    }
+
+    #[tokio::test]
+    async fn the_taskbar_apps_the_icons_and_the_hidden_ones() {
+        let hidden_id = ssd_core::taskbar::id_of("02 Code.lnk");
+        let (app, _) = app_configured(
+            Platform {
+                taskbar: Some(Arc::new(ssd_core::ports::FakeTaskbar)),
+                ..Platform::default()
+            },
+            &format!(r#"{{"token":"tok","hidden":["{hidden_id}"]}}"#),
+        );
+        let auth = [("x-token", "tok")];
+        // nothing is read until the first refresh (the agent does it in the background at start)
+        let empty = body_of(call(&app, "GET", "/api/apps", &auth).await).await;
+        assert_eq!(empty["apps"], serde_json::json!([]));
+
+        let count = post(&app, "/api/refresh", "").await;
+        assert_eq!(body_of(count).await, serde_json::json!({ "count": 2 }));
+        let apps = body_of(call(&app, "GET", "/api/apps", &auth).await).await;
+        assert_eq!(apps["host"], "PC");
+        let names: Vec<&str> = apps["apps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(names, ["Brave", "Terminal"]);
+        assert_eq!(apps["apps"][0]["hasIcon"], true);
+        assert_eq!(apps["apps"][0]["iconVersion"].as_str().unwrap().len(), 8);
+
+        let brave = apps["apps"][0]["id"].as_str().unwrap().to_owned();
+        let icon = call(&app, "GET", &format!("/api/icon/{brave}"), &auth).await;
+        assert_eq!(icon.status(), StatusCode::OK);
+        assert_eq!(icon.headers()["content-type"], "image/png");
+        assert_eq!(
+            icon.headers()["cache-control"],
+            "max-age=31536000, immutable"
+        );
+        // a hidden app still has its icon (the editor lists every app)
+        assert_eq!(
+            call(&app, "GET", &format!("/api/icon/{hidden_id}"), &auth)
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        for bad in ["/api/icon/nope", "/api/icon/..%2f..%2fconfig", "/api/icon/"] {
+            assert_eq!(
+                call(&app, "GET", bad, &auth).await.status(),
+                StatusCode::NOT_FOUND,
+                "{bad}"
+            );
+        }
     }
 }

@@ -74,6 +74,10 @@ pub fn is_ported(state: &AppState, method: &Method, path: &str) -> bool {
             state.platform.media.is_some()
         }
         (&Method::GET, "/api/shortcuts") => true,
+        (&Method::GET, "/api/apps") | (&Method::POST, "/api/refresh") => {
+            state.platform.taskbar.is_some()
+        }
+        (&Method::GET, p) if p.starts_with("/api/icon/") => state.platform.taskbar.is_some(),
         (&Method::POST, p)
             if p.starts_with("/api/shortcut/") || p.starts_with("/api/mediakey/") =>
         {
@@ -101,6 +105,12 @@ pub async fn answer(
             || path.starts_with("/api/mediakey/") =>
         {
             shortcut_route(state, method, path).await
+        }
+        (&Method::GET, "/api/apps") => crate::apps::list(state),
+        (&Method::POST, "/api/refresh") => crate::apps::refresh_route(state).await,
+        (&Method::GET, p) if p.starts_with("/api/icon/") => {
+            let id = p.strip_prefix("/api/icon/").unwrap_or_default();
+            crate::apps::icon(state, id).await
         }
         _ if path.starts_with("/api/media") => media_route(state, path, query, body).await,
         _ => match &state.platform.audio {

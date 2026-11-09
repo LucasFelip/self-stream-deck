@@ -87,6 +87,7 @@ fn platform(fake: bool) -> Platform {
             audio: Some(Arc::new(ssd_core::ports::FakeAudio::default())),
             media: Some(Arc::new(ssd_core::ports::FakeMedia::default())),
             input: Some(Arc::new(ssd_core::ports::FakeInput::default())),
+            taskbar: Some(Arc::new(ssd_core::ports::FakeTaskbar)),
         };
     }
     #[cfg(windows)]
@@ -94,6 +95,7 @@ fn platform(fake: bool) -> Platform {
         audio: Some(Arc::new(ssd_platform_windows::WindowsAudio)),
         media: Some(Arc::new(ssd_platform_windows::WindowsMedia)),
         input: Some(Arc::new(ssd_platform_windows::WindowsInput)),
+        taskbar: Some(Arc::new(ssd_platform_windows::WindowsTaskbar)),
     };
     #[cfg(not(windows))]
     Platform::default()
@@ -158,6 +160,12 @@ async fn run() -> Result<(), String> {
         args.web_dir.display(),
         upstream.map_or("no".to_string(), |u| u.to_string())
     );
+
+    // the apps list of the last run is already loaded; the taskbar is read again in the background when it changed
+    tokio::spawn({
+        let state = state.clone();
+        async move { state.refresh_apps().await }
+    });
 
     let serve = axum::serve(
         listener,

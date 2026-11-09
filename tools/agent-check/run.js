@@ -194,6 +194,19 @@ const step = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.strictEqual((await post('/api/mediakey/playpause')).status, 200);
       assert.strictEqual((await post('/api/mediakey/explode')).status, 404);
     });
+    await step('taskbar apps (fake taskbar): refresh, list, icons', async () => {
+      const refreshed = await request('/api/refresh', { method: 'POST', headers: auth });
+      assert.deepStrictEqual(JSON.parse(refreshed.body), { count: 3 });
+      const apps = JSON.parse((await request('/api/apps', { headers: auth })).body);
+      assert.ok(apps.host);
+      assert.deepStrictEqual(apps.apps.map((a) => a.name), ['Brave', 'Code', 'Terminal']);
+      assert.ok(apps.apps.every((a) => a.hasIcon && /^[0-9a-f]{8}$/.test(a.iconVersion)));
+      const icon = await request(`/api/icon/${apps.apps[0].id}`, { headers: auth });
+      assert.strictEqual(icon.status, 200);
+      assert.strictEqual(icon.headers['content-type'], 'image/png');
+      assert.match(icon.headers['cache-control'], /immutable/);
+      assert.strictEqual((await request('/api/icon/nope', { headers: auth })).status, 404);
+    });
     await step('/api/requests counts the routes (static files as one)', async () => {
       const r = JSON.parse((await request('/api/requests', { headers: auth })).body);
       assert.ok(r.counts['GET static'] >= 1 && r.counts['GET /api/ping'] >= 1, JSON.stringify(r.counts));

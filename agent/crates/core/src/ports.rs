@@ -232,6 +232,50 @@ impl InputPort for FakeInput {
     }
 }
 
+/// The pinned taskbar shortcuts: reads them and writes one PNG icon per shortcut (`<id>.png`) to the icon folder.
+pub trait TaskbarPort: Send + Sync {
+    /// The folder whose changes mean the taskbar changed (`None`: nothing to watch).
+    fn folder(&self) -> Option<std::path::PathBuf>;
+    fn read(&self, icon_dir: &std::path::Path) -> PortResult<Vec<crate::taskbar::TaskbarItem>>;
+}
+
+/// A taskbar of mentira: three shortcuts, the last one the Windows Terminal alias.
+#[derive(Default)]
+pub struct FakeTaskbar;
+
+impl TaskbarPort for FakeTaskbar {
+    fn folder(&self) -> Option<std::path::PathBuf> {
+        None
+    }
+
+    fn read(&self, icon_dir: &std::path::Path) -> PortResult<Vec<crate::taskbar::TaskbarItem>> {
+        std::fs::create_dir_all(icon_dir).map_err(|e| PortError::Failed(e.to_string()))?;
+        let item = |file: &str, target: &str| {
+            let id = crate::taskbar::id_of(file);
+            let png = [
+                &[0x89u8, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a][..],
+                file.as_bytes(),
+            ]
+            .concat();
+            let _ = std::fs::write(icon_dir.join(format!("{id}.png")), &png);
+            crate::taskbar::TaskbarItem {
+                lnk: format!("C:\\TaskBar\\{file}"),
+                file: file.into(),
+                target: target.into(),
+                args: String::new(),
+                has_icon: true,
+                icon_hash: Some(crate::sha1::sha1_hex(&png)),
+                id,
+            }
+        };
+        Ok(vec![
+            item("01 Brave.lnk", "C:\\Brave\\brave.exe"),
+            item("02 Code.lnk", "C:\\Code\\Code.exe"),
+            item("03 Terminal.lnk", "C:\\Users\\x\\wt.exe"),
+        ])
+    }
+}
+
 /// An in-memory PC for the tests and `--fake-platform`: the same shape as `contracts/fixtures/fake-pc.json`.
 pub struct FakeAudio {
     state: Mutex<FakeState>,
