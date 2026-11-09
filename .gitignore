@@ -20,3 +20,5 @@ android/local.properties
 tools/baseline/last.json
 agent/target/
 agent/**/target/
+agent/target-pkg/
+dist/

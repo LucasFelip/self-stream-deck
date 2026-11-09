@@ -12,6 +12,7 @@ hyper = { version = "1", features = ["client", "http1"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
 http-body-util = "0.1"
 tokio-stream = "0.1"
+rust-embed = { version = "8", features = ["debug-embed"] }
 tower = { version = "0.5", features = ["util"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 tracing = "0.1"

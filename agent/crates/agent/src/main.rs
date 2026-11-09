@@ -1,10 +1,18 @@
 //! `ssd`: the Self Stream Deck agent.
 //!
-//!   ssd [--data-dir DIR] [--web-dir DIR] [--port N] [--node PATH/index.js] [--node-port N]
+//!   ssd [--data-dir DIR] [--web-dir DIR] [--port N] [--no-tray] [--migrate-from DIR] [--fake-platform]
+//!   ssd diagnose [--out FILE]      one report to read (or send) when something does not work
+//!   ssd --version
 //!
-//! Transition mode (plan 3.1): with `--node`, the Node agent runs as a child on `--node-port` (default 7870) and every route this agent does
-//! not answer yet is handed to it. The phone and the interface only ever see this agent's port.
+//! An installed agent needs nothing else: the interface is packed inside the executable and the files live in `%APPDATA%\SelfStreamDeck`.
+//! `--web-dir` serves the interface from a folder instead (while it is being worked on).
+//!
+//! Transition mode (plan 3.1): with `--node PATH/index.js`, the Node agent runs as a child on `--node-port` (default 7870) and every route this
+//! agent does not answer is handed to it. Every route is answered here now, so this is only for comparing the two.
+mod data;
+mod diagnose;
 mod lan;
+mod tray;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -17,38 +25,66 @@ use ssd_core::config::Config;
 
 struct Args {
     data_dir: PathBuf,
-    web_dir: PathBuf,
+    web_dir: Option<PathBuf>,
     port: Option<u16>,
     node: Option<PathBuf>,
     node_port: u16,
     fake_platform: bool,
+    no_tray: bool,
+    migrate_from: Option<PathBuf>,
+    diagnose: bool,
+    out: Option<PathBuf>,
 }
+
+const USAGE: &str = "usage: ssd [--data-dir DIR] [--web-dir DIR] [--port N] [--no-tray] [--migrate-from DIR] [--fake-platform]\n       ssd diagnose [--out FILE]\n       ssd --version";
 
 fn parse_args() -> Result<Args, String> {
     let mut args = Args {
         data_dir: std::env::var_os("SSD_DATA_DIR")
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("data")),
-        web_dir: std::env::var_os("SSD_WEB_DIST")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("web/dist")),
+            .unwrap_or_else(data::default_dir),
+        web_dir: std::env::var_os("SSD_WEB_DIST").map(PathBuf::from),
         port: std::env::var("SSD_PORT").ok().and_then(|p| p.parse().ok()),
         node: None,
         node_port: 7870,
         fake_platform: false,
+        no_tray: false,
+        migrate_from: None,
+        diagnose: false,
+        out: None,
     };
-    let mut it = std::env::args().skip(1);
+    let mut it = std::env::args().skip(1).peekable();
+    if it.peek().is_some_and(|first| first == "diagnose") {
+        args.diagnose = true;
+        it.next();
+    }
     while let Some(flag) = it.next() {
         let mut value = |name: &str| it.next().ok_or_else(|| format!("{name} needs a value"));
         match flag.as_str() {
             "--data-dir" => args.data_dir = value("--data-dir")?.into(),
-            "--web-dir" => args.web_dir = value("--web-dir")?.into(),
-            "--port" => args.port = Some(value("--port")?.parse().map_err(|_| "--port is not a number".to_string())?),
+            "--web-dir" => args.web_dir = Some(value("--web-dir")?.into()),
+            "--port" => {
+                args.port = Some(
+                    value("--port")?
+                        .parse()
+                        .map_err(|_| "--port is not a number".to_string())?,
+                )
+            }
             "--node" => args.node = Some(value("--node")?.into()),
-            "--node-port" => args.node_port = value("--node-port")?.parse().map_err(|_| "--node-port is not a number".to_string())?,
+            "--node-port" => {
+                args.node_port = value("--node-port")?
+                    .parse()
+                    .map_err(|_| "--node-port is not a number".to_string())?
+            }
+            "--migrate-from" => args.migrate_from = Some(value("--migrate-from")?.into()),
+            "--out" => args.out = Some(value("--out")?.into()),
+            "--no-tray" => args.no_tray = true,
             "--fake-platform" => args.fake_platform = true,
-            "-h" | "--help" => return Err("usage: ssd [--data-dir DIR] [--web-dir DIR] [--port N] [--node PATH/index.js] [--node-port N] [--fake-platform]".into()),
-            other => return Err(format!("unknown option {other}")),
+            "--version" | "-V" => {
+                return Err(format!("Self Stream Deck {}", env!("CARGO_PKG_VERSION")))
+            }
+            "-h" | "--help" => return Err(USAGE.into()),
+            other => return Err(format!("unknown option {other}\n{USAGE}")),
         }
     }
     Ok(args)
@@ -127,14 +163,59 @@ async fn main() -> std::process::ExitCode {
     match run().await {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(message) => {
-            eprintln!("ssd: {message}");
-            std::process::ExitCode::from(2)
+            // `--version` and `--help` come out of the parser as a message: they are not failures
+            let is_failure =
+                !(message.starts_with("Self Stream Deck ") || message.starts_with("usage:"));
+            if is_failure {
+                eprintln!("ssd: {message}");
+            } else {
+                println!("{message}");
+            }
+            std::process::ExitCode::from(if is_failure { 2 } else { 0 })
         }
     }
 }
 
 async fn run() -> Result<(), String> {
     let args = parse_args()?;
+    // an interface in the executable, unless a folder was asked for (or the build has none: a source checkout uses web/dist)
+    let embedded = args.web_dir.is_none() && ssd_api::embedded::available();
+    let web_dir = match (&args.web_dir, embedded) {
+        (Some(dir), _) => dir.clone(),
+        (None, true) => PathBuf::new(),
+        (None, false) => PathBuf::from("web/dist"),
+    };
+
+    if args.diagnose {
+        let report = diagnose::report(&args.data_dir, embedded);
+        match &args.out {
+            Some(file) => {
+                std::fs::write(file, &report).map_err(|e| e.to_string())?;
+                println!("report written to {}", file.display());
+            }
+            None => print!("{report}"),
+        }
+        return Ok(());
+    }
+
+    if let Some(from) = &args.migrate_from {
+        match data::migrate(from, &args.data_dir) {
+            Ok(copied) if !copied.is_empty() => println!(
+                "[data] copied {} from {} to {}",
+                copied.join(" and "),
+                from.display(),
+                args.data_dir.display()
+            ),
+            Ok(_) => {}
+            Err(error) => {
+                return Err(format!(
+                    "could not bring the files of {} along: {error}",
+                    from.display()
+                ))
+            }
+        }
+    }
+
     let config = Config::load(&args.data_dir).map_err(|e| e.to_string())?;
     let port = args.port.unwrap_or_else(|| config.port());
     let machine = std::env::var("COMPUTERNAME").unwrap_or_default();
@@ -161,7 +242,7 @@ async fn run() -> Result<(), String> {
     let state = AppState::new(
         config.clone(),
         &machine,
-        args.web_dir.clone(),
+        web_dir.clone(),
         upstream,
         platform(args.fake_platform, &args.data_dir),
     );
@@ -172,9 +253,22 @@ async fn run() -> Result<(), String> {
     tracing::info!(
         "listening on http://{address}/?token={} (web: {}, node behind: {})",
         config.token(),
-        args.web_dir.display(),
+        if embedded {
+            "inside the executable".to_owned()
+        } else {
+            web_dir.display().to_string()
+        },
         upstream.map_or("no".to_string(), |u| u.to_string())
     );
+
+    #[cfg(windows)]
+    if !args.no_tray {
+        tray::start(tray::Info {
+            port,
+            token: config.token().to_owned(),
+            log: args.data_dir.join("server.log"),
+        });
+    }
 
     // the apps list of the last run is already loaded; the taskbar is read again in the background when it changed
     tokio::spawn({
@@ -182,15 +276,8 @@ async fn run() -> Result<(), String> {
         async move { state.refresh_apps().await }
     });
 
-    // the home network: HTTPS with the certificate the phone pins, the iPhone side and the firewall rules (the scripts that make the
-    // certificates are the Node agent's, next to its index.js)
-    let scripts = args
-        .node
-        .as_ref()
-        .and_then(|n| n.parent())
-        .and_then(|p| p.parent())
-        .map(|p| p.join("scripts"))
-        .unwrap_or_else(|| PathBuf::from("scripts"));
+    // the home network: HTTPS with the certificate the phone pins, the iPhone side and the firewall rules
+    let scripts = lan::extract_scripts()?;
     let app = router(state);
     lan::start(&config, &args.data_dir, &scripts, app.clone()).await;
 

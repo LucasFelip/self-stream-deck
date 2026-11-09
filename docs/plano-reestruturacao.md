@@ -176,15 +176,19 @@ Cada item: porta em `core`, implementação em `platform-windows`, adaptador fal
 
 Riscos: câmera virtual (ordem 11), SMTC e Core Audio (cobertos pelo spike), diferenças sutis de comportamento que só o uso real mostra (por isso o proxy e as fixtures). Gatilho de saída: se a Fase 3.2 passar de 2x a estimativa sem fechar a ordem 9, reavaliar D1.
 
-### Fase 4: Empacotamento e operação (≈ 1 a 2 semanas) — não começou (precisa do corte da 3.3)
+### Fase 4: Empacotamento e operação (≈ 1 a 2 semanas) — **em andamento: pacote zip com instalador em PowerShell pronto e testado até gerar o zip; falta instalar de verdade numa máquina limpa, MSI, assinatura testada e atualização automática**
 
-- [ ] Instalador MSI (WiX) ou `cargo-dist`: instala em `Program Files`, atalho, desinstalação limpa, regra de firewall opcional.
-- [ ] Config e dados em `%APPDATA%\SelfStreamDeck\`; **migração automática** de `server/data/config.json` (token preservado, para o celular não perder o pareamento), `.bak`, `tls/`, `icons/`.
-- [ ] Ícone na bandeja: status, abrir painel, mostrar QR/código de pareamento, abrir logs, sair.
-- [ ] Início com o Windows (tarefa agendada ou serviço) e reinício automático em falha (substitui `supervisor.js` e `autostart.ps1`).
-- [ ] Assinatura do `.exe` e do instalador (certificado próprio no início; um certificado de verdade quando for distribuir).
-- [ ] Atualização automática com verificação de assinatura, e canal "estável/teste".
-- [ ] Logs com rotação; comando `ssd diagnose` que junta log, versão, config sem token.
+- [x] **Interface dentro do `.exe`** (`rust-embed`): o `ssd.exe` (5,1 MB) serve o painel sem a pasta `web/dist`; `--web-dir` continua servindo de uma pasta.
+- [x] **Dados em `%APPDATA%\SelfStreamDeck\`** (padrão do `ssd`) e `--migrate-from DIR`, que copia `config.json` (token preservado, o celular não perde o pareamento) e `tls/` só quando o destino ainda não tem config. Os scripts de certificado vão embutidos no `.exe` e são extraídos para a pasta temporária.
+- [x] **Ícone na bandeja** (`tray.rs`): abrir painel (duplo clique também), mostrar código de pareamento, abrir o registro, sair. Não é aberto com `--no-tray` (o `agent-check` usa).
+- [x] **`ssd diagnose [--out ARQ]`** e `ssd --version`: versão, pastas, config com o token mascarado, portas, impressões digitais dos certificados, tarefa agendada, regras de firewall, o que cada parte do PC responde e o fim do log com o token trocado por `***`.
+- [x] **Pacote**: `agent/scripts/package.ps1` constrói o painel e o agente (em `agent/target-pkg`, para não brigar com um agente em uso) e gera `dist/SelfStreamDeck-<versão>.zip` + `.sha256` com `ssd.exe`, `install.ps1`, `uninstall.ps1` e `launch-hidden.vbs`.
+- [x] **`install.ps1`/`uninstall.ps1`**: copiam para `Program Files`, trazem o token e os certificados de uma instalação anterior (`-From`), registram a tarefa de início (oculta, administrador, reinício 3x) e o atalho no Menu Iniciar; a desinstalação tira tarefa, atalho, regras de firewall e arquivos e mantém os dados (a menos de `-RemoveData`). Escritos mas **ainda não executados** (a instalação em uso aqui seria trocada).
+- [x] **Log com rotação**: o `launch-hidden.vbs` guarda uma geração anterior depois de 2 MB.
+- [x] `sign.ps1`: assina o `.exe` com um certificado próprio (criado uma vez no repositório de certificados do usuário) ou com um `.pfx` dado; `package.ps1 -Sign`. **Não executado ainda** (usa o servidor de carimbo de data da DigiCert).
+- [ ] Instalador MSI (WiX): precisa baixar o WiX; só com permissão. O zip com PowerShell cobre o mesmo por enquanto.
+- [ ] Atualização automática com verificação de assinatura e canais estável/teste.
+- [ ] Testar numa máquina limpa e depois de reiniciar o PC.
 
 Pronto quando: máquina limpa instala, pareia o celular e funciona após reiniciar o PC.
 

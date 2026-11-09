@@ -79,7 +79,11 @@ fn ui_version(state: &AppState) -> u64 {
         .is_none_or(|at| at.elapsed() > Duration::from_millis(1500))
     {
         let mut best = 0;
-        newest(&state.web_dir, &mut best);
+        if state.web_dir.as_os_str().is_empty() {
+            best = crate::embedded::newest_ms();
+        } else {
+            newest(&state.web_dir, &mut best);
+        }
         *cache = (Some(Instant::now()), best);
     }
     cache.1

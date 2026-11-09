@@ -35,6 +35,8 @@ pub fn is_static_path(path: &str) -> bool {
             .is_some_and(|e| content_type(&e.to_lowercase()).is_some())
 }
 
+type Reader = Box<dyn FnOnce() -> Option<Vec<u8>> + Send>;
+
 pub async fn serve(state: &Arc<AppState>, if_none_match: Option<&str>, path: &str) -> Response {
     let not_found = || {
         json(
@@ -76,25 +78,39 @@ pub async fn serve(state: &Arc<AppState>, if_none_match: Option<&str>, path: &st
         return not_found();
     };
 
-    let Ok(meta) = tokio::fs::metadata(&file).await else {
-        return not_found();
+    // the interface packed in the executable, or the folder on disk
+    let (etag, read): (String, Reader) = if state.web_dir.as_os_str().is_empty() {
+        let Some(packed) = crate::embedded::get(&relative) else {
+            return not_found();
+        };
+        (
+            format!("\"{:x}-{:x}\"", packed.data.len(), packed.modified_ms),
+            Box::new(move || Some(packed.data)),
+        )
+    } else {
+        let Ok(meta) = tokio::fs::metadata(&file).await else {
+            return not_found();
+        };
+        if !meta.is_file() {
+            return not_found();
+        }
+        let modified = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        (
+            format!("\"{:x}-{:x}\"", meta.len(), modified),
+            Box::new(move || std::fs::read(&file).ok()),
+        )
     };
-    if !meta.is_file() {
-        return not_found();
-    }
-    let modified = meta
-        .modified()
-        .ok()
-        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    let etag = format!("\"{:x}-{:x}\"", meta.len(), modified);
     let mut response = if if_none_match == Some(etag.as_str()) {
         let mut response = Response::new(Body::empty());
         *response.status_mut() = StatusCode::NOT_MODIFIED;
         response
     } else {
-        let Ok(bytes) = tokio::fs::read(&file).await else {
+        let Some(bytes) = read() else {
             return not_found();
         };
         let mut response = Response::new(Body::from(bytes));

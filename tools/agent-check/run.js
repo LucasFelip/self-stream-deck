@@ -43,7 +43,7 @@ const step = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
 (async () => {
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'ssd-agent-check-'));
   fs.writeFileSync(path.join(data, 'config.json'), JSON.stringify({ token: TOKEN, port: PORT }));
-  const agent = spawn(EXE, ['--data-dir', data, '--web-dir', WEB, '--port', String(PORT), '--node', NODE_INDEX, '--node-port', String(NODE_PORT), '--fake-platform'], { stdio: 'ignore' });
+  const agent = spawn(EXE, ['--data-dir', data, '--web-dir', WEB, '--port', String(PORT), '--node', NODE_INDEX, '--node-port', String(NODE_PORT), '--fake-platform', '--no-tray'], { stdio: 'ignore' });
   const stop = () => { agent.kill(); };
   process.on('exit', stop);
   try {

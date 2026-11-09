@@ -312,6 +312,19 @@ fn firewall(ports: &[u16], rule: &str) {
     }
 }
 
+/// The two PowerShell scripts that make the certificates are packed into the executable; this writes them to a temporary folder.
+pub fn extract_scripts() -> Result<PathBuf, String> {
+    let dir = std::env::temp_dir().join(format!("ssd-scripts-{}", env!("CARGO_PKG_VERSION")));
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    for (name, text) in [
+        ("tls-cert.ps1", include_str!("../scripts/tls-cert.ps1")),
+        ("tls-ios.ps1", include_str!("../scripts/tls-ios.ps1")),
+    ] {
+        std::fs::write(dir.join(name), text).map_err(|e| e.to_string())?;
+    }
+    Ok(dir)
+}
+
 /// Starts what `config` asks for beyond the loopback port and prints how to pair a phone.
 pub async fn start(config: &Config, data: &Path, scripts: &Path, app: Router) {
     let token = config.token().to_owned();

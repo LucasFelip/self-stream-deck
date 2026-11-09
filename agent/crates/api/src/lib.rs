@@ -4,6 +4,7 @@
 mod apps;
 mod camera;
 mod editor;
+pub mod embedded;
 mod events;
 mod monitorroutes;
 mod powerroutes;
@@ -63,7 +64,7 @@ pub struct AppState {
     pub guard: Guard,
     /// config.json, shared by the routes that read or write it
     pub config: Mutex<Config>,
-    /// the build of web/ (web/dist)
+    /// the build of web/ (web/dist); an empty path means the interface packed inside the executable
     pub web_dir: PathBuf,
     /// where the Node agent listens while it still serves the routes that are not ported
     pub upstream: Option<SocketAddr>,
