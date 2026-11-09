@@ -2,6 +2,7 @@
 //! then a transition proxy that hands every route not yet ported to the Node agent running as a child on an internal port (plan 3.1).
 //! Each route that gets ported is answered here and stops being proxied.
 mod apps;
+mod editor;
 mod events;
 mod powerroutes;
 mod proxy;
@@ -64,6 +65,8 @@ pub struct AppState {
     pub hub: events::Hub,
     /// the shutdown this agent scheduled, for the countdown on the phone
     pub scheduled: Mutex<Option<Scheduled>>,
+    /// macros being run (one run of each at a time)
+    pub running_macros: Mutex<std::collections::HashSet<String>>,
     ui_cache: Mutex<(Option<std::time::Instant>, u64)>,
     playing_cache: Mutex<Option<(std::time::Instant, serde_json::Value)>>,
     /// this PC's name, as the Apps page shows it
@@ -87,6 +90,7 @@ impl AppState {
             apps: Mutex::new(apps::AppsState::default()),
             hub: events::Hub::default(),
             scheduled: Mutex::new(None),
+            running_macros: Mutex::new(Default::default()),
             ui_cache: Mutex::new((None, 0)),
             playing_cache: Mutex::new(None),
             config: Mutex::new(config),
@@ -1230,6 +1234,151 @@ data: {\"windows\":["
         assert_eq!(
             (state["miniPlayer"].clone(), state["playing"].clone()),
             (false.into(), serde_json::Value::Null)
+        );
+    }
+
+    fn with_input(input: Arc<ssd_core::ports::FakeInput>) -> Platform {
+        Platform {
+            input: Some(input),
+            ..everything()
+        }
+    }
+
+    #[tokio::test]
+    async fn the_editor_saves_shortcuts_macros_and_hidden_apps() {
+        let (app, _) = app_on(everything());
+        let auth = [("x-token", "tok")];
+        post(&app, "/api/refresh", "").await;
+        let apps = body_of(call(&app, "GET", "/api/apps", &auth).await).await;
+        let brave = apps["apps"][0]["id"].as_str().unwrap().to_owned();
+
+        let editor = body_of(call(&app, "GET", "/api/editor", &auth).await).await;
+        assert_eq!(editor["apps"][0]["canPlace"], true);
+        assert_eq!(editor["apps"][0]["hidden"], false);
+        assert_eq!(
+            editor["devices"]["playback"][0],
+            serde_json::json!({ "id": "out1", "name": "Alto-falantes" })
+        );
+        assert_eq!(editor["screens"], 2);
+        assert!(editor["shortcuts"].as_array().unwrap().len() >= 9);
+
+        let saved = post(&app, "/api/editor/shortcuts", r#"{"items":[{"id":"copy","label":"Copiar","keys":"Ctrl+C"},{"label":"Fechar","keys":"alt+f4"}]}"#).await;
+        let saved = body_of(saved).await;
+        assert_eq!(
+            saved["shortcuts"][0],
+            serde_json::json!({ "id": "copy", "label": "Copiar", "keys": "ctrl+c", "display": "Ctrl+C" })
+        );
+        assert!(saved["shortcuts"][1]["id"]
+            .as_str()
+            .unwrap()
+            .starts_with("fechar-"));
+        assert_eq!(
+            post(
+                &app,
+                "/api/editor/shortcuts",
+                r#"{"items":[{"label":"x","keys":"ctrl+nope"}]}"#
+            )
+            .await
+            .status(),
+            StatusCode::BAD_REQUEST
+        );
+
+        let macros = format!(
+            r#"{{"items":[{{"label":"Jogar","page":"apps","steps":[{{"type":"launch","app":"{brave}"}},{{"type":"wait","ms":100}}]}}]}}"#
+        );
+        let saved = body_of(post(&app, "/api/editor/macros", &macros).await).await;
+        assert_eq!(saved["macros"][0]["label"], "Jogar");
+        let unknown = r#"{"items":[{"label":"x","steps":[{"type":"launch","app":"nope"}]}]}"#;
+        assert_eq!(
+            post(&app, "/api/editor/macros", unknown).await.status(),
+            StatusCode::BAD_REQUEST
+        );
+
+        let hidden = format!(r#"{{"hidden":["{brave}","{brave}"]}}"#);
+        assert_eq!(
+            post(&app, "/api/editor/apps", &hidden).await.status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            post(&app, "/api/editor/apps", r#"{"hidden":["nope"]}"#)
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+        let after = body_of(call(&app, "GET", "/api/apps", &auth).await).await;
+        assert!(
+            after["apps"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|a| a["id"] != brave.as_str()),
+            "a hidden app leaves the Apps page"
+        );
+        let editor = body_of(call(&app, "GET", "/api/editor", &auth).await).await;
+        assert_eq!(
+            editor["apps"][0]["hidden"], true,
+            "but the editor still lists it"
+        );
+
+        let list = body_of(call(&app, "GET", "/api/macros", &auth).await).await;
+        assert_eq!(list["macros"][0]["page"], "apps");
+        assert_eq!(list["macros"][0]["steps"], 2);
+    }
+
+    #[tokio::test]
+    async fn the_editor_can_be_turned_off() {
+        let (app, _) = app_configured(everything(), r#"{"token":"tok","editor":false}"#);
+        assert_eq!(
+            call(&app, "GET", "/api/editor", &[("x-token", "tok")])
+                .await
+                .status(),
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            post(&app, "/api/editor/shortcuts", r#"{"items":[]}"#)
+                .await
+                .status(),
+            StatusCode::FORBIDDEN
+        );
+    }
+
+    #[tokio::test]
+    async fn a_macro_runs_its_steps_reports_each_one_and_hands_the_camera_back() {
+        let input = Arc::new(ssd_core::ports::FakeInput::default());
+        let (app, _) = app_configured(
+            with_input(input.clone()),
+            r#"{"token":"tok","macros":[{"id":"m1","label":"Mix","page":"shortcuts","steps":[
+                {"type":"keys","keys":"ctrl+c"},{"type":"media","key":"next"},{"type":"volume","level":55},{"type":"mute","muted":true},
+                {"type":"output","device":"out2","name":"Fone"},{"type":"output","device":"gone","name":"Sumiu"},
+                {"type":"launch","app":"nope"},{"type":"wait","ms":100},{"type":"camera","on":true}]}]}"#,
+        );
+        let auth = [("x-token", "tok")];
+        let ran = body_of(post(&app, "/api/macro/m1", "").await).await;
+        assert_eq!(ran["ok"], false, "two steps failed");
+        assert_eq!(ran["label"], "Mix");
+        let steps = ran["steps"].as_array().unwrap();
+        assert_eq!(steps.len(), 9);
+        assert_eq!(steps[0], serde_json::json!({ "type": "keys", "ok": true }));
+        assert_eq!(
+            steps[5],
+            serde_json::json!({ "type": "output", "ok": false, "error": "device not found: Sumiu" })
+        );
+        assert_eq!(
+            steps[6],
+            serde_json::json!({ "type": "launch", "ok": false, "error": "app not on the taskbar anymore" })
+        );
+        assert_eq!(
+            ran["client"],
+            serde_json::json!([{ "type": "camera", "on": true }])
+        );
+        assert_eq!(input.pressed(), vec![vec![0x11, b'C'], vec![0xb0]]);
+        let volume = body_of(call(&app, "GET", "/api/volume", &auth).await).await;
+        assert_eq!(volume, serde_json::json!({ "level": 55, "muted": true }));
+        let audio = body_of(call(&app, "GET", "/api/audio", &auth).await).await;
+        assert_eq!(audio["playback"][1]["default"], true);
+        assert_eq!(
+            post(&app, "/api/macro/nope", "").await.status(),
+            StatusCode::NOT_FOUND
         );
     }
 }

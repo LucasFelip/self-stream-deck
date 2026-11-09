@@ -277,6 +277,36 @@ const step = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.deepStrictEqual((await send('/api/power', { action: 'cancel' })).json, { ok: true, action: 'cancel', cancelled: true, note: null });
       assert.strictEqual(JSON.parse((await request('/api/state', { headers: auth })).body).scheduled, null);
     });
+    await step('button editor and macros (fake PC): save shortcuts, macros and hidden apps; run a macro', async () => {
+      const send = (route, body) => new Promise((resolve, reject) => {
+        const req = http.request({ host: '127.0.0.1', port: PORT, path: route, method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' } }, (res) => {
+          const chunks = [];
+          res.on('data', (c) => chunks.push(c));
+          res.on('end', () => resolve({ status: res.statusCode, json: (() => { try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return null; } })() }));
+        });
+        req.on('error', reject);
+        req.end(JSON.stringify(body));
+      });
+      const get = async (route) => JSON.parse((await request(route, { headers: auth })).body);
+      const editor = await get('/api/editor');
+      assert.deepStrictEqual(Object.keys(editor), ['shortcuts', 'macros', 'apps', 'devices', 'screens']);
+      const brave = editor.apps.find((a) => a.name === 'Brave').id;
+      const shortcuts = await send('/api/editor/shortcuts', { items: [{ id: 'copy', label: 'Copiar', keys: 'Ctrl+C' }] });
+      assert.deepStrictEqual(shortcuts.json.shortcuts, [{ id: 'copy', label: 'Copiar', keys: 'ctrl+c', display: 'Ctrl+C' }]);
+      assert.strictEqual((await send('/api/editor/shortcuts', { items: [{ label: 'x', keys: 'ctrl+nope' }] })).status, 400);
+      const macros = await send('/api/editor/macros', { items: [{ id: 'mix', label: 'Mix', page: 'apps', steps: [{ type: 'keys', keys: 'ctrl+v' }, { type: 'volume', level: 40 }, { type: 'launch', app: brave }, { type: 'camera', on: true }] }] });
+      assert.strictEqual(macros.status, 200);
+      assert.strictEqual((await send('/api/editor/macros', { items: [{ label: 'x', steps: [{ type: 'launch', app: '../evil' }] }] })).status, 400);
+      assert.deepStrictEqual((await get('/api/macros')).macros, [{ id: 'mix', label: 'Mix', page: 'apps', steps: 4 }]);
+      const ran = await send('/api/macro/mix', {});
+      assert.strictEqual(ran.json.ok, true);
+      assert.deepStrictEqual(ran.json.steps.map((s) => [s.type, s.ok]), [['keys', true], ['volume', true], ['launch', true], ['camera', true]]);
+      assert.deepStrictEqual(ran.json.client, [{ type: 'camera', on: true }]);
+      assert.strictEqual((await send('/api/macro/nope', {})).status, 404);
+      assert.strictEqual((await send('/api/editor/apps', { hidden: [brave] })).status, 200);
+      assert.ok(!(await get('/api/apps')).apps.some((a) => a.id === brave));
+      assert.strictEqual((await send('/api/editor/apps', { hidden: [] })).status, 200);
+    });
     await step('/api/requests counts the routes (static files as one)', async () => {
       const r = JSON.parse((await request('/api/requests', { headers: auth })).body);
       assert.ok(r.counts['GET static'] >= 1 && r.counts['GET /api/ping'] >= 1, JSON.stringify(r.counts));

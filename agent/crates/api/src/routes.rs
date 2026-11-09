@@ -14,7 +14,9 @@ use crate::{json, AppState};
 
 /// How much body each route reads (the Node agent used 64 KB for the layout and 4 KB for everything else).
 pub fn body_limit(path: &str) -> usize {
-    if path == "/api/layout" {
+    if path == "/api/editor/macros" {
+        128 * 1024
+    } else if path == "/api/layout" || path.starts_with("/api/editor/") {
         64 * 1024
     } else {
         4096
@@ -73,7 +75,14 @@ pub fn is_ported(state: &AppState, method: &Method, path: &str) -> bool {
         (&Method::GET, "/api/media" | "/api/media/art") | (&Method::POST, "/api/media/control") => {
             state.platform.media.is_some()
         }
-        (&Method::GET, "/api/shortcuts" | "/api/events") => true,
+        (&Method::GET, "/api/shortcuts" | "/api/events" | "/api/editor" | "/api/macros") => true,
+        (&Method::POST, "/api/editor/shortcuts" | "/api/editor/macros" | "/api/editor/apps") => {
+            true
+        }
+        (&Method::POST, p) if p.starts_with("/api/macro/") => {
+            let p = &state.platform;
+            p.audio.is_some() && p.windows.is_some() && p.input.is_some() && p.taskbar.is_some()
+        }
         (&Method::GET | &Method::POST, "/api/power") => {
             state.platform.power.is_some() && state.platform.windows.is_some()
         }
@@ -125,6 +134,16 @@ pub async fn answer(
             shortcut_route(state, method, path).await
         }
         (&Method::GET, "/api/events") => crate::events::subscribe(state, query).await,
+        (&Method::GET, "/api/editor") => {
+            crate::editor::editor_route(state, false, path, body).await
+        }
+        (&Method::POST, p) if p.starts_with("/api/editor/") => {
+            crate::editor::editor_route(state, true, path, body).await
+        }
+        (&Method::GET, "/api/macros") => crate::editor::macros_list(state),
+        (&Method::POST, p) if p.starts_with("/api/macro/") => {
+            crate::editor::run_macro(state, &p["/api/macro/".len()..]).await
+        }
         (&Method::GET | &Method::POST, "/api/power") => {
             crate::powerroutes::power_route(state, method == Method::POST, body).await
         }
@@ -472,11 +491,12 @@ async fn media_art(
 
 // ---- shortcuts and media keys ------------------------------------------------------------------------------------------------------
 
-struct Shortcut {
-    id: String,
-    label: String,
-    display: String,
-    vks: Vec<u8>,
+pub(crate) struct Shortcut {
+    pub(crate) id: String,
+    pub(crate) label: String,
+    pub(crate) keys: String,
+    pub(crate) display: String,
+    pub(crate) vks: Vec<u8>,
 }
 
 /// What JavaScript's `String(value)` gives for what a config file can hold.
@@ -490,7 +510,7 @@ fn js_string(value: &Value) -> Option<String> {
 }
 
 /// The shortcuts of `config.json` (or of the editor, which validates them); one that does not parse is left out, like the Node agent does.
-fn shortcuts(state: &AppState) -> Vec<Shortcut> {
+pub(crate) fn shortcuts(state: &AppState) -> Vec<Shortcut> {
     let config = state.config.lock().unwrap();
     let Some(Value::Array(entries)) = config.get("shortcuts") else {
         return Vec::new();
@@ -512,6 +532,7 @@ fn shortcuts(state: &AppState) -> Vec<Shortcut> {
                 id,
                 label,
                 display: ssd_core::keys::display(&keys).ok()?,
+                keys: keys.clone(),
                 vks: ssd_core::keys::parse(&keys).ok()?,
             })
         })

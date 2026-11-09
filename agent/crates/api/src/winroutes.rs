@@ -187,39 +187,49 @@ async fn route(
 
 /// Only ids from the taskbar list can be launched, never arbitrary paths. An app that already has a window is brought to the front instead
 /// of being started again.
-pub async fn launch(state: &Arc<AppState>, id: &str) -> Response {
-    let Some(app) = apps::visible(state).into_iter().find(|app| app.id == id) else {
-        return error(StatusCode::NOT_FOUND, "unknown app");
-    };
+/// Brings the app's window to the front when it has one, else starts it (like a click on the taskbar).
+pub(crate) async fn launch_app(
+    state: &Arc<AppState>,
+    app: &ssd_core::taskbar::App,
+) -> Result<&'static str, PortError> {
     let (Some(windows), Some(taskbar)) = (
         state.platform.windows.clone(),
         state.platform.taskbar.clone(),
     ) else {
-        return error(StatusCode::NOT_FOUND, "not found");
+        return Err(PortError::Failed(
+            "launching is not available on this agent".into(),
+        ));
     };
-    let work = {
-        let app = app.clone();
-        move || -> Result<&'static str, PortError> {
-            if let Some(process) = &app.proc {
-                let open = windows
-                    .snapshot()
-                    .map(|s| s.windows.iter().any(|w| &w.name == process))
-                    .unwrap_or(false);
-                // a window that cannot be focused is not a reason to fail: the app is started instead
-                if open && windows.focus_process(process).unwrap_or(false) {
-                    return Ok("focused");
-                }
+    let app = app.clone();
+    let work = move || -> Result<&'static str, PortError> {
+        if let Some(process) = &app.proc {
+            let open = windows
+                .snapshot()
+                .map(|s| s.windows.iter().any(|w| &w.name == process))
+                .unwrap_or(false);
+            // a window that cannot be focused is not a reason to fail: the app is started instead
+            if open && windows.focus_process(process).unwrap_or(false) {
+                return Ok("focused");
             }
-            taskbar.launch(&app.lnk)?;
-            Ok("launched")
         }
+        taskbar.launch(&app.lnk)?;
+        Ok("launched")
     };
-    match tokio::task::spawn_blocking(work).await {
-        Ok(Ok(action)) => json(
+    tokio::task::spawn_blocking(work)
+        .await
+        .unwrap_or_else(|_| Err(PortError::Failed("internal error".into())))
+}
+
+/// Only ids from the taskbar list can be launched, never arbitrary paths.
+pub async fn launch(state: &Arc<AppState>, id: &str) -> Response {
+    let Some(app) = apps::visible(state).into_iter().find(|app| app.id == id) else {
+        return error(StatusCode::NOT_FOUND, "unknown app");
+    };
+    match launch_app(state, &app).await {
+        Ok(action) => json(
             StatusCode::OK,
             json!({ "ok": true, "name": app.name, "action": action }),
         ),
-        Ok(Err(problem)) => port_error(problem),
-        Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "internal error"),
+        Err(problem) => port_error(problem),
     }
 }
