@@ -5,15 +5,21 @@ mod audio;
 #[cfg(windows)]
 mod input;
 #[cfg(windows)]
+pub mod lan;
+#[cfg(windows)]
 mod media;
 #[cfg(windows)]
 mod monitor;
+#[cfg(windows)]
+mod notifications;
 #[cfg(windows)]
 mod power;
 #[cfg(windows)]
 mod sysinfo;
 #[cfg(windows)]
 mod taskbar;
+#[cfg(windows)]
+mod vcam;
 #[cfg(windows)]
 mod windows_mgmt;
 
@@ -26,8 +32,12 @@ pub use media::WindowsMedia;
 #[cfg(windows)]
 pub use monitor::WindowsMonitor;
 #[cfg(windows)]
+pub use notifications::WindowsNotifications;
+#[cfg(windows)]
 pub use power::WindowsPower;
 #[cfg(windows)]
 pub use taskbar::WindowsTaskbar;
+#[cfg(windows)]
+pub use vcam::WindowsVcam;
 #[cfg(windows)]
 pub use windows_mgmt::WindowsWindows;

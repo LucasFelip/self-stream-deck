@@ -134,7 +134,7 @@ Portado da antiga durante a migração (bug que existia nas duas): ao completar 
 - [x] **Android real (A31, no app):** páginas Apps, Janelas, Som e PC, menu (popover em paisagem, folha em retrato), folha da câmera, Voltar e rotação, sem erros de script no log. Ainda por testar no aparelho: escurecer, notificações e Atualizar.
 - [ ] **Adiado:** iPhone no Safari e na Tela de Início. 
 
-### Fase 3: Agente em Rust (≈ 5 a 7 semanas) — **3.0 e 3.1 feitas; 3.2 em andamento (43 de 51 operações; faltam notificações, câmera e LAN/TLS/iPhone); 3.3 pendente**
+### Fase 3: Agente em Rust (≈ 5 a 7 semanas) — **3.0 e 3.1 feitas; 3.2 feita no que é API (51 de 51 operações e os 9 tópicos de eventos, sem o Node); 3.3 em andamento: o Rust já roda sozinho, falta trocar a tarefa agendada; 3.3 pendente**
 
 **3.0 Spike de viabilidade (3 a 5 dias), com portão de decisão — feito, passou ([ADR 0008](adr/0008-spike-rust-windows.md))**
 Provar em Rust, fora do produto, os três pontos de maior risco: (a) Core Audio (volume, mudo, mixer por app, troca de dispositivo padrão), (b) SMTC via WinRT (leitura e controle de mídia), (c) `SetWinEventHook` empurrando mudanças de janelas. Se algum for inviável ou muito frágil, aplicar a alternativa da D1 e registrar no ADR.
@@ -163,9 +163,9 @@ Cada item: porta em `core`, implementação em `platform-windows`, adaptador fal
 | 7 | Mídia | `/api/media*` | **portado** (`platform-windows/media.rs`, SMTC tipado; capa com cache de 40 e MIME pela assinatura; chave da capa por FNV-1a em vez de SHA-1) |
 | 8 | Monitor | `/api/monitor/*` | **portado** (`platform-windows/monitor.rs` + `sysinfo.rs`: contadores PDH numa thread que descansa 60 s sem uso, `nvidia-smi`, memória compartilhada do RTSS/Afterburner, processos por programa, WMI pelo crate `wmi`, registro e IP Helper). Neste PC `/api/monitor/info` sai com os mesmos valores do Node e as outras três com a mesma forma (números inteiros saem como `95.0` no Rust, que o JavaScript lê igual). Os tópicos `monitor`, `game` e `processes` do SSE também; com os três abertos o `ssd` gasta 1,6 % de um núcleo |
 | 9 | Janelas e telas | `/api/windows*`, `/api/screens*` | **portado** (`platform-windows/windows_mgmt.rs`: lista tipo Alt+Tab, ações, mover, posicionar, encaixar, telas, brilho DDC/CI, desligar telas, projeção) e `POST /api/launch/:id` (foca a janela aberta ou inicia pelo explorer). Neste PC: `/api/screens` byte a byte igual ao Node e `/api/windows` igual salvo `iconVersion`. O empurrão por `SetWinEventHook` também está (`platform-windows`, com os eventos de título limitados a ~2 por segundo como no Node): 0,2 % de um núcleo com o fluxo aberto, contra 2,5 % perguntando a cada 600 ms |
-| 10 | Notificações do Windows | `notifications.js` | o que a UI usa hoje |
-| 11 | Câmera e câmera virtual | `/api/camera/*` | por último: DirectShow/Media Foundation é o trecho mais trabalhoso; pode ficar no helper C# por mais tempo, sem bloquear o resto |
-| 12 | LAN/TLS/iPhone | `lan-cli`, `tls*`, `ios`, `firewall` | geração de AC e certificado (`rcgen`), firewall |
+| 10 | Notificações do Windows | `notifications.js` | **portado** (`platform-windows/notifications.rs`, WinRT tipado; tópico `notifications` do SSE com o filtro por apps do `core/notices.rs`). Neste PC o tópico sai idêntico ao do Node |
+| 11 | Câmera e câmera virtual (**portado**: quadros, fluxo MJPEG, status, câmera direta pelo filtro UnityCapture com SHA-256 fixado, decodificação do JPEG e memória compartilhada do filtro numa thread do próprio agente, copiar link) | `/api/camera/*` | por último: DirectShow/Media Foundation é o trecho mais trabalhoso; pode ficar no helper C# por mais tempo, sem bloquear o resto |
+| 12 | LAN/TLS/iPhone | `lan-cli`, `tls*`, `ios`, `firewall` | **portado o servidor**: HTTPS pelo Schannel (`native-tls`) com os **mesmos** certificados de `data/tls/` (neste PC a impressão digital servida é a que o celular já fixa, TLS 1.3), servidor do iPhone com a AC dele, porta HTTP da AC, regras de firewall e endereços de casa. Diferenças aceitas: os certificados só são refeitos quando faltam (sem renovar por validade nem quando os IPs mudam: ainda é o `tls-ios.js`) e eles continuam sendo criados pelos scripts PowerShell; o `lan-cli` segue no Node |
 
 **3.3 Corte**
 - [ ] Todas as rotas no Rust; proxy removido; Node e C# fora do caminho de produção.
@@ -173,7 +173,7 @@ Cada item: porta em `core`, implementação em `platform-windows`, adaptador fal
 
 Riscos: câmera virtual (ordem 11), SMTC e Core Audio (cobertos pelo spike), diferenças sutis de comportamento que só o uso real mostra (por isso o proxy e as fixtures). Gatilho de saída: se a Fase 3.2 passar de 2x a estimativa sem fechar a ordem 9, reavaliar D1.
 
-### Fase 4: Empacotamento e operação (≈ 1 a 2 semanas) — não começou (depende da 3.3)
+### Fase 4: Empacotamento e operação (≈ 1 a 2 semanas) — não começou (precisa do corte da 3.3)
 
 - [ ] Instalador MSI (WiX) ou `cargo-dist`: instala em `Program Files`, atalho, desinstalação limpa, regra de firewall opcional.
 - [ ] Config e dados em `%APPDATA%\SelfStreamDeck\`; **migração automática** de `server/data/config.json` (token preservado, para o celular não perder o pareamento), `.bak`, `tls/`, `icons/`.

@@ -14,7 +14,9 @@ use crate::{json, AppState};
 
 /// How much body each route reads (the Node agent used 64 KB for the layout and 4 KB for everything else).
 pub fn body_limit(path: &str) -> usize {
-    if path == "/api/editor/macros" {
+    if path == "/api/camera/frame" {
+        crate::camera::MAX_FRAME
+    } else if path == "/api/editor/macros" {
         128 * 1024
     } else if path == "/api/layout" || path.starts_with("/api/editor/") {
         64 * 1024
@@ -65,7 +67,8 @@ pub(crate) fn port_error(error_: PortError) -> Response {
 /// True when this agent answers the route.
 pub fn is_ported(state: &AppState, method: &Method, path: &str) -> bool {
     match (method, path) {
-        (&Method::GET, "/api/pair-code") | (&Method::GET | &Method::POST, "/api/layout") => true,
+        (&Method::GET, "/api/pair-code" | "/api/ping")
+        | (&Method::GET | &Method::POST, "/api/layout") => true,
         (&Method::GET | &Method::POST, "/api/volume")
         | (&Method::GET, "/api/audio")
         | (
@@ -76,6 +79,14 @@ pub fn is_ported(state: &AppState, method: &Method, path: &str) -> bool {
             state.platform.media.is_some()
         }
         (&Method::GET, "/api/shortcuts" | "/api/events" | "/api/editor" | "/api/macros") => true,
+        (&Method::GET, "/api/camera/stream" | "/api/camera/status")
+        | (
+            &Method::POST,
+            "/api/camera/frame"
+            | "/api/camera/direct/install"
+            | "/api/camera/direct/uninstall"
+            | "/api/camera/copy-link",
+        ) => state.platform.vcam.is_some(),
         (
             &Method::GET,
             "/api/monitor/sample"
@@ -132,6 +143,7 @@ pub async fn answer(
         (&Method::GET, "/api/pair-code") => {
             json(StatusCode::OK, json!({ "code": state.guard.token() }))
         }
+        (&Method::GET, "/api/ping") => json(StatusCode::OK, json!({ "ok": true })),
         (&Method::GET, "/api/layout") => json(StatusCode::OK, tile_order(state)),
         (&Method::POST, "/api/layout") => save_layout(state, body),
         _ if path == "/api/shortcuts"
@@ -141,6 +153,15 @@ pub async fn answer(
             shortcut_route(state, method, path).await
         }
         (&Method::GET, "/api/events") => crate::events::subscribe(state, query).await,
+        (_, p) if p.starts_with("/api/camera/") => {
+            crate::camera::camera_route(
+                state,
+                method == Method::POST,
+                p,
+                axum::body::Bytes::copy_from_slice(body),
+            )
+            .await
+        }
         (&Method::GET, p) if p.starts_with("/api/monitor/") => {
             crate::monitorroutes::route(state, p).await
         }

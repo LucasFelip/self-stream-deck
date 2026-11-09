@@ -2,6 +2,7 @@
 //! then a transition proxy that hands every route not yet ported to the Node agent running as a child on an internal port (plan 3.1).
 //! Each route that gets ported is answered here and stops being proxied.
 mod apps;
+mod camera;
 mod editor;
 mod events;
 mod monitorroutes;
@@ -26,7 +27,8 @@ use ssd_core::config::Config;
 use ssd_core::guard::{percent_decode, Guard};
 use ssd_core::media::ArtCache;
 use ssd_core::ports::{
-    AudioPort, InputPort, MediaPort, MonitorPort, PowerPort, TaskbarPort, WindowsPort,
+    AudioPort, InputPort, MediaPort, MonitorPort, NotificationsPort, PowerPort, TaskbarPort,
+    VcamPort, WindowsPort,
 };
 use ssd_core::power::Scheduled;
 
@@ -49,7 +51,13 @@ pub struct Platform {
     pub windows: Option<Arc<dyn WindowsPort>>,
     pub power: Option<Arc<dyn PowerPort>>,
     pub monitor: Option<Arc<dyn MonitorPort>>,
+    pub notifications: Option<Arc<dyn NotificationsPort>>,
+    pub vcam: Option<Arc<dyn VcamPort>>,
 }
+
+/// Put on a request that arrived over TLS: the pairing cookie then carries `Secure`.
+#[derive(Clone, Copy)]
+pub struct Secure;
 
 pub struct AppState {
     pub guard: Guard,
@@ -67,6 +75,8 @@ pub struct AppState {
     pub apps: Mutex<apps::AppsState>,
     /// who listens to which live topic
     pub hub: events::Hub,
+    /// the phone's camera as a webcam
+    pub camera: Arc<camera::Camera>,
     /// the shutdown this agent scheduled, for the countdown on the phone
     pub scheduled: Mutex<Option<Scheduled>>,
     /// macros being run (one run of each at a time)
@@ -95,6 +105,7 @@ impl AppState {
             host: machine_name.to_owned(),
             apps: Mutex::new(apps::AppsState::default()),
             hub: events::Hub::default(),
+            camera: Arc::new(camera::Camera::default()),
             scheduled: Mutex::new(None),
             info_cache: Mutex::new(None),
             running_macros: Mutex::new(Default::default()),
@@ -199,6 +210,7 @@ async fn handle(State(state): State<Arc<AppState>>, request: Request) -> Respons
         .get::<ConnectInfo<SocketAddr>>()
         .map(|c| c.0.ip())
         .unwrap_or(IpAddr::from([127, 0, 0, 1]));
+    let secure = request.extensions().get::<Secure>().is_some();
     let method = request.method().clone();
     let path = request.uri().path().to_owned();
     let query = request.uri().query().unwrap_or("").to_owned();
@@ -286,7 +298,7 @@ async fn handle(State(state): State<Arc<AppState>>, request: Request) -> Respons
     if method == Method::GET && statics::is_static_path(&path) {
         // Pairing link: /?token=... stores the token in a cookie and drops it from the URL.
         if token_in_query.is_some() {
-            return redirect(&path, Some(guard.pairing_cookie(false)));
+            return redirect(&path, Some(guard.pairing_cookie(secure)));
         }
         return statics::serve(&state, if_none_match.as_deref(), &path).await;
     }
@@ -335,6 +347,8 @@ mod tests {
             windows: None,
             power: None,
             monitor: None,
+            notifications: None,
+            vcam: None,
         })
     }
 
@@ -479,7 +493,7 @@ mod tests {
         .await;
         assert_eq!(refused.status(), StatusCode::FORBIDDEN);
         assert_eq!(
-            call(&app, "GET", "/api/ping", &[("x-token", "tok")])
+            call(&app, "GET", "/api/not-a-route", &[("x-token", "tok")])
                 .await
                 .status(),
             StatusCode::NOT_FOUND
@@ -680,6 +694,8 @@ mod tests {
             windows: None,
             power: None,
             monitor: None,
+            notifications: None,
+            vcam: None,
         });
         let auth = [("x-token", "tok")];
         let media = body_of(call(&app, "GET", "/api/media", &auth).await).await;
@@ -768,6 +784,8 @@ mod tests {
                 windows: None,
                 power: None,
                 monitor: None,
+                notifications: None,
+                vcam: None,
             },
             r#"{"token":"tok","shortcuts":[{"id":"tm","label":"Gerenciador","keys":"ctrl+shift+esc"},{"keys":"alt+f4"},{"id":"bad","keys":"ctrl+nope"}]}"#,
         );
@@ -1123,6 +1141,8 @@ data: {\"windows\":["
             windows: Some(Arc::new(ssd_core::ports::FakeWindows::default())),
             power: Some(Arc::new(ssd_core::ports::FakePower::default())),
             monitor: Some(Arc::new(ssd_core::ports::FakeMonitor)),
+            notifications: Some(Arc::new(ssd_core::ports::FakeNotifications)),
+            vcam: Some(Arc::new(ssd_core::ports::FakeVcam::default())),
         }
     }
 
@@ -1423,5 +1443,111 @@ data: {\"windows\":["
             }
         }
         assert!(seen.contains("event: game\ndata: null"), "{seen}");
+    }
+
+    async fn post_bytes(app: &Router, uri: &str, body: Vec<u8>) -> Response {
+        let request = Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header("host", "127.0.0.1:7878")
+            .header("x-token", "tok")
+            .body(Body::from(body))
+            .unwrap();
+        app.clone().oneshot(request).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn the_phone_camera_frames_the_stream_the_status_and_the_direct_camera() {
+        let vcam = Arc::new(ssd_core::ports::FakeVcam::default());
+        let (app, _) = app_on(Platform {
+            vcam: Some(vcam.clone()),
+            ..Platform::default()
+        });
+        let auth = [("x-token", "tok")];
+        let mut jpeg = vec![0xff, 0xd8, 0xff, 0xe0];
+        jpeg.extend(std::iter::repeat_n(7u8, 2000));
+
+        // nothing yet: the stream shows the "no signal" picture, the status says nobody is sending
+        let idle = body_of(call(&app, "GET", "/api/camera/status", &auth).await).await;
+        assert_eq!(
+            (
+                idle["live"].clone(),
+                idle["fps"].clone(),
+                idle["wanted"].clone()
+            ),
+            (false.into(), 0.into(), false.into())
+        );
+        assert!(idle["link"]
+            .as_str()
+            .unwrap()
+            .contains("/camera.html?token=tok"));
+        assert_eq!(idle["direct"]["name"], "Stream Deck Camera");
+
+        let mut stream = call(&app, "GET", "/api/camera/stream", &auth).await;
+        assert!(stream.headers()["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("multipart/x-mixed-replace; boundary="));
+        let first = read_until(stream.body_mut(), "image/jpeg").await;
+        assert!(first.starts_with("--ssdframe"), "{first:.60}");
+
+        // a frame is answered with 204 and tells the phone somebody watches (this stream)
+        let sent = post_bytes(&app, "/api/camera/frame", jpeg.clone()).await;
+        assert_eq!(sent.status(), StatusCode::NO_CONTENT);
+        assert_eq!(sent.headers()["x-camera-wanted"], "1");
+        for bad in [
+            vec![1, 2, 3, 4, 5],
+            vec![0xff, 0xd8],
+            vec![0xff, 0xd8, 0xff, 0xe0]
+                .into_iter()
+                .chain(std::iter::repeat_n(0, 1_600_000))
+                .collect::<Vec<u8>>(),
+        ] {
+            assert!(post_bytes(&app, "/api/camera/frame", bad)
+                .await
+                .status()
+                .is_client_error());
+        }
+        let live = body_of(call(&app, "GET", "/api/camera/status", &auth).await).await;
+        assert_eq!(live["live"], true);
+        assert_eq!(live["viewers"], 1);
+        assert!(live["ageMs"].as_u64().unwrap() < 2000);
+        drop(stream);
+        assert_eq!(
+            vcam.log(),
+            vec!["feed 2004".to_owned()],
+            "the direct camera got the good frame only"
+        );
+
+        // the direct camera needs an explicit confirmation; copy-link puts the OBS link on the clipboard
+        assert_eq!(
+            post(&app, "/api/camera/direct/install", "{}")
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            post(&app, "/api/camera/direct/install", r#"{"confirm":true}"#)
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            post(&app, "/api/camera/direct/uninstall", r#"{"confirm":true}"#)
+                .await
+                .status(),
+            StatusCode::OK
+        );
+        assert_eq!(
+            post(&app, "/api/camera/copy-link", "").await.status(),
+            StatusCode::OK
+        );
+        let log = vcam.log();
+        assert_eq!(&log[1..3], ["install", "uninstall"]);
+        assert!(
+            log[3].starts_with("clipboard http://127.0.0.1:")
+                && log[3].contains("/camera.html?token=tok"),
+            "{log:?}"
+        );
     }
 }

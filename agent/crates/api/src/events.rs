@@ -60,6 +60,7 @@ fn owned(state: &AppState, name: &str) -> bool {
         "audio" => state.platform.audio.is_some(),
         "media" => state.platform.media.is_some(),
         "monitor" | "game" | "processes" => state.platform.monitor.is_some(),
+        "notifications" => state.platform.notifications.is_some(),
         "state" => crate::powerroutes::state_ready(state),
         "power" => state.platform.power.is_some() && state.platform.windows.is_some(),
         _ => false,
@@ -155,6 +156,33 @@ async fn produce(state: &Arc<AppState>, name: &str) -> Option<(String, String)> 
             };
             let data = crate::monitorroutes::read(state, what).await.ok()?;
             Some((data.to_string(), state.hub.tick()))
+        }
+        // what Windows kept quiet (Do Not Disturb, a game) from the apps listed in config.notifications.apps; the phone shows the new ones
+        "notifications" => {
+            let port = state.platform.notifications.clone()?;
+            let words: Vec<String> = {
+                let config = state.config.lock().unwrap();
+                let section = config.get("notifications");
+                if section.and_then(|s| s.get("enabled")) == Some(&Value::Bool(false)) {
+                    Vec::new()
+                } else {
+                    section
+                        .and_then(|s| s.get("apps"))
+                        .and_then(Value::as_array)
+                        .map(|apps| {
+                            apps.iter()
+                                .filter_map(|a| a.as_str().map(str::to_owned))
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                }
+            };
+            let listing = tokio::task::spawn_blocking(move || port.list())
+                .await
+                .ok()?
+                .ok()?;
+            let data = ssd_core::notices::shown(&listing, &words).to_string();
+            Some((data.clone(), data))
         }
         "game" => {
             let data = crate::monitorroutes::read(state, "fps").await.ok()?;

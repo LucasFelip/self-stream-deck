@@ -50,6 +50,7 @@ server.on('error', (err) => {
 // Wi-Fi: an HTTPS server on the local network, with a self-signed certificate the phone app pins, and a firewall rule
 // limited to this one port and the local subnet. Resolves to the pairing links (empty when Wi-Fi is off or failed).
 async function startLan() {
+  if (process.env.SSD_NO_LAN) return []; // the agent in front of this one serves the home network
   if (!config.lan) {
     console.log('\nWi-Fi access is off. Turn it on with: npm run lan -- on');
     return [];
@@ -78,7 +79,7 @@ async function startLan() {
 // signed it is installed on the iPhone once), and a plain-HTTP port that only hands out that authority's PUBLIC certificate.
 // The addresses are looked at again every few minutes: when they change the certificate is made again and swapped in live.
 async function startIos() {
-  if (!config.ios) return;
+  if (process.env.SSD_NO_LAN || !config.ios) return;
   try {
     let material = await tlsIos.ensure();
     const secure = harden(https.createServer({ pfx: material.pfx, passphrase: material.passphrase, minVersion: 'TLSv1.2' }, onRequest));

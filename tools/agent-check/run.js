@@ -315,6 +315,47 @@ const step = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.strictEqual((await get('/api/monitor/processes')).cpu[0].name, 'game');
       assert.strictEqual((await get('/api/monitor/info')).host, 'FAKE-PC');
     });
+    await step('phone camera (fake direct camera): frames in, 204 with the wanted flag, stream, status, direct camera confirmation', async () => {
+      const jpeg = fs.readFileSync(path.join(ROOT, 'legacy', 'server', 'assets', 'nosignal.jpg'));
+      const frame = (body) => new Promise((resolve, reject) => {
+        const req = http.request({ host: '127.0.0.1', port: PORT, path: '/api/camera/frame', method: 'POST', headers: { ...auth, 'Content-Type': 'image/jpeg', 'Content-Length': body.length } }, (res) => { res.resume(); res.on('end', () => resolve(res)); });
+        req.on('error', reject);
+        req.end(body);
+      });
+      const sent = await frame(jpeg);
+      assert.strictEqual(sent.statusCode, 204);
+      assert.ok(['0', '1'].includes(sent.headers['x-camera-wanted']));
+      assert.strictEqual((await frame(Buffer.from('not a picture'))).statusCode, 400);
+      const status = JSON.parse((await request('/api/camera/status', { headers: auth })).body);
+      assert.deepStrictEqual(Object.keys(status), ['live', 'fps', 'kbps', 'viewers', 'wanted', 'ageMs', 'link', 'direct']);
+      assert.strictEqual(status.live, true);
+      assert.match(status.link, /\/camera\.html\?token=/);
+      const refused = await request('/api/camera/direct/install', { method: 'POST', headers: auth });
+      assert.strictEqual(refused.status, 400);
+      const stream = await new Promise((resolve, reject) => {
+        const req = http.request({ host: '127.0.0.1', port: PORT, path: '/api/camera/stream', headers: auth }, (res) => {
+          res.once('data', (chunk) => { req.destroy(); resolve({ type: res.headers['content-type'], start: chunk.toString('latin1', 0, 12) }); });
+        });
+        req.on('error', (e) => (e.code === 'ECONNRESET' ? undefined : reject(e)));
+        req.end();
+      });
+      assert.match(stream.type, /multipart\/x-mixed-replace; boundary=ssdframe/);
+      assert.strictEqual(stream.start, '--ssdframe\r\n');
+    });
+    await step('notifications topic (fake Action Center): only the apps the config lists', async () => {
+      const text = await new Promise((resolve, reject) => {
+        let seen = '';
+        const req = http.request({ host: '127.0.0.1', port: PORT, path: '/api/events?topics=notifications', headers: auth }, (res) => {
+          res.on('data', (c) => { seen += c; if (seen.includes('event: notifications\n') && seen.endsWith('\n\n')) { req.destroy(); resolve(seen); } });
+        });
+        req.on('error', (e) => (e.code === 'ECONNRESET' ? undefined : reject(e)));
+        setTimeout(() => { req.destroy(); reject(new Error(`no notifications event: ${seen}`)); }, 8000);
+        req.end();
+      });
+      const data = JSON.parse(text.split('data: ')[1].split('\n')[0]);
+      assert.strictEqual(data.access, 'allowed');
+      assert.deepStrictEqual(data.notifications.map((n) => n.app), ['WhatsApp'], 'the default config lists WhatsApp only');
+    });
     await step('/api/requests counts the routes (static files as one)', async () => {
       const r = JSON.parse((await request('/api/requests', { headers: auth })).body);
       assert.ok(r.counts['GET static'] >= 1 && r.counts['GET /api/ping'] >= 1, JSON.stringify(r.counts));

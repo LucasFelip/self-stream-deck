@@ -592,6 +592,84 @@ impl MonitorPort for FakeMonitor {
     }
 }
 
+/// The notifications the Windows Action Center holds (also what Do Not Disturb or a game kept from popping up).
+pub trait NotificationsPort: Send + Sync {
+    /// `{ access, notifications: [{ id, aumid, app, title, body, time }] }`, newest last.
+    fn list(&self) -> PortResult<serde_json::Value>;
+}
+
+/// An Action Center with one WhatsApp message in it.
+#[derive(Default)]
+pub struct FakeNotifications;
+
+impl NotificationsPort for FakeNotifications {
+    fn list(&self) -> PortResult<serde_json::Value> {
+        Ok(serde_json::json!({ "access": "allowed", "notifications": [
+            { "id": 7, "aumid": "5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App", "app": "WhatsApp", "title": "Maria", "body": "Oi!", "time": 1_700_000_000_000_i64 },
+            { "id": 8, "aumid": "Brave.X", "app": "Brave", "title": "Site", "body": "", "time": 1_700_000_001_000_i64 }
+        ] }))
+    }
+}
+
+/// The direct virtual camera ("Stream Deck Camera") and the clipboard link for OBS.
+pub trait VcamPort: Send + Sync {
+    /// `{ name, installed, inUse, busy }`.
+    fn status(&self) -> PortResult<serde_json::Value>;
+    /// Some app has the device open and takes frames.
+    fn in_use(&self) -> bool;
+    /// Hands a JPEG to the device, if it is installed (cheap when it is not).
+    fn feed(&self, jpeg: &[u8]);
+    fn install(&self) -> PortResult<()>;
+    fn uninstall(&self) -> PortResult<()>;
+    fn copy_to_clipboard(&self, text: &str) -> PortResult<()>;
+}
+
+/// A camera that is not installed and remembers what it was asked.
+#[derive(Default)]
+pub struct FakeVcam {
+    log: Mutex<Vec<String>>,
+}
+
+impl FakeVcam {
+    pub fn log(&self) -> Vec<String> {
+        self.log.lock().unwrap().clone()
+    }
+}
+
+impl VcamPort for FakeVcam {
+    fn status(&self) -> PortResult<serde_json::Value> {
+        Ok(
+            serde_json::json!({ "name": "Stream Deck Camera", "installed": false, "inUse": false, "busy": false }),
+        )
+    }
+
+    fn in_use(&self) -> bool {
+        false
+    }
+
+    fn feed(&self, jpeg: &[u8]) {
+        self.log
+            .lock()
+            .unwrap()
+            .push(format!("feed {}", jpeg.len()));
+    }
+
+    fn install(&self) -> PortResult<()> {
+        self.log.lock().unwrap().push("install".into());
+        Ok(())
+    }
+
+    fn uninstall(&self) -> PortResult<()> {
+        self.log.lock().unwrap().push("uninstall".into());
+        Ok(())
+    }
+
+    fn copy_to_clipboard(&self, text: &str) -> PortResult<()> {
+        self.log.lock().unwrap().push(format!("clipboard {text}"));
+        Ok(())
+    }
+}
+
 /// An in-memory PC for the tests and `--fake-platform`: the same shape as `contracts/fixtures/fake-pc.json`.
 pub struct FakeAudio {
     state: Mutex<FakeState>,

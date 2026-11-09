@@ -4,6 +4,8 @@
 //!
 //! Transition mode (plan 3.1): with `--node`, the Node agent runs as a child on `--node-port` (default 7870) and every route this agent does
 //! not answer yet is handed to it. The phone and the interface only ever see this agent's port.
+mod lan;
+
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -81,7 +83,7 @@ fn children_end_with_me() {
 fn children_end_with_me() {}
 
 /// The PC: Windows' own APIs, or an in-memory PC with `--fake-platform` (and everywhere that is not Windows, for now nothing).
-fn platform(fake: bool) -> Platform {
+fn platform(fake: bool, data_dir: &std::path::Path) -> Platform {
     if fake {
         return Platform {
             audio: Some(Arc::new(ssd_core::ports::FakeAudio::default())),
@@ -91,6 +93,8 @@ fn platform(fake: bool) -> Platform {
             windows: Some(Arc::new(ssd_core::ports::FakeWindows::default())),
             power: Some(Arc::new(ssd_core::ports::FakePower::default())),
             monitor: Some(Arc::new(ssd_core::ports::FakeMonitor)),
+            notifications: Some(Arc::new(ssd_core::ports::FakeNotifications)),
+            vcam: Some(Arc::new(ssd_core::ports::FakeVcam::default())),
         };
     }
     #[cfg(windows)]
@@ -102,6 +106,10 @@ fn platform(fake: bool) -> Platform {
         windows: Some(Arc::new(ssd_platform_windows::WindowsWindows)),
         power: Some(Arc::new(ssd_platform_windows::WindowsPower)),
         monitor: Some(Arc::new(ssd_platform_windows::WindowsMonitor)),
+        notifications: Some(Arc::new(ssd_platform_windows::WindowsNotifications)),
+        vcam: Some(Arc::new(ssd_platform_windows::WindowsVcam::new(
+            data_dir.join("vcam"),
+        ))),
     };
     #[cfg(not(windows))]
     Platform::default()
@@ -139,6 +147,7 @@ async fn run() -> Result<(), String> {
                 .arg(script)
                 .env("SSD_PORT", args.node_port.to_string())
                 .env("SSD_DATA_DIR", &args.data_dir)
+                .env("SSD_NO_LAN", "1")
                 .stdin(Stdio::null())
                 .kill_on_drop(true)
                 .spawn()
@@ -154,7 +163,7 @@ async fn run() -> Result<(), String> {
         &machine,
         args.web_dir.clone(),
         upstream,
-        platform(args.fake_platform),
+        platform(args.fake_platform, &args.data_dir),
     );
     let address = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = tokio::net::TcpListener::bind(address)
@@ -173,9 +182,21 @@ async fn run() -> Result<(), String> {
         async move { state.refresh_apps().await }
     });
 
+    // the home network: HTTPS with the certificate the phone pins, the iPhone side and the firewall rules (the scripts that make the
+    // certificates are the Node agent's, next to its index.js)
+    let scripts = args
+        .node
+        .as_ref()
+        .and_then(|n| n.parent())
+        .and_then(|p| p.parent())
+        .map(|p| p.join("scripts"))
+        .unwrap_or_else(|| PathBuf::from("scripts"));
+    let app = router(state);
+    lan::start(&config, &args.data_dir, &scripts, app.clone()).await;
+
     let serve = axum::serve(
         listener,
-        router(state).into_make_service_with_connect_info::<SocketAddr>(),
+        app.into_make_service_with_connect_info::<SocketAddr>(),
     );
     tokio::select! {
         result = serve => result.map_err(|e| e.to_string()),
