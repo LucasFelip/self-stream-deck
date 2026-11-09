@@ -4,10 +4,11 @@
 //! the ones in the live list.
 use std::collections::{HashMap, HashSet};
 use std::ffi::c_void;
-use std::sync::Once;
+use std::sync::{Mutex, Once};
 
 use ssd_core::ports::{
-    Monitor, Percent, PortError, PortResult, Projection, WindowAction, WindowsPort, Zone,
+    ChangeCallback, Monitor, Percent, PortError, PortResult, Projection, WindowAction, WindowsPort,
+    Zone,
 };
 use ssd_core::windows::{WindowInfo, WindowsSnapshot};
 use windows::Win32::Devices::Display::{
@@ -25,13 +26,18 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
+use windows::Win32::System::Threading::GetCurrentThreadId;
+use windows::Win32::UI::Accessibility::{SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK};
 use windows::Win32::UI::Input::KeyboardAndMouse::{keybd_event, KEYEVENTF_KEYUP};
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetWindow, GetWindowLongW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW,
-    GetWindowThreadProcessId, IsIconic, IsWindowVisible, IsZoomed, PostMessageW,
-    SetForegroundWindow, SetProcessDPIAware, SetWindowPos, ShowWindow, GWL_EXSTYLE, GW_OWNER,
-    SWP_NOACTIVATE, SWP_NOZORDER, SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE, WS_EX_APPWINDOW,
-    WS_EX_TOOLWINDOW,
+    DispatchMessageW, EnumWindows, GetMessageW, GetWindow, GetWindowLongW, GetWindowRect,
+    GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible,
+    IsZoomed, PeekMessageW, PostMessageW, PostThreadMessageW, SetForegroundWindow,
+    SetProcessDPIAware, SetWindowPos, ShowWindow, TranslateMessage, EVENT_OBJECT_CREATE,
+    EVENT_OBJECT_NAMECHANGE, EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZEEND,
+    EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MOVESIZEEND, GWL_EXSTYLE, GW_OWNER, MSG, PM_NOREMOVE,
+    SWP_NOACTIVATE, SWP_NOZORDER, SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE, WINEVENT_OUTOFCONTEXT,
+    WINEVENT_SKIPOWNPROCESS, WM_QUIT, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
 };
 
 fn hwnd(handle: i64) -> HWND {
@@ -360,10 +366,124 @@ fn move_window(window: HWND, target: usize) -> PortResult<()> {
     Ok(())
 }
 
+// ---- change events -------------------------------------------------------------------------------------------------------------------
+
+/// The one callback the hook procedure calls (a hook procedure has no closure): there is one watcher at a time.
+static ON_CHANGE: Mutex<Option<ChangeCallback>> = Mutex::new(None);
+
+unsafe extern "system" fn on_event(
+    _: HWINEVENTHOOK,
+    event: u32,
+    window: HWND,
+    id_object: i32,
+    id_child: i32,
+    _thread: u32,
+    _time: u32,
+) {
+    // the window itself (OBJID_WINDOW), not its scroll bars, carets or menus
+    if id_object != 0 || id_child != 0 || window.0.is_null() {
+        return;
+    }
+    if let Some(callback) = ON_CHANGE.lock().unwrap().as_ref() {
+        callback(event == EVENT_OBJECT_NAMECHANGE);
+    }
+}
+
+/// Ends the watch: the message loop quits and the hooks go away.
+pub struct WatchGuard {
+    thread: u32,
+    join: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Drop for WatchGuard {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = PostThreadMessageW(self.thread, WM_QUIT, WPARAM(0), LPARAM(0));
+        }
+        if let Some(join) = self.join.take() {
+            let _ = join.join();
+        }
+        *ON_CHANGE.lock().unwrap() = None;
+    }
+}
+
+/// `SetWinEventHook` out of context, on a thread of its own with a message loop (the callbacks arrive as messages to it): focus changes, windows
+/// created, destroyed, shown, hidden, moved, resized, minimized and renamed.
+fn start_watch(callback: ChangeCallback) -> Option<WatchGuard> {
+    *ON_CHANGE.lock().unwrap() = Some(callback);
+    let (sender, receiver) = std::sync::mpsc::channel::<u32>();
+    let join = std::thread::Builder::new()
+        .name("window-events".into())
+        .spawn(move || unsafe {
+            // the thread must have a message queue before anyone posts to it
+            let mut message = MSG::default();
+            let _ = PeekMessageW(&mut message, None, 0, 0, PM_NOREMOVE);
+            let flags = WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS;
+            let hooks = [
+                SetWinEventHook(
+                    EVENT_SYSTEM_FOREGROUND,
+                    EVENT_SYSTEM_FOREGROUND,
+                    None,
+                    Some(on_event),
+                    0,
+                    0,
+                    flags,
+                ),
+                SetWinEventHook(
+                    EVENT_SYSTEM_MOVESIZEEND,
+                    EVENT_SYSTEM_MOVESIZEEND,
+                    None,
+                    Some(on_event),
+                    0,
+                    0,
+                    flags,
+                ),
+                SetWinEventHook(
+                    EVENT_SYSTEM_MINIMIZESTART,
+                    EVENT_SYSTEM_MINIMIZEEND,
+                    None,
+                    Some(on_event),
+                    0,
+                    0,
+                    flags,
+                ),
+                SetWinEventHook(
+                    EVENT_OBJECT_CREATE,
+                    EVENT_OBJECT_NAMECHANGE,
+                    None,
+                    Some(on_event),
+                    0,
+                    0,
+                    flags,
+                ),
+            ];
+            let _ = sender.send(GetCurrentThreadId());
+            while GetMessageW(&mut message, None, 0, 0).as_bool() {
+                let _ = TranslateMessage(&message);
+                DispatchMessageW(&message);
+            }
+            for hook in hooks {
+                let _ = UnhookWinEvent(hook);
+            }
+        })
+        .ok()?;
+    let thread = receiver
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .ok()?;
+    Some(WatchGuard {
+        thread,
+        join: Some(join),
+    })
+}
+
 #[derive(Default)]
 pub struct WindowsWindows;
 
 impl WindowsPort for WindowsWindows {
+    fn watch(&self, on_change: ChangeCallback) -> Option<Box<dyn Send>> {
+        start_watch(on_change).map(|guard| Box::new(guard) as Box<dyn Send>)
+    }
+
     fn snapshot(&self) -> PortResult<WindowsSnapshot> {
         let names = process_names();
         let mut running: Vec<String> = names

@@ -1,6 +1,6 @@
 //! What the PC offers, as traits. `platform-windows` implements them with the Windows APIs proved in the spike (ADR 0008); the tests, and the
 //! agent's `--fake-platform` mode, implement them with in-memory fakes (see [`FakeAudio`]). The ports are added with their module (plan 3.2).
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
@@ -330,7 +330,17 @@ pub enum Projection {
 
 /// The windows and the screens. Every action names a window by handle, and the platform only acts on a handle that is in the live list
 /// (otherwise `NotFound("window not found")`): the phone cannot make this process touch an arbitrary window.
+/// Called (from any thread, quickly) when something about the windows changed. The argument is true when only a title changed (a terminal's
+/// spinner can do that many times a second): the caller may take its time over those.
+pub type ChangeCallback = Arc<dyn Fn(bool) + Send + Sync>;
+
 pub trait WindowsPort: Send + Sync {
+    /// Pushes changes (focus, windows opening, closing, moving, renaming) instead of making the caller ask. The watch ends when the returned
+    /// guard is dropped. `None`: this platform cannot, so the caller asks on a timer.
+    fn watch(&self, _on_change: ChangeCallback) -> Option<Box<dyn Send>> {
+        None
+    }
+
     fn snapshot(&self) -> PortResult<crate::windows::WindowsSnapshot>;
     fn action(&self, handle: i64, action: WindowAction) -> PortResult<()>;
     fn move_to_monitor(&self, handle: i64, monitor: usize) -> PortResult<()>;

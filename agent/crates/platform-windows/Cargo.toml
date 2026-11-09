@@ -29,6 +29,8 @@ windows = { version = "0.58", features = [
   "Win32_Devices_Display",
   "Win32_Graphics_Dwm",
   "Win32_System_Diagnostics_ToolHelp",
+  "Win32_UI_Accessibility",
+  "Win32_System_Threading",
   "Media_Control",
   "Foundation",
   "Foundation_Collections",

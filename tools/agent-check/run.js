@@ -235,6 +235,24 @@ const step = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.strictEqual((await send(`/api/launch/${named('Code')}`, {})).json.action, 'launched');
       assert.strictEqual((await send('/api/launch/nope', {})).status, 404);
     });
+    await step('live events: topics of this agent (windows, audio, media) and of Node (power) in one stream; unknown topics are refused', async () => {
+      assert.strictEqual((await request('/api/events?topics=nope', { headers: auth })).status, 400);
+      assert.strictEqual((await request('/api/events', { headers: auth })).status, 400);
+      const seen = await new Promise((resolve, reject) => {
+        let text = '';
+        const req = http.request({ host: '127.0.0.1', port: PORT, path: '/api/events?topics=windows,audio,media,power', headers: auth }, (res) => {
+          res.on('data', (c) => {
+            text += c;
+            if (['windows', 'audio', 'media', 'power'].every((name) => text.includes(`event: ${name}\n`))) { req.destroy(); resolve(text); }
+          });
+        });
+        req.on('error', (e) => (e.code === 'ECONNRESET' ? undefined : reject(e)));
+        setTimeout(() => { req.destroy(); reject(new Error(`not every topic arrived in 10 s: ${text.slice(0, 300)}`)); }, 10000);
+        req.end();
+      });
+      assert.ok(seen.startsWith('retry: 2000\n\n'), 'one retry line, from this agent');
+      assert.strictEqual(seen.split('retry:').length - 1, 1, 'the retry line of the Node stream is not repeated');
+    });
     await step('/api/requests counts the routes (static files as one)', async () => {
       const r = JSON.parse((await request('/api/requests', { headers: auth })).body);
       assert.ok(r.counts['GET static'] >= 1 && r.counts['GET /api/ping'] >= 1, JSON.stringify(r.counts));

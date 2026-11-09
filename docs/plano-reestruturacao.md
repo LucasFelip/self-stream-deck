@@ -134,7 +134,7 @@ Portado da antiga durante a migração (bug que existia nas duas): ao completar 
 - [x] **Android real (A31, no app):** páginas Apps, Janelas, Som e PC, menu (popover em paisagem, folha em retrato), folha da câmera, Voltar e rotação, sem erros de script no log. Ainda por testar no aparelho: escurecer, notificações e Atualizar.
 - [ ] **Adiado:** iPhone no Safari e na Tela de Início. 
 
-### Fase 3: Agente em Rust (≈ 5 a 7 semanas) — **3.0 e 3.1 feitas; 3.2 em andamento (29 de 51 operações: layout, pareamento, áudio, mídia, atalhos, apps, janelas e telas); 3.3 pendente**
+### Fase 3: Agente em Rust (≈ 5 a 7 semanas) — **3.0 e 3.1 feitas; 3.2 em andamento (30 de 51 operações: layout, pareamento, áudio, mídia, atalhos, apps, janelas, telas e o fluxo de eventos); 3.3 pendente**
 
 **3.0 Spike de viabilidade (3 a 5 dias), com portão de decisão — feito, passou ([ADR 0008](adr/0008-spike-rust-windows.md))**
 Provar em Rust, fora do produto, os três pontos de maior risco: (a) Core Audio (volume, mudo, mixer por app, troca de dispositivo padrão), (b) SMTC via WinRT (leitura e controle de mídia), (c) `SetWinEventHook` empurrando mudanças de janelas. Se algum for inviável ou muito frágil, aplicar a alternativa da D1 e registrar no ADR.
@@ -142,6 +142,7 @@ Resultado: os três funcionam em Rust (`agent/spike`: Core Audio 11 ms, SMTC 12 
 
 **3.1 Esqueleto (1 semana) — feito, com o que ficou para depois indicado**
 - [x] Workspace Cargo `agent/`: `core` (guard, config, portas `AudioPort/MediaPort/PowerPort`), `api` (axum), `agent` (binário `ssd`) e o `spike`. Faltam as portas `InputPort/WindowsPort/MonitorPort/TaskbarPort/VCamPort` e o crate `platform-windows`, que entram com cada módulo da 3.2.
+- [x] **Hub de SSE próprio** (`api/events.rs`): produtores só enquanto alguém escuta, só envia o que mudou, último valor ao entrar, keep-alive de 20 s. Os tópicos que o Rust produz (`windows`, `audio`, `media`) saem dele; os demais (`state`, `power`, `notifications`, `monitor`, `processes`, `game`) vêm do Node e são mesclados no mesmo fluxo (uma só linha `retry`).
 - [x] `axum` com validação de `Host`, bloqueio por falhas, token (consulta, cabeçalho, cookie), origem, página de pareamento, manifest/ícones públicos e estáticos com ETag/304 (paridade com `security.js`/`http.js`). [ ] Ainda não: estáticos embutidos no exe (`rust-embed`; hoje lê `web/dist`) e o hub de SSE próprio (o SSE passa pelo proxy; vira próprio com o primeiro tópico portado).
 - [x] Config: mesma `config.json` do Node (chaves desconhecidas preservadas, BOM aceito), gravação atômica com `.bak`, nunca sobrescreve arquivo ilegível. [ ] Falta a validação equivalente a `config-check.js` (hoje só o tipo das chaves editáveis).
 - [x] `tracing` com nível por `SSD_LOG`; contadores de `/api/requests`.
@@ -161,7 +162,7 @@ Cada item: porta em `core`, implementação em `platform-windows`, adaptador fal
 | 6 | Áudio | `/api/audio*`, `/api/volume`, `/api/mic` | **portado** (`platform-windows/audio.rs`: volume, mudo, microfone, dispositivos, mixer por app e troca do padrão por `IPolicyConfig`, conferido contra o Node neste PC: mesmas listas; o rótulo do app às vezes sai melhor, porque o Rust lê a descrição do exe também de processos protegidos) |
 | 7 | Mídia | `/api/media*` | **portado** (`platform-windows/media.rs`, SMTC tipado; capa com cache de 40 e MIME pela assinatura; chave da capa por FNV-1a em vez de SHA-1) |
 | 8 | Monitor | `/api/monitor/*` | PDH, `nvidia-smi`, RTSS/Afterburner, WMI |
-| 9 | Janelas e telas | `/api/windows*`, `/api/screens*` | **portado** (`platform-windows/windows_mgmt.rs`: lista tipo Alt+Tab, ações, mover, posicionar, encaixar, telas, brilho DDC/CI, desligar telas, projeção) e `POST /api/launch/:id` (foca a janela aberta ou inicia pelo explorer). Neste PC: `/api/screens` byte a byte igual ao Node e `/api/windows` igual salvo `iconVersion`. **Falta:** o empurrão `SetWinEventHook` para o SSE (vem com o hub de SSE próprio) |
+| 9 | Janelas e telas | `/api/windows*`, `/api/screens*` | **portado** (`platform-windows/windows_mgmt.rs`: lista tipo Alt+Tab, ações, mover, posicionar, encaixar, telas, brilho DDC/CI, desligar telas, projeção) e `POST /api/launch/:id` (foca a janela aberta ou inicia pelo explorer). Neste PC: `/api/screens` byte a byte igual ao Node e `/api/windows` igual salvo `iconVersion`. O empurrão por `SetWinEventHook` também está (`platform-windows`, com os eventos de título limitados a ~2 por segundo como no Node): 0,2 % de um núcleo com o fluxo aberto, contra 2,5 % perguntando a cada 600 ms |
 | 10 | Notificações do Windows | `notifications.js` | o que a UI usa hoje |
 | 11 | Câmera e câmera virtual | `/api/camera/*` | por último: DirectShow/Media Foundation é o trecho mais trabalhoso; pode ficar no helper C# por mais tempo, sem bloquear o resto |
 | 12 | LAN/TLS/iPhone | `lan-cli`, `tls*`, `ios`, `firewall` | geração de AC e certificado (`rcgen`), firewall |

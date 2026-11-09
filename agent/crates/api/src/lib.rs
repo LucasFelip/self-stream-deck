@@ -2,6 +2,7 @@
 //! then a transition proxy that hands every route not yet ported to the Node agent running as a child on an internal port (plan 3.1).
 //! Each route that gets ported is answered here and stops being proxied.
 mod apps;
+mod events;
 mod proxy;
 mod routes;
 mod statics;
@@ -56,6 +57,8 @@ pub struct AppState {
     pub art: Mutex<ArtCache>,
     /// the taskbar apps
     pub apps: Mutex<apps::AppsState>,
+    /// who listens to which live topic
+    pub hub: events::Hub,
     /// this PC's name, as the Apps page shows it
     pub host: String,
     counts: Mutex<HashMap<String, u64>>,
@@ -75,6 +78,7 @@ impl AppState {
             guard,
             host: machine_name.to_owned(),
             apps: Mutex::new(apps::AppsState::default()),
+            hub: events::Hub::default(),
             config: Mutex::new(config),
             web_dir,
             upstream,
@@ -1009,5 +1013,77 @@ mod tests {
             post(&app, "/api/launch/nope", "").await.status(),
             StatusCode::NOT_FOUND
         );
+    }
+
+    /// Reads the stream until `needle` shows up (or gives up after 3 s).
+    async fn read_until(body: &mut axum::body::Body, needle: &str) -> String {
+        use http_body_util::BodyExt;
+        let mut text = String::new();
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(3);
+        while !text.contains(needle) {
+            let frame = tokio::time::timeout_at(deadline, body.frame())
+                .await
+                .unwrap_or_else(|_| panic!("no `{needle}` in the stream so far: {text}"))
+                .unwrap()
+                .unwrap();
+            if let Ok(data) = frame.into_data() {
+                text.push_str(&String::from_utf8_lossy(&data));
+            }
+        }
+        text
+    }
+
+    #[tokio::test]
+    async fn the_event_stream_pushes_a_topic_and_refuses_unknown_ones() {
+        let (app, _) = app_on(Platform {
+            audio: Some(Arc::new(ssd_core::ports::FakeAudio::default())),
+            windows: Some(Arc::new(ssd_core::ports::FakeWindows::default())),
+            ..Platform::default()
+        });
+        let auth = [("x-token", "tok")];
+        for bad in [
+            "/api/events",
+            "/api/events?topics=",
+            "/api/events?topics=audio,nope",
+        ] {
+            assert_eq!(
+                call(&app, "GET", bad, &auth).await.status(),
+                StatusCode::BAD_REQUEST,
+                "{bad}"
+            );
+        }
+
+        let response = call(&app, "GET", "/api/events?topics=audio,windows", &auth).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()["content-type"], "text/event-stream");
+        let mut body = response.into_body();
+        let mut all = read_until(&mut body, "event: windows").await;
+        if !all.contains("event: audio") {
+            all.push_str(&read_until(&mut body, "event: audio").await);
+        }
+        assert!(
+            all.starts_with(
+                "retry: 2000
+
+"
+            ),
+            "{all}"
+        );
+        assert!(
+            all.contains(
+                "event: audio
+data: {\"playback\":"
+            ),
+            "{all}"
+        );
+        assert!(
+            all.contains(
+                "event: windows
+data: {\"windows\":["
+            ),
+            "{all}"
+        );
+        // a topic only goes again when it changed: with nothing changing, the next thing on the wire is the keep-alive or nothing
+        assert_eq!(all.matches("event: audio").count(), 1, "{all}");
     }
 }
