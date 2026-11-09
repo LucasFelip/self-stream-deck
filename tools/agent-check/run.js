@@ -307,6 +307,14 @@ const step = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.ok(!(await get('/api/apps')).apps.some((a) => a.id === brave));
       assert.strictEqual((await send('/api/editor/apps', { hidden: [] })).status, 200);
     });
+    await step('monitor (fake PC): sample, frame rate, processes, info', async () => {
+      const get = async (route) => JSON.parse((await request(route, { headers: auth })).body);
+      const sample = await get('/api/monitor/sample');
+      assert.deepStrictEqual(Object.keys(sample), ['cpu', 'memory', 'gpu', 'fps', 'disk', 'network', 'uptime']);
+      assert.strictEqual(await get('/api/monitor/fps'), null);
+      assert.strictEqual((await get('/api/monitor/processes')).cpu[0].name, 'game');
+      assert.strictEqual((await get('/api/monitor/info')).host, 'FAKE-PC');
+    });
     await step('/api/requests counts the routes (static files as one)', async () => {
       const r = JSON.parse((await request('/api/requests', { headers: auth })).body);
       assert.ok(r.counts['GET static'] >= 1 && r.counts['GET /api/ping'] >= 1, JSON.stringify(r.counts));

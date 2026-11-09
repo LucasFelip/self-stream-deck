@@ -76,6 +76,13 @@ pub fn is_ported(state: &AppState, method: &Method, path: &str) -> bool {
             state.platform.media.is_some()
         }
         (&Method::GET, "/api/shortcuts" | "/api/events" | "/api/editor" | "/api/macros") => true,
+        (
+            &Method::GET,
+            "/api/monitor/sample"
+            | "/api/monitor/fps"
+            | "/api/monitor/processes"
+            | "/api/monitor/info",
+        ) => state.platform.monitor.is_some(),
         (&Method::POST, "/api/editor/shortcuts" | "/api/editor/macros" | "/api/editor/apps") => {
             true
         }
@@ -134,6 +141,9 @@ pub async fn answer(
             shortcut_route(state, method, path).await
         }
         (&Method::GET, "/api/events") => crate::events::subscribe(state, query).await,
+        (&Method::GET, p) if p.starts_with("/api/monitor/") => {
+            crate::monitorroutes::route(state, p).await
+        }
         (&Method::GET, "/api/editor") => {
             crate::editor::editor_route(state, false, path, body).await
         }

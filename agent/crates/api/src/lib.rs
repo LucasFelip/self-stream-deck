@@ -4,6 +4,7 @@
 mod apps;
 mod editor;
 mod events;
+mod monitorroutes;
 mod powerroutes;
 mod proxy;
 mod routes;
@@ -24,7 +25,9 @@ use axum::Router;
 use ssd_core::config::Config;
 use ssd_core::guard::{percent_decode, Guard};
 use ssd_core::media::ArtCache;
-use ssd_core::ports::{AudioPort, InputPort, MediaPort, PowerPort, TaskbarPort, WindowsPort};
+use ssd_core::ports::{
+    AudioPort, InputPort, MediaPort, MonitorPort, PowerPort, TaskbarPort, WindowsPort,
+};
 use ssd_core::power::Scheduled;
 
 /// Sent with every response: the page only ever loads its own files, cannot be framed, and nothing is sniffed or leaked.
@@ -45,6 +48,7 @@ pub struct Platform {
     pub taskbar: Option<Arc<dyn TaskbarPort>>,
     pub windows: Option<Arc<dyn WindowsPort>>,
     pub power: Option<Arc<dyn PowerPort>>,
+    pub monitor: Option<Arc<dyn MonitorPort>>,
 }
 
 pub struct AppState {
@@ -66,6 +70,8 @@ pub struct AppState {
     /// the shutdown this agent scheduled, for the countdown on the phone
     pub scheduled: Mutex<Option<Scheduled>>,
     /// macros being run (one run of each at a time)
+    /// the static description of the PC, read once
+    pub info_cache: Mutex<Option<serde_json::Value>>,
     pub running_macros: Mutex<std::collections::HashSet<String>>,
     ui_cache: Mutex<(Option<std::time::Instant>, u64)>,
     playing_cache: Mutex<Option<(std::time::Instant, serde_json::Value)>>,
@@ -90,6 +96,7 @@ impl AppState {
             apps: Mutex::new(apps::AppsState::default()),
             hub: events::Hub::default(),
             scheduled: Mutex::new(None),
+            info_cache: Mutex::new(None),
             running_macros: Mutex::new(Default::default()),
             ui_cache: Mutex::new((None, 0)),
             playing_cache: Mutex::new(None),
@@ -327,6 +334,7 @@ mod tests {
             taskbar: None,
             windows: None,
             power: None,
+            monitor: None,
         })
     }
 
@@ -671,6 +679,7 @@ mod tests {
             taskbar: None,
             windows: None,
             power: None,
+            monitor: None,
         });
         let auth = [("x-token", "tok")];
         let media = body_of(call(&app, "GET", "/api/media", &auth).await).await;
@@ -758,6 +767,7 @@ mod tests {
                 taskbar: None,
                 windows: None,
                 power: None,
+                monitor: None,
             },
             r#"{"token":"tok","shortcuts":[{"id":"tm","label":"Gerenciador","keys":"ctrl+shift+esc"},{"keys":"alt+f4"},{"id":"bad","keys":"ctrl+nope"}]}"#,
         );
@@ -1112,6 +1122,7 @@ data: {\"windows\":["
             taskbar: Some(Arc::new(ssd_core::ports::FakeTaskbar::default())),
             windows: Some(Arc::new(ssd_core::ports::FakeWindows::default())),
             power: Some(Arc::new(ssd_core::ports::FakePower::default())),
+            monitor: Some(Arc::new(ssd_core::ports::FakeMonitor)),
         }
     }
 
@@ -1380,5 +1391,37 @@ data: {\"windows\":["
             post(&app, "/api/macro/nope", "").await.status(),
             StatusCode::NOT_FOUND
         );
+    }
+
+    #[tokio::test]
+    async fn the_monitor_routes_and_the_streams_that_carry_them() {
+        let (app, _) = app_on(everything());
+        let auth = [("x-token", "tok")];
+        let sample = body_of(call(&app, "GET", "/api/monitor/sample", &auth).await).await;
+        assert_eq!(sample["cpu"]["usage"], 12.5);
+        assert!(body_of(call(&app, "GET", "/api/monitor/fps", &auth).await)
+            .await
+            .is_null());
+        let top = body_of(call(&app, "GET", "/api/monitor/processes", &auth).await).await;
+        assert_eq!(top["cpu"][0]["name"], "game");
+        let info = body_of(call(&app, "GET", "/api/monitor/info", &auth).await).await;
+        assert_eq!(info["host"], "FAKE-PC");
+
+        // the sample is pushed as the `monitor` event, the program list as `processes`, and the frame rate as `game`
+        let response = call(
+            &app,
+            "GET",
+            "/api/events?topics=monitor,processes,game",
+            &auth,
+        )
+        .await;
+        let mut body = response.into_body();
+        let mut seen = read_until(&mut body, "event: monitor").await;
+        for topic in ["event: processes", "event: game"] {
+            if !seen.contains(topic) {
+                seen.push_str(&read_until(&mut body, topic).await);
+            }
+        }
+        assert!(seen.contains("event: game\ndata: null"), "{seen}");
     }
 }

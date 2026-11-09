@@ -544,6 +544,54 @@ impl PowerPort for FakePower {
     }
 }
 
+/// The numbers behind Desempenho, Processos and Sistema. Each answer is the JSON the page reads (the shapes are in `contracts/openapi.yaml`).
+pub trait MonitorPort: Send + Sync {
+    /// CPU, memory, GPU, frame rate, disks, network and uptime in one reading.
+    fn sample(&self) -> PortResult<serde_json::Value>;
+    /// The frame rate of the game being played, or null.
+    fn fps(&self) -> PortResult<serde_json::Value>;
+    /// The programs using most CPU and memory.
+    fn processes(&self) -> PortResult<serde_json::Value>;
+    /// The static description of the PC (slow to collect, it does not change while the agent runs).
+    fn info(&self) -> PortResult<serde_json::Value>;
+}
+
+/// A PC whose numbers are the ones of `contracts/fixtures/fake-pc.json`.
+#[derive(Default)]
+pub struct FakeMonitor;
+
+impl MonitorPort for FakeMonitor {
+    fn sample(&self) -> PortResult<serde_json::Value> {
+        Ok(serde_json::json!({
+            "cpu": { "usage": 12.5, "cores": [10, 15], "freqMHz": 3600, "temp": null, "power": null, "tempSource": null, "processes": 200, "threads": 2500 },
+            "memory": { "totalMB": 16384, "usedMB": 8192, "usedPct": 50, "commitUsedMB": 9000, "commitLimitMB": 20000 },
+            "gpu": null, "fps": null,
+            "disk": { "disks": [], "total": null, "drives": [{ "name": "C:", "label": "", "totalGB": 500, "freeGB": 250.5 }] },
+            "network": [], "uptime": 3600
+        }))
+    }
+
+    fn fps(&self) -> PortResult<serde_json::Value> {
+        Ok(serde_json::Value::Null)
+    }
+
+    fn processes(&self) -> PortResult<serde_json::Value> {
+        Ok(serde_json::json!({
+            "cpu": [{ "name": "game", "cpu": 40.5, "memMB": 4096, "count": 1 }],
+            "mem": [{ "name": "brave", "cpu": 3.0, "memMB": 2048, "count": 12 }]
+        }))
+    }
+
+    fn info(&self) -> PortResult<serde_json::Value> {
+        Ok(
+            serde_json::json!({ "host": "FAKE-PC", "user": "fake", "os": { "name": "Windows", "version": "10", "build": "1", "arch": "64-bit", "installed": null, "lastBoot": null },
+            "cpu": { "name": "Fake CPU", "cores": 2, "threads": 4, "maxMHz": 3600, "l2KB": 512, "l3KB": 4096, "socket": "AM5" },
+            "memory": { "totalGB": 16, "modules": [] }, "gpus": [], "board": { "maker": "Fake", "model": "Board", "bios": "1", "biosDate": null },
+            "storage": [], "drives": [], "network": [], "monitors": [] }),
+        )
+    }
+}
+
 /// An in-memory PC for the tests and `--fake-platform`: the same shape as `contracts/fixtures/fake-pc.json`.
 pub struct FakeAudio {
     state: Mutex<FakeState>,

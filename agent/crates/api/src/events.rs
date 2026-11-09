@@ -59,6 +59,7 @@ fn owned(state: &AppState, name: &str) -> bool {
         "windows" => state.platform.windows.is_some(),
         "audio" => state.platform.audio.is_some(),
         "media" => state.platform.media.is_some(),
+        "monitor" | "game" | "processes" => state.platform.monitor.is_some(),
         "state" => crate::powerroutes::state_ready(state),
         "power" => state.platform.power.is_some() && state.platform.windows.is_some(),
         _ => false,
@@ -69,7 +70,8 @@ fn interval(name: &str) -> Duration {
     Duration::from_millis(match name {
         "windows" => 600,
         "media" => 1500,
-        "state" => 3000,
+        "game" => 1000,
+        "state" | "processes" => 3000,
         "power" => 5000,
         _ => 2000,
     })
@@ -144,6 +146,20 @@ async fn produce(state: &Arc<AppState>, name: &str) -> Option<(String, String)> 
             }
             Some((json!(current).to_string(), stable["sessions"].to_string()))
         }
+        // always sent, even when it looks the same: a sample is a moment, not a state
+        "monitor" | "processes" => {
+            let what = if name == "monitor" {
+                "sample"
+            } else {
+                "processes"
+            };
+            let data = crate::monitorroutes::read(state, what).await.ok()?;
+            Some((data.to_string(), state.hub.tick()))
+        }
+        "game" => {
+            let data = crate::monitorroutes::read(state, "fps").await.ok()?;
+            Some((data.to_string(), data.to_string()))
+        }
         "state" => {
             let data = crate::powerroutes::build_state(state).await?;
             let signature = without_countdown(&data);
@@ -168,6 +184,11 @@ fn without_countdown(data: &Value) -> String {
 }
 
 impl Hub {
+    /// A signature that is never the same twice, for the topics that are sent on every turn.
+    fn tick(&self) -> String {
+        self.next_client.fetch_add(1, Ordering::Relaxed).to_string()
+    }
+
     fn publish(&self, name: &str, json: String, signature: String) {
         let mut topics = self.topics.lock().unwrap();
         let Some(topic) = topics.get_mut(name) else {
