@@ -189,7 +189,8 @@ Riscos: câmera virtual (ordem 11), SMTC e Core Audio (cobertos pelo spike), dif
 - [ ] Instalador MSI (WiX): precisa baixar o WiX; só com permissão. O zip com PowerShell cobre o mesmo por enquanto.
 - [ ] Atualização automática com verificação de assinatura e canais estável/teste.
 - [x] Bandeja verificada: o processo cria a janela `SelfStreamDeckTray` e o ícone.
-- [ ] Testar numa máquina limpa e depois de reiniciar o PC.
+- [x] Instalado de verdade (`install.ps1 -From`) e verificado: token e certificados preservados, celular A31 usando Apps, Janelas, Som e PC; depois de um reinício (botão de desligar/reiniciar do app) a tarefa subiu sozinha, o ícone apareceu na bandeja e as portas responderam. No logon a rede ainda não estava pronta: o registro diz "nenhum endereço encontrado" (só o texto; o servidor escuta em 0.0.0.0 e o celular conectou pelo Wi-Fi). Os certificados do iPhone só são refeitos quando faltam, então um IP novo não entra neles sozinho.
+- [ ] Testar numa máquina limpa (sem as pastas do projeto).
 
 Pronto quando: máquina limpa instala, pareia o celular e funciona após reiniciar o PC.
 
