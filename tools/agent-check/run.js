@@ -253,6 +253,30 @@ const step = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.ok(seen.startsWith('retry: 2000\n\n'), 'one retry line, from this agent');
       assert.strictEqual(seen.split('retry:').length - 1, 1, 'the retry line of the Node stream is not repeated');
     });
+    await step('power and the header state (fake PC): confirmation, schedule and countdown, cancel', async () => {
+      const send = (route, body) => new Promise((resolve, reject) => {
+        const req = http.request({ host: '127.0.0.1', port: PORT, path: route, method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' } }, (res) => {
+          const chunks = [];
+          res.on('data', (c) => chunks.push(c));
+          res.on('end', () => resolve({ status: res.statusCode, json: (() => { try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return null; } })() }));
+        });
+        req.on('error', reject);
+        req.end(JSON.stringify(body));
+      });
+      const power = JSON.parse((await request('/api/power', { headers: auth })).body);
+      assert.deepStrictEqual(Object.keys(power), ['enabled', 'uptimeSec', 'lastBoot', 'hibernate', 'fastStartup', 'rebootPending', 'openApps', 'scheduled']);
+      assert.strictEqual((await send('/api/power', { action: 'shutdown' })).status, 400, 'a shutdown needs the confirmation');
+      assert.strictEqual((await send('/api/power', { action: 'explode', confirm: true })).status, 400);
+      const asked = await send('/api/power', { action: 'restart', confirm: true, delaySec: 300 });
+      assert.strictEqual(asked.status, 200);
+      assert.strictEqual(asked.json.action, 'restart');
+      const state = JSON.parse((await request('/api/state', { headers: auth })).body);
+      assert.deepStrictEqual(Object.keys(state), ['running', 'open', 'scheduled', 'mic', 'volume', 'playing', 'miniPlayer', 'ui', 'appsRev']);
+      assert.strictEqual(state.scheduled.action, 'restart');
+      assert.ok(state.scheduled.inSec > 250 && state.scheduled.inSec <= 300);
+      assert.deepStrictEqual((await send('/api/power', { action: 'cancel' })).json, { ok: true, action: 'cancel', cancelled: true, note: null });
+      assert.strictEqual(JSON.parse((await request('/api/state', { headers: auth })).body).scheduled, null);
+    });
     await step('/api/requests counts the routes (static files as one)', async () => {
       const r = JSON.parse((await request('/api/requests', { headers: auth })).body);
       assert.ok(r.counts['GET static'] >= 1 && r.counts['GET /api/ping'] >= 1, JSON.stringify(r.counts));

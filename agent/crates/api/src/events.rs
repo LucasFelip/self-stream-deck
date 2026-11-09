@@ -59,6 +59,8 @@ fn owned(state: &AppState, name: &str) -> bool {
         "windows" => state.platform.windows.is_some(),
         "audio" => state.platform.audio.is_some(),
         "media" => state.platform.media.is_some(),
+        "state" => crate::powerroutes::state_ready(state),
+        "power" => state.platform.power.is_some() && state.platform.windows.is_some(),
         _ => false,
     }
 }
@@ -67,6 +69,8 @@ fn interval(name: &str) -> Duration {
     Duration::from_millis(match name {
         "windows" => 600,
         "media" => 1500,
+        "state" => 3000,
+        "power" => 5000,
         _ => 2000,
     })
 }
@@ -140,8 +144,27 @@ async fn produce(state: &Arc<AppState>, name: &str) -> Option<(String, String)> 
             }
             Some((json!(current).to_string(), stable["sessions"].to_string()))
         }
+        "state" => {
+            let data = crate::powerroutes::build_state(state).await?;
+            let signature = without_countdown(&data);
+            Some((data.to_string(), signature))
+        }
+        "power" => {
+            let data = crate::powerroutes::build_power(state).await?;
+            let signature = without_countdown(&data);
+            Some((data.to_string(), signature))
+        }
         _ => None,
     }
+}
+
+/// The countdown of a scheduled shutdown is counted by the phone itself, so it is not part of what "changed" means.
+fn without_countdown(data: &Value) -> String {
+    let mut stable = data.clone();
+    if let Some(scheduled) = stable.get_mut("scheduled").filter(|s| s.is_object()) {
+        scheduled["inSec"] = json!(0);
+    }
+    stable.to_string()
 }
 
 impl Hub {

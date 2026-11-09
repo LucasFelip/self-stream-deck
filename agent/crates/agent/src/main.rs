@@ -89,6 +89,7 @@ fn platform(fake: bool) -> Platform {
             input: Some(Arc::new(ssd_core::ports::FakeInput::default())),
             taskbar: Some(Arc::new(ssd_core::ports::FakeTaskbar::default())),
             windows: Some(Arc::new(ssd_core::ports::FakeWindows::default())),
+            power: Some(Arc::new(ssd_core::ports::FakePower::default())),
         };
     }
     #[cfg(windows)]
@@ -98,6 +99,7 @@ fn platform(fake: bool) -> Platform {
         input: Some(Arc::new(ssd_platform_windows::WindowsInput)),
         taskbar: Some(Arc::new(ssd_platform_windows::WindowsTaskbar)),
         windows: Some(Arc::new(ssd_platform_windows::WindowsWindows)),
+        power: Some(Arc::new(ssd_platform_windows::WindowsPower)),
     };
     #[cfg(not(windows))]
     Platform::default()

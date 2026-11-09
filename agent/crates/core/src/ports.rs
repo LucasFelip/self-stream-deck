@@ -477,6 +477,73 @@ impl WindowsPort for FakeWindows {
     }
 }
 
+/// Shutdown, restart, sleep... The rules (confirmation, delays, what is remembered) are in `power.rs`; this is only what Windows does.
+pub trait PowerPort: Send + Sync {
+    /// Uptime, the hibernation and fast-startup settings and whether a restart is pending.
+    fn raw(&self) -> PortResult<crate::power::Raw>;
+    /// `shutdown.exe` with these arguments.
+    fn shutdown(&self, args: &[String]) -> PortResult<crate::power::CommandResult>;
+    fn lock(&self) -> PortResult<()>;
+    fn sleep(&self) -> PortResult<()>;
+}
+
+/// A PC that never turns off: it only remembers what it was asked (and can fail one call on purpose).
+#[derive(Default)]
+pub struct FakePower {
+    calls: Mutex<Vec<String>>,
+    failure: Option<(String, i32, String)>,
+}
+
+impl FakePower {
+    /// The call `call` (as in `calls()`) gets this exit code and output.
+    pub fn failing_with(call: &str, code: i32, output: &str) -> Self {
+        Self {
+            failure: Some((call.into(), code, output.into())),
+            ..Self::default()
+        }
+    }
+
+    pub fn calls(&self) -> Vec<String> {
+        self.calls.lock().unwrap().clone()
+    }
+}
+
+impl PowerPort for FakePower {
+    fn raw(&self) -> PortResult<crate::power::Raw> {
+        Ok(crate::power::Raw {
+            uptime_sec: 3600,
+            hibernate: Some(1),
+            hiberboot: Some(1),
+            reboot_pending: false,
+        })
+    }
+
+    fn shutdown(&self, args: &[String]) -> PortResult<crate::power::CommandResult> {
+        let call = format!("shutdown {}", args.join(" "));
+        self.calls.lock().unwrap().push(call.clone());
+        Ok(match &self.failure {
+            Some((failing, code, output)) if *failing == call => crate::power::CommandResult {
+                code: *code,
+                output: output.clone(),
+            },
+            _ => crate::power::CommandResult {
+                code: 0,
+                output: String::new(),
+            },
+        })
+    }
+
+    fn lock(&self) -> PortResult<()> {
+        self.calls.lock().unwrap().push("lock".into());
+        Ok(())
+    }
+
+    fn sleep(&self) -> PortResult<()> {
+        self.calls.lock().unwrap().push("sleep".into());
+        Ok(())
+    }
+}
+
 /// An in-memory PC for the tests and `--fake-platform`: the same shape as `contracts/fixtures/fake-pc.json`.
 pub struct FakeAudio {
     state: Mutex<FakeState>,

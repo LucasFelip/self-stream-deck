@@ -134,7 +134,7 @@ Portado da antiga durante a migração (bug que existia nas duas): ao completar 
 - [x] **Android real (A31, no app):** páginas Apps, Janelas, Som e PC, menu (popover em paisagem, folha em retrato), folha da câmera, Voltar e rotação, sem erros de script no log. Ainda por testar no aparelho: escurecer, notificações e Atualizar.
 - [ ] **Adiado:** iPhone no Safari e na Tela de Início. 
 
-### Fase 3: Agente em Rust (≈ 5 a 7 semanas) — **3.0 e 3.1 feitas; 3.2 em andamento (30 de 51 operações: layout, pareamento, áudio, mídia, atalhos, apps, janelas, telas e o fluxo de eventos); 3.3 pendente**
+### Fase 3: Agente em Rust (≈ 5 a 7 semanas) — **3.0 e 3.1 feitas; 3.2 em andamento (33 de 51 operações: layout, pareamento, áudio, mídia, atalhos, apps, janelas, telas, eventos, energia e estado); 3.3 pendente**
 
 **3.0 Spike de viabilidade (3 a 5 dias), com portão de decisão — feito, passou ([ADR 0008](adr/0008-spike-rust-windows.md))**
 Provar em Rust, fora do produto, os três pontos de maior risco: (a) Core Audio (volume, mudo, mixer por app, troca de dispositivo padrão), (b) SMTC via WinRT (leitura e controle de mídia), (c) `SetWinEventHook` empurrando mudanças de janelas. Se algum for inviável ou muito frágil, aplicar a alternativa da D1 e registrar no ADR.
@@ -155,7 +155,7 @@ Cada item: porta em `core`, implementação em `platform-windows`, adaptador fal
 | Ordem | Módulo | Rotas | Observação |
 |---|---|---|---|
 | 1 | Estado e ping | `/api/ping`, `/api/state`, `/api/layout`, `/api/pair-code` | **`/api/layout` e `/api/pair-code` portadas**; `ping` e `state` dependem dos módulos de PC |
-| 2 | Energia | `/api/power` | desligar, reiniciar, agendar, hibernar |
+| 2 | Energia | `/api/power` | **portado** (`core/power.rs` com as regras testadas contra um PC de mentira e `platform-windows/power.rs`: `shutdown.exe`, `LockWorkStation`, `SetSuspendState`, registro). `GET /api/state` (cabeçalho: apps rodando/abertos, contagem do desligamento, mic, volume, tocando, `ui`, `appsRev`) também; os tópicos `state` e `power` do SSE agora saem do Rust. Neste PC `/api/power` e `/api/state` iguais ao Node, só 1 s/1 ms de diferença de relógio |
 | 3 | Teclas e macros | `/api/shortcut/:id`, `/api/macro/:id`, `/api/mediakey/:key`, `/api/shortcuts`, `/api/macros` | **atalhos e teclas de mídia portados** (`keybd_event`, mesma lista fechada de teclas em `core/keys.rs`); macros dependem de apps/janelas e ficam no Node |
 | 4 | Editor | `/api/editor*` | validação já existe no desenho de `validate.js` |
 | 5 | Apps e barra de tarefas | `/api/apps`, `/api/launch/:id`, `/api/icon/:id`, `/api/refresh` | **lista, ícones e atualizar portados** (`IShellLinkW` + `PrivateExtractIconsW` + PNG, ~ms em vez de 2,5 s de PowerShell; mesmos 21 ids, nomes e processos que o Node neste PC). Diferenças aceitas: a versão do ícone vem do PNG do Rust (outro texto), e `wt.exe` usa o ícone do atalho. `/api/launch/:id` fica no Node até o módulo de janelas (focar a janela já aberta) |

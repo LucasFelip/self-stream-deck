@@ -74,6 +74,10 @@ pub fn is_ported(state: &AppState, method: &Method, path: &str) -> bool {
             state.platform.media.is_some()
         }
         (&Method::GET, "/api/shortcuts" | "/api/events") => true,
+        (&Method::GET | &Method::POST, "/api/power") => {
+            state.platform.power.is_some() && state.platform.windows.is_some()
+        }
+        (&Method::GET, "/api/state") => crate::powerroutes::state_ready(state),
         (&Method::GET, "/api/windows" | "/api/screens")
         | (
             &Method::POST,
@@ -121,6 +125,10 @@ pub async fn answer(
             shortcut_route(state, method, path).await
         }
         (&Method::GET, "/api/events") => crate::events::subscribe(state, query).await,
+        (&Method::GET | &Method::POST, "/api/power") => {
+            crate::powerroutes::power_route(state, method == Method::POST, body).await
+        }
+        (&Method::GET, "/api/state") => crate::powerroutes::state_route(state).await,
         _ if path.starts_with("/api/windows") || path.starts_with("/api/screens") => {
             crate::winroutes::windows_route(state, method == Method::POST, path, query, body).await
         }

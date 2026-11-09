@@ -3,6 +3,7 @@
 //! Each route that gets ported is answered here and stops being proxied.
 mod apps;
 mod events;
+mod powerroutes;
 mod proxy;
 mod routes;
 mod statics;
@@ -22,7 +23,8 @@ use axum::Router;
 use ssd_core::config::Config;
 use ssd_core::guard::{percent_decode, Guard};
 use ssd_core::media::ArtCache;
-use ssd_core::ports::{AudioPort, InputPort, MediaPort, TaskbarPort, WindowsPort};
+use ssd_core::ports::{AudioPort, InputPort, MediaPort, PowerPort, TaskbarPort, WindowsPort};
+use ssd_core::power::Scheduled;
 
 /// Sent with every response: the page only ever loads its own files, cannot be framed, and nothing is sniffed or leaked.
 pub const SECURITY_HEADERS: [(&str, &str); 5] = [
@@ -41,6 +43,7 @@ pub struct Platform {
     pub input: Option<Arc<dyn InputPort>>,
     pub taskbar: Option<Arc<dyn TaskbarPort>>,
     pub windows: Option<Arc<dyn WindowsPort>>,
+    pub power: Option<Arc<dyn PowerPort>>,
 }
 
 pub struct AppState {
@@ -59,6 +62,10 @@ pub struct AppState {
     pub apps: Mutex<apps::AppsState>,
     /// who listens to which live topic
     pub hub: events::Hub,
+    /// the shutdown this agent scheduled, for the countdown on the phone
+    pub scheduled: Mutex<Option<Scheduled>>,
+    ui_cache: Mutex<(Option<std::time::Instant>, u64)>,
+    playing_cache: Mutex<Option<(std::time::Instant, serde_json::Value)>>,
     /// this PC's name, as the Apps page shows it
     pub host: String,
     counts: Mutex<HashMap<String, u64>>,
@@ -79,6 +86,9 @@ impl AppState {
             host: machine_name.to_owned(),
             apps: Mutex::new(apps::AppsState::default()),
             hub: events::Hub::default(),
+            scheduled: Mutex::new(None),
+            ui_cache: Mutex::new((None, 0)),
+            playing_cache: Mutex::new(None),
             config: Mutex::new(config),
             web_dir,
             upstream,
@@ -312,6 +322,7 @@ mod tests {
             input: None,
             taskbar: None,
             windows: None,
+            power: None,
         })
     }
 
@@ -655,6 +666,7 @@ mod tests {
             input: None,
             taskbar: None,
             windows: None,
+            power: None,
         });
         let auth = [("x-token", "tok")];
         let media = body_of(call(&app, "GET", "/api/media", &auth).await).await;
@@ -741,6 +753,7 @@ mod tests {
                 input: Some(input.clone()),
                 taskbar: None,
                 windows: None,
+                power: None,
             },
             r#"{"token":"tok","shortcuts":[{"id":"tm","label":"Gerenciador","keys":"ctrl+shift+esc"},{"keys":"alt+f4"},{"id":"bad","keys":"ctrl+nope"}]}"#,
         );
@@ -1085,5 +1098,138 @@ data: {\"windows\":["
         );
         // a topic only goes again when it changed: with nothing changing, the next thing on the wire is the keep-alive or nothing
         assert_eq!(all.matches("event: audio").count(), 1, "{all}");
+    }
+
+    fn everything() -> Platform {
+        Platform {
+            audio: Some(Arc::new(ssd_core::ports::FakeAudio::default())),
+            media: Some(Arc::new(ssd_core::ports::FakeMedia::default())),
+            input: None,
+            taskbar: Some(Arc::new(ssd_core::ports::FakeTaskbar::default())),
+            windows: Some(Arc::new(ssd_core::ports::FakeWindows::default())),
+            power: Some(Arc::new(ssd_core::ports::FakePower::default())),
+        }
+    }
+
+    #[tokio::test]
+    async fn power_actions_need_confirmation_and_the_countdown_shows_in_the_state() {
+        let (app, _) = app_on(everything());
+        let auth = [("x-token", "tok")];
+        post(&app, "/api/refresh", "").await;
+
+        let power = body_of(call(&app, "GET", "/api/power", &auth).await).await;
+        assert_eq!(power["enabled"], true);
+        assert_eq!(power["uptimeSec"], 3600);
+        assert_eq!(
+            (power["hibernate"].clone(), power["fastStartup"].clone()),
+            (true.into(), true.into())
+        );
+        assert_eq!(power["scheduled"], serde_json::Value::Null);
+        assert!(power["openApps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a["name"] == "Brave"));
+
+        for (body, status) in [
+            (
+                r#"{"action":"explode","confirm":true}"#,
+                StatusCode::BAD_REQUEST,
+            ),
+            (r#"{"action":"shutdown"}"#, StatusCode::BAD_REQUEST),
+            (
+                r#"{"action":"shutdown","confirm":true,"delaySec":-4}"#,
+                StatusCode::BAD_REQUEST,
+            ),
+        ] {
+            assert_eq!(
+                post(&app, "/api/power", body).await.status(),
+                status,
+                "{body}"
+            );
+        }
+        let asked = post(
+            &app,
+            "/api/power",
+            r#"{"action":"shutdown","confirm":true,"delaySec":120,"force":true}"#,
+        )
+        .await;
+        assert_eq!(asked.status(), StatusCode::OK);
+        let asked = body_of(asked).await;
+        assert_eq!(
+            (asked["ok"].clone(), asked["action"].clone()),
+            (true.into(), "shutdown".into())
+        );
+        assert!(asked["at"].as_i64().unwrap() > 0);
+
+        let state = body_of(call(&app, "GET", "/api/state", &auth).await).await;
+        assert_eq!(state["scheduled"]["action"], "shutdown");
+        assert!(state["scheduled"]["inSec"].as_i64().unwrap() > 100);
+        assert_eq!(state["scheduled"]["force"], true);
+
+        let cancelled = post(&app, "/api/power", r#"{"action":"cancel"}"#).await;
+        assert_eq!(
+            body_of(cancelled).await,
+            serde_json::json!({ "ok": true, "action": "cancel", "cancelled": true, "note": null })
+        );
+        let after = body_of(call(&app, "GET", "/api/state", &auth).await).await;
+        assert!(after["scheduled"].is_null());
+    }
+
+    #[tokio::test]
+    async fn the_state_of_the_header_is_made_of_the_other_modules() {
+        let (app, _) = app_on(everything());
+        let auth = [("x-token", "tok")];
+        post(&app, "/api/refresh", "").await;
+        let apps = body_of(call(&app, "GET", "/api/apps", &auth).await).await;
+        let brave = apps["apps"][0]["id"].clone();
+
+        let state = body_of(call(&app, "GET", "/api/state", &auth).await).await;
+        assert_eq!(state["running"], serde_json::json!([brave]));
+        assert_eq!(state["open"], serde_json::json!([brave]));
+        assert_eq!(
+            state["volume"],
+            serde_json::json!({ "level": 30, "muted": false })
+        );
+        assert_eq!(
+            state["mic"],
+            serde_json::json!({ "available": true, "muted": false })
+        );
+        assert_eq!(state["playing"]["session"], "s1");
+        assert_eq!(state["playing"]["canToggle"], true);
+        assert_eq!(state["miniPlayer"], true);
+        assert!(
+            state["ui"].as_u64().unwrap() > 0,
+            "the build folder has files"
+        );
+        assert_eq!(
+            state["appsRev"], 1,
+            "one change since the start: the first read"
+        );
+    }
+
+    #[tokio::test]
+    async fn power_controls_can_be_turned_off_in_the_config() {
+        let (app, _) = app_configured(
+            everything(),
+            r#"{"token":"tok","powerControls":false,"miniPlayer":false}"#,
+        );
+        let off = post(
+            &app,
+            "/api/power",
+            r#"{"action":"shutdown","confirm":true}"#,
+        )
+        .await;
+        assert_eq!(off.status(), StatusCode::FORBIDDEN);
+        let auth = [("x-token", "tok")];
+        assert_eq!(
+            body_of(call(&app, "GET", "/api/power", &auth).await).await["enabled"],
+            false
+        );
+        let state = body_of(call(&app, "GET", "/api/state", &auth).await).await;
+        assert_eq!(
+            (state["miniPlayer"].clone(), state["playing"].clone()),
+            (false.into(), serde_json::Value::Null)
+        );
     }
 }
