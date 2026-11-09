@@ -167,9 +167,12 @@ Cada item: porta em `core`, implementação em `platform-windows`, adaptador fal
 | 11 | Câmera e câmera virtual (**portado**: quadros, fluxo MJPEG, status, câmera direta pelo filtro UnityCapture com SHA-256 fixado, decodificação do JPEG e memória compartilhada do filtro numa thread do próprio agente, copiar link) | `/api/camera/*` | por último: DirectShow/Media Foundation é o trecho mais trabalhoso; pode ficar no helper C# por mais tempo, sem bloquear o resto |
 | 12 | LAN/TLS/iPhone | `lan-cli`, `tls*`, `ios`, `firewall` | **portado o servidor**: HTTPS pelo Schannel (`native-tls`) com os **mesmos** certificados de `data/tls/` (neste PC a impressão digital servida é a que o celular já fixa, TLS 1.3), servidor do iPhone com a AC dele, porta HTTP da AC, regras de firewall e endereços de casa. Diferenças aceitas: os certificados só são refeitos quando faltam (sem renovar por validade nem quando os IPs mudam: ainda é o `tls-ios.js`) e eles continuam sendo criados pelos scripts PowerShell; o `lan-cli` segue no Node |
 
-**3.3 Corte**
-- [ ] Todas as rotas no Rust; proxy removido; Node e C# fora do caminho de produção.
-- [ ] Paridade: contrato + Playwright + 1 semana de uso. Comparar com a linha de base da Fase 0 (RAM, startup, latência).
+**3.3 Corte** — o `ssd` roda **sozinho** (sem `--node`) e responde as 51 operações e os 9 tópicos; neste PC, sozinho, usa um processo de ~55 MB (o Node mais os 4 helpers somavam ~250 MB) e 1 % de um núcleo parado, 5 % com os 9 tópicos abertos.
+- [x] Todas as rotas no Rust; o proxy só existe quando se passa `--node` (modo de transição).
+- [x] Servidor da rede local (TLS, iPhone, firewall) no Rust, com os certificados de `data/tls/`.
+- [ ] **Trocar a tarefa agendada** para o `ssd.exe`: `agent/scripts/autostart.ps1` (mesmo nome de tarefa; precisa de administrador e de parar o Node antes, porque usam as mesmas portas). Escrito e com `status` testado; o `install` ainda não foi executado.
+- [ ] Ainda no Node: o vigia do `adb reverse` (`phone.js`, só se `--phone`/`autoOpenPhone`), o `lan-cli`, a renovação dos certificados e o `supervisor.js` (o reinício agora é o `RestartCount` da tarefa).
+- [ ] Paridade em uso: contrato completo contra o Rust (`tools/contract-test` ainda roda só contra o Node), testes de navegador contra o `ssd`, uma semana de uso. Comparar com a linha de base da Fase 0 (RAM, startup, latência).
 
 Riscos: câmera virtual (ordem 11), SMTC e Core Audio (cobertos pelo spike), diferenças sutis de comportamento que só o uso real mostra (por isso o proxy e as fixtures). Gatilho de saída: se a Fase 3.2 passar de 2x a estimativa sem fechar a ordem 9, reavaliar D1.
 
