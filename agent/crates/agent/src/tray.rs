@@ -135,9 +135,11 @@ pub fn start(info: Info) {
                 lpszClassName: class,
                 ..Default::default()
             };
-            RegisterClassW(&window_class);
+            if RegisterClassW(&window_class) == 0 {
+                tracing::warn!("tray: could not register the window class");
+            }
             // a window that is never shown: the tray sends its messages to it
-            let Ok(window) = CreateWindowExW(
+            let window = match CreateWindowExW(
                 WINDOW_EX_STYLE(0),
                 class,
                 w!("Self Stream Deck"),
@@ -150,8 +152,12 @@ pub fn start(info: Info) {
                 None,
                 None,
                 None,
-            ) else {
-                return;
+            ) {
+                Ok(window) => window,
+                Err(error) => {
+                    tracing::warn!("tray: could not create the window: {error}");
+                    return;
+                }
             };
             let icon: HICON =
                 CreateIconFromResourceEx(ICON_PNG, true, 0x0003_0000, 32, 32, LR_DEFAULTCOLOR)
@@ -167,7 +173,9 @@ pub fn start(info: Info) {
             };
             let tip: Vec<u16> = "Self Stream Deck".encode_utf16().collect();
             data.szTip[..tip.len()].copy_from_slice(&tip);
-            let _ = Shell_NotifyIconW(NIM_ADD, &data);
+            if !Shell_NotifyIconW(NIM_ADD, &data).as_bool() {
+                tracing::warn!("tray: Windows did not add the icon");
+            }
             let mut message = MSG::default();
             while GetMessageW(&mut message, None, 0, 0).as_bool() {
                 let _ = TranslateMessage(&message);

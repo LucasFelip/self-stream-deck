@@ -183,11 +183,12 @@ Riscos: câmera virtual (ordem 11), SMTC e Core Audio (cobertos pelo spike), dif
 - [x] **Ícone na bandeja** (`tray.rs`): abrir painel (duplo clique também), mostrar código de pareamento, abrir o registro, sair. Não é aberto com `--no-tray` (o `agent-check` usa).
 - [x] **`ssd diagnose [--out ARQ]`** e `ssd --version`: versão, pastas, config com o token mascarado, portas, impressões digitais dos certificados, tarefa agendada, regras de firewall, o que cada parte do PC responde e o fim do log com o token trocado por `***`.
 - [x] **Pacote**: `agent/scripts/package.ps1` constrói o painel e o agente (em `agent/target-pkg`, para não brigar com um agente em uso) e gera `dist/SelfStreamDeck-<versão>.zip` + `.sha256` com `ssd.exe`, `install.ps1`, `uninstall.ps1` e `launch-hidden.vbs`.
-- [x] **`install.ps1`/`uninstall.ps1`**: copiam para `Program Files`, trazem o token e os certificados de uma instalação anterior (`-From`), registram a tarefa de início (oculta, administrador, reinício 3x) e o atalho no Menu Iniciar; a desinstalação tira tarefa, atalho, regras de firewall e arquivos e mantém os dados (a menos de `-RemoveData`). Escritos mas **ainda não executados** (a instalação em uso aqui seria trocada).
+- [x] **`install.ps1`/`uninstall.ps1`**: copiam para `Program Files`, trazem o token e os certificados de uma instalação anterior (`-From`), registram a tarefa de início (oculta, administrador, reinício 3x) e o atalho no Menu Iniciar; a desinstalação tira tarefa, atalho, regras de firewall e arquivos e mantém os dados (a menos de `-RemoveData`). Escritos, **ainda não executados** (a instalação em uso aqui seria trocada; fica para o usuário rodar).
 - [x] **Log com rotação**: o `launch-hidden.vbs` guarda uma geração anterior depois de 2 MB.
-- [x] `sign.ps1`: assina o `.exe` com um certificado próprio (criado uma vez no repositório de certificados do usuário) ou com um `.pfx` dado; `package.ps1 -Sign`. **Não executado ainda** (usa o servidor de carimbo de data da DigiCert).
+- [x] `sign.ps1`: assina o `.exe` com um certificado próprio (criado uma vez no repositório de certificados do usuário) ou com um `.pfx` dado; `package.ps1 -Sign`. Testado com certificado próprio (assina, mas o Windows mostra "raiz não confiável", como esperado); `-Timestamp` pede o carimbo de data à DigiCert e é opcional.
 - [ ] Instalador MSI (WiX): precisa baixar o WiX; só com permissão. O zip com PowerShell cobre o mesmo por enquanto.
 - [ ] Atualização automática com verificação de assinatura e canais estável/teste.
+- [x] Bandeja verificada: o processo cria a janela `SelfStreamDeckTray` e o ícone.
 - [ ] Testar numa máquina limpa e depois de reiniciar o PC.
 
 Pronto quando: máquina limpa instala, pareia o celular e funciona após reiniciar o PC.

@@ -9,7 +9,8 @@
 param(
     [Parameter(Mandatory)][string]$File,
     [string]$Pfx = '',
-    [string]$Password = ''
+    [string]$Password = '',
+    [switch]$Timestamp   # also asks a timestamp server (http://timestamp.digicert.com) so the signature outlives the certificate; sends only the hash
 )
 
 $ErrorActionPreference = 'Stop'
@@ -22,6 +23,9 @@ if ($Pfx) {
         Write-Host "Made a self-signed code-signing certificate ($($certificate.Thumbprint))."
     }
 }
-$result = Set-AuthenticodeSignature -FilePath $File -Certificate $certificate -HashAlgorithm SHA256 -TimestampServer 'http://timestamp.digicert.com'
-Write-Host "$($result.Status): $File"
-if ($result.Status -notin 'Valid', 'UnknownError') { Write-Host $result.StatusMessage }
+$extra = @{}
+if ($Timestamp) { $extra.TimestampServer = 'http://timestamp.digicert.com' }
+$result = Set-AuthenticodeSignature -FilePath $File -Certificate $certificate -HashAlgorithm SHA256 @extra
+# a self-signed certificate is signed but not trusted (UnknownError / "root not trusted"): that is expected, the signature is there
+if ($result.SignerCertificate) { Write-Host "Signed by $($result.SignerCertificate.Subject) ($($result.Status)): $File" }
+else { throw "not signed: $($result.StatusMessage)" }
