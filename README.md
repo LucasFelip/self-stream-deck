@@ -17,7 +17,7 @@ sistema e controles de energia.
   A interface web (o build de `web/`) vai **dentro** do `.exe`, então a lógica do painel fica toda no PC.
 - `web/` — a interface (React + TypeScript, PWA).
 - `android/` — app Android fino (Kotlin, sem bibliotecas além do Android): guarda o endereço do PC, mantém a tela ligada,
-  vibra ao toque, mostra a página e um **relógio** pequeno na lateral (hora `00:00`–`23:59` e data `dia/mês`, em 24 h qualquer que seja o idioma do celular; some junto com o escurecimento). Mudar a interface **não exige recompilar o APK**.
+  vibra ao toque, mostra a página e um **relógio** pequeno na lateral (hora `00:00`–`23:59` e data `dia/mês`, em 24 h qualquer que seja o idioma do celular; some junto com o escurecimento). Na tela "Sem conexão com o PC" há **Tentar de novo**, **Configurar endereço** e **Bloquear tela**; este último bloqueia o celular e, na primeira vez, pede para ativar o app como administrador do aparelho (só a permissão de bloquear a tela, que dá para desativar em Configurações → Segurança → Apps administradores do dispositivo, e precisa estar desativada antes de desinstalar o app). Mudar a interface **não exige recompilar o APK**.
 
 ## Páginas
 
