@@ -2,8 +2,10 @@ package dev.selfstreamdeck
 
 import android.Manifest
 import android.app.Activity
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -15,6 +17,7 @@ import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.text.InputType
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -29,9 +32,13 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
@@ -51,6 +58,46 @@ class MainActivity : Activity() {
 
     private var candidates: List<String> = emptyList()
     private var candidateIndex = 0
+
+    private var clock: TextView? = null // the little clock over the deck: "14:35" and under it "07/11" (day/month)
+    private val clockTick = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) = updateClock()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // the system says when the minute (or the time, or the time zone) changes: no timer of ours to keep running
+        registerReceiver(clockTick, IntentFilter().apply {
+            addAction(Intent.ACTION_TIME_TICK)
+            addAction(Intent.ACTION_TIME_CHANGED)
+            addAction(Intent.ACTION_TIMEZONE_CHANGED)
+        })
+        updateClock()
+    }
+
+    override fun onStop() {
+        unregisterReceiver(clockTick)
+        super.onStop()
+    }
+
+    /** 24-hour time (00:00 to 23:59) and the date as day/month, whatever the phone's language is. */
+    private fun updateClock() {
+        val now = Date()
+        val time = SimpleDateFormat("HH:mm", Locale.US).format(now)
+        val date = SimpleDateFormat("dd/MM", Locale.US).format(now)
+        clock?.text = "$time\n$date"
+    }
+
+    private fun makeClock(): TextView = TextView(this).apply {
+        setTextColor(Color.parseColor("#8B90A0")) // the deck's muted text
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        gravity = Gravity.CENTER
+        includeFontPadding = false
+        setLineSpacing(0f, 1.1f)
+        // it only shows: touches go through it to the page below
+        isClickable = false
+        isFocusable = false
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -180,7 +227,21 @@ class MainActivity : Activity() {
             }
         }
 
-        setContentView(view)
+        // the page, and over it the clock in the free space of the left rail, above the settings gear (it is the page's layout that leaves it free)
+        val frame = FrameLayout(this)
+        frame.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        val label = makeClock()
+        clock = label
+        frame.addView(
+            label,
+            FrameLayout.LayoutParams(dp(CLOCK_WIDTH_DP), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.START)
+                .apply {
+                    bottomMargin = dp(CLOCK_BOTTOM_DP)
+                    marginStart = dp(CLOCK_START_DP)
+                },
+        )
+        updateClock()
+        setContentView(frame)
         view.loadUrl(candidates[0])
         hideSystemBars()
     }
@@ -276,6 +337,8 @@ class MainActivity : Activity() {
                 val params = window.attributes
                 params.screenBrightness = if (on) 0.01f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
                 window.attributes = params
+                // the dimmer is meant to be dark: the clock goes with it
+                clock?.visibility = if (on) View.INVISIBLE else View.VISIBLE
             }
         }
 
@@ -298,6 +361,7 @@ class MainActivity : Activity() {
 
     private fun showSetup() {
         showingSetup = true
+        clock = null
         destroyWebView()
 
         val pad = dp(24)
@@ -369,6 +433,9 @@ class MainActivity : Activity() {
         const val KEY_FP = "fp" // the certificate's SHA-256, lower-case hex
         const val USB_PORT = 7878
         const val REQUEST_CAMERA = 7
+        const val CLOCK_WIDTH_DP = 80 // the width of the left rail of the deck (about 103 dp), a little less
+        const val CLOCK_START_DP = 12 // centered in that rail
+        const val CLOCK_BOTTOM_DP = 72 // above the settings gear
         val BACKGROUND = Color.parseColor("#0E0F13")
 
         /** Accepts "ip:port/?token=x" without a scheme and rejects anything that is not http(s). */

@@ -17,7 +17,7 @@ sistema e controles de energia.
   A interface web (o build de `web/`) vai **dentro** do `.exe`, então a lógica do painel fica toda no PC.
 - `web/` — a interface (React + TypeScript, PWA).
 - `android/` — app Android fino (Kotlin, sem bibliotecas além do Android): guarda o endereço do PC, mantém a tela ligada,
-  vibra ao toque e mostra a página. Mudar a interface **não exige recompilar o APK**.
+  vibra ao toque, mostra a página e um **relógio** pequeno na lateral (hora `00:00`–`23:59` e data `dia/mês`, em 24 h qualquer que seja o idioma do celular; some junto com o escurecimento). Mudar a interface **não exige recompilar o APK**.
 
 ## Páginas
 
