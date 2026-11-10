@@ -6,6 +6,7 @@ members = ["crates/core", "crates/api", "crates/agent", "crates/platform-windows
 edition = "2021"
 version = "0.1.7"
 publish = false
+license = "MIT"
 
 [profile.release]
 opt-level = "s"

@@ -2,6 +2,7 @@
   "name": "self-stream-deck-web",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Interface do self-stream-deck (React + TypeScript), servida pelo agente como PWA",
   "scripts": {

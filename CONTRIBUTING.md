@@ -57,3 +57,7 @@ Antes de abrir um commit, `node tools/check.js` (na raiz) precisa passar: format
 `powershell -File agent/scripts/package.ps1 [-Sign]` constrói a interface e o agente (em `agent/target-pkg`, para não brigar com um agente em uso) e gera `dist/SelfStreamDeck-<versão>.zip` com `install.ps1` e `uninstall.ps1`.
 
 O MSI vem de `powershell -File agent/scripts/msi/build-msi.ps1 [-Sign]` e precisa do WiX Toolset 3.14 em `.tools/wix` (descompacte `wix314-binaries.zip` do [release wix3141rtm](https://github.com/wixtoolset/wix3/releases/tag/wix3141rtm); a pasta `.tools/` fica fora do git).
+
+## Licença
+
+O projeto é MIT ([LICENSE](LICENSE)). Ao enviar uma contribuição você concorda que ela seja distribuída sob a mesma licença.

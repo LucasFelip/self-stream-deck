@@ -3,6 +3,7 @@ name = "ssd-api"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [dependencies]
 ssd-core = { path = "../core" }

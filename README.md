@@ -10,7 +10,7 @@ Transforma um celular em um painel de controle do seu PC com Windows: abrir prog
 | **Painel** | React + TypeScript (PWA), servido pelo próprio agente; funciona no app Android, no Safari do iPhone e em qualquer navegador |
 | **App Android** | casca fina em Kotlin (WebView) que guarda o endereço, mantém a tela ligada e vibra ao toque |
 | **Rede** | USB (`adb reverse`) ou Wi-Fi da casa por HTTPS com certificado próprio fixado pelo app; nada passa pela internet |
-| **Versão** | 0.1.x · Windows 10/11 · Android 7+ · iOS 16.4+ (Safari) |
+| **Versão** | 0.1.x · Windows 10/11 · Android 7+ · iOS 16.4+ (Safari) · licença MIT |
 
 ## O que ele faz
 
@@ -119,4 +119,4 @@ A lista completa e o histórico estão na [retrospectiva](docs/retrospectiva.md)
 ## Créditos e licença
 
 - A câmera virtual direta usa o filtro de código aberto [UnityCapture](https://github.com/schellingb/UnityCapture) (licença zlib), baixado de um commit fixo e conferido por SHA-256 na primeira instalação.
-- O projeto ainda **não tem uma licença definida**: sem ela, o padrão é "todos os direitos reservados". Escolha uma (por exemplo MIT ou Apache-2.0) e acrescente um arquivo `LICENSE` antes de aceitar contribuições de terceiros.
+- O projeto é distribuído sob a **licença MIT** (veja [`LICENSE`](LICENSE)). As dependências do agente (crates do Rust) e do painel (pacotes do npm) têm as suas próprias licenças, que não foram auditadas aqui: confira-as antes de redistribuir um pacote.
