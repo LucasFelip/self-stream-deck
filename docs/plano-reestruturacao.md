@@ -193,12 +193,12 @@ Riscos: câmera virtual (ordem 11), SMTC e Core Audio (cobertos pelo spike), dif
 
 Pronto quando: máquina limpa instala, pareia o celular e funciona após reiniciar o PC.
 
-### Fase 5: Android em Kotlin e limpeza (≈ 0,5 a 1 semana) — **Kotlin portado e testado no A31, limpeza feita; falta a retrospectiva final e decidir o Actions (D7)**
+### Fase 5: Android em Kotlin e limpeza (≈ 0,5 a 1 semana) — **feita (Kotlin testado no A31, limpeza e retrospectiva); só o Actions (D7) segue como decisão do dono**
 
 - [x] `MainActivity.java` (407 linhas) → `MainActivity.kt` (mesma ponte: `openSettings`, `retry`, `reconnect`, `setDim`, `vibrate`; mesmas regras de endereços, impressão digital fixada e câmera). Gradle com o catálogo `gradle/libs.versions.toml` (AGP 8.5.2, Kotlin 1.9.24). Compila (`assembleDebug`, APK de 808 KB); instalado e testado no A31 (abre já pareado, carrega o painel pelo `adb reverse`, menu ⚙ → Endereço do PC abre a tela de pareamento, Voltar fecha o menu e volta ao painel sem fechar o app; câmera e escurecimento não foram exercitados).
 - [x] Removido o servidor Node (`legacy/server`: fontes, C# nativo, scripts PowerShell dos helpers, testes), o proxy de transição do Rust (`--node`), `tools/baseline` e o `autostart.ps1`; `README`, `CONTRIBUTING`, `ARQUITETURA.md` e `contracts/README.md` reescritos para o agente em Rust. Ficou fora do git, em `legacy/server/data/`, só a pasta de dados antiga (a câmera direta ainda está registrada lá): apague quando a câmera tiver sido reinstalada.
 - [ ] Reativar/ligar o Actions se o dono decidir (D7).
-- [ ] Retrospectiva: o que ficou melhor, medido contra a linha de base.
+- [x] Retrospectiva: [docs/retrospectiva.md](retrospectiva.md), com os números de antes e depois e o que ficou sem fazer.
 
 ## 5. Qualidade em todas as fases
 
