@@ -9,6 +9,7 @@ import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.Typeface
 import android.net.Uri
 import android.net.http.SslCertificate
 import android.net.http.SslError
@@ -59,7 +60,9 @@ class MainActivity : Activity() {
     private var candidates: List<String> = emptyList()
     private var candidateIndex = 0
 
-    private var clock: TextView? = null // the little clock over the deck: "14:35" and under it "07/11" (day/month)
+    private var clock: LinearLayout? = null // the little clock over the deck: "14:35" and under it "07/11" (day/month)
+    private var clockTime: TextView? = null
+    private var clockDate: TextView? = null
     private val clockTick = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) = updateClock()
     }
@@ -83,20 +86,39 @@ class MainActivity : Activity() {
     /** 24-hour time (00:00 to 23:59) and the date as day/month, whatever the phone's language is. */
     private fun updateClock() {
         val now = Date()
-        val time = SimpleDateFormat("HH:mm", Locale.US).format(now)
-        val date = SimpleDateFormat("dd/MM", Locale.US).format(now)
-        clock?.text = "$time\n$date"
+        clockTime?.text = SimpleDateFormat("HH:mm", Locale.US).format(now)
+        clockDate?.text = SimpleDateFormat("dd/MM", Locale.US).format(now)
     }
 
-    private fun makeClock(): TextView = TextView(this).apply {
-        setTextColor(Color.parseColor("#8B90A0")) // the deck's muted text
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-        gravity = Gravity.CENTER
-        includeFontPadding = false
-        setLineSpacing(0f, 1.1f)
-        // it only shows: touches go through it to the page below
-        isClickable = false
-        isFocusable = false
+    /**
+     * Built like one of the left rail's tabs of the page (web/src/styles/style.css, `.tab`): a slot as tall as a tab (48), the same
+     * muted color, system font and weight, the big thing (the time, where a tab has its icon) over a small label (the date, 0.6rem).
+     * Sizes are in dp, like the CSS pixels of the page.
+     */
+    private fun makeClock(): LinearLayout {
+        val muted = Color.parseColor("#7D8394") // --muted of the deck
+        fun label(size: Float) = TextView(this).apply {
+            setTextColor(muted)
+            setTextSize(TypedValue.COMPLEX_UNIT_DIP, size)
+            // weight 600 like the tabs' labels (font-weight: 600); older Androids only have bold
+            typeface = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) Typeface.create(Typeface.DEFAULT, 600, false) else Typeface.DEFAULT_BOLD
+            includeFontPadding = false
+            gravity = Gravity.CENTER
+            maxLines = 1
+        }
+        val time = label(CLOCK_TIME_DP)
+        val date = label(CLOCK_DATE_DP)
+        clockTime = time
+        clockDate = date
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            addView(time)
+            addView(date, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(2) })
+            // it only shows: touches go through it to the page below
+            isClickable = false
+            isFocusable = false
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -227,19 +249,23 @@ class MainActivity : Activity() {
             }
         }
 
-        // the page, and over it the clock in the free space of the left rail, above the settings gear (it is the page's layout that leaves it free)
+        // The page, and over it the clock in the rail's free slot, right after the last tab and above the settings gear. The page puts the rail
+        // after the display cut-out (env(safe-area-inset-left)), so the clock does too, to sit exactly under the tabs.
         val frame = FrameLayout(this)
         frame.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        val label = makeClock()
-        clock = label
-        frame.addView(
-            label,
-            FrameLayout.LayoutParams(dp(CLOCK_WIDTH_DP), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.START)
-                .apply {
-                    bottomMargin = dp(CLOCK_BOTTOM_DP)
-                    marginStart = dp(CLOCK_START_DP)
-                },
-        )
+        val face = makeClock()
+        clock = face
+        val place = FrameLayout.LayoutParams(dp(RAIL_TAB_WIDTH_DP), dp(RAIL_TAB_HEIGHT_DP), Gravity.BOTTOM or Gravity.START)
+            .apply { bottomMargin = dp(CLOCK_BOTTOM_DP); marginStart = dp(1) }
+        frame.addView(face, place)
+        frame.setOnApplyWindowInsetsListener { _, insets ->
+            @Suppress("DEPRECATION")
+            val cutout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) insets.displayCutout?.safeInsetLeft ?: 0 else 0
+            place.marginStart = cutout + dp(1)
+            face.layoutParams = place
+            insets
+        }
+        frame.requestApplyInsets()
         updateClock()
         setContentView(frame)
         view.loadUrl(candidates[0])
@@ -433,9 +459,11 @@ class MainActivity : Activity() {
         const val KEY_FP = "fp" // the certificate's SHA-256, lower-case hex
         const val USB_PORT = 7878
         const val REQUEST_CAMERA = 7
-        const val CLOCK_WIDTH_DP = 80 // the width of the left rail of the deck (about 103 dp), a little less
-        const val CLOCK_START_DP = 12 // centered in that rail
-        const val CLOCK_BOTTOM_DP = 72 // above the settings gear
+        const val RAIL_TAB_WIDTH_DP = 70 // a tab of the rail: 72 (--rail-w) minus its 1 px of padding on each side
+        const val RAIL_TAB_HEIGHT_DP = 48 // --touch
+        const val CLOCK_TIME_DP = 14f // where a tab has its 20 px icon
+        const val CLOCK_DATE_DP = 9.6f // 0.6rem, the size of a tab's label
+        const val CLOCK_BOTTOM_DP = 65 // the slot after the sixth tab, above the settings gear (a 48 slot at the bottom)
         val BACKGROUND = Color.parseColor("#0E0F13")
 
         /** Accepts "ip:port/?token=x" without a scheme and rejects anything that is not http(s). */
