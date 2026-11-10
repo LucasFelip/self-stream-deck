@@ -25,6 +25,10 @@ jobs:
         with: { node-version-file: .nvmrc, cache: npm, cache-dependency-path: '**/package-lock.json' }
       - uses: Swatinem/rust-cache@v2
         with: { workspaces: agent }
+      - run: npm ci
+        working-directory: web
+      - run: npm ci
+        working-directory: tools/contract-test
       - run: node tools/check.js --ci
 
   msi:
