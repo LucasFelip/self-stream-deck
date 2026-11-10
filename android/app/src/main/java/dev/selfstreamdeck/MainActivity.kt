@@ -97,17 +97,17 @@ class MainActivity : Activity() {
      */
     private fun makeClock(): LinearLayout {
         val muted = Color.parseColor("#7D8394") // --muted of the deck
-        fun label(size: Float) = TextView(this).apply {
+        fun label(size: Float, weight: Int) = TextView(this).apply {
             setTextColor(muted)
             setTextSize(TypedValue.COMPLEX_UNIT_DIP, size)
-            // weight 600 like the tabs' labels (font-weight: 600); older Androids only have bold
-            typeface = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) Typeface.create(Typeface.DEFAULT, 600, false) else Typeface.DEFAULT_BOLD
+            // font weights as in the page's CSS; older Androids only have regular and bold
+            typeface = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) Typeface.create(Typeface.DEFAULT, weight, false) else Typeface.DEFAULT_BOLD
             includeFontPadding = false
             gravity = Gravity.CENTER
             maxLines = 1
         }
-        val time = label(CLOCK_TIME_DP)
-        val date = label(CLOCK_DATE_DP)
+        val time = label(CLOCK_TIME_DP, 700)
+        val date = label(CLOCK_DATE_DP, 600)
         clockTime = time
         clockDate = date
         return LinearLayout(this).apply {
@@ -462,7 +462,7 @@ class MainActivity : Activity() {
         const val RAIL_TAB_WIDTH_DP = 70 // a tab of the rail: 72 (--rail-w) minus its 1 px of padding on each side
         const val RAIL_TAB_HEIGHT_DP = 48 // --touch
         const val CLOCK_TIME_DP = 14f // where a tab has its 20 px icon
-        const val CLOCK_DATE_DP = 9.6f // 0.6rem, the size of a tab's label
+        const val CLOCK_DATE_DP = 11.5f // a little over the 9.6 of a tab's label, which was too small to read at a glance
         const val CLOCK_BOTTOM_DP = 65 // the slot after the sixth tab, above the settings gear (a 48 slot at the bottom)
         val BACKGROUND = Color.parseColor("#0E0F13")
 
