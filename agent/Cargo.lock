@@ -1065,6 +1065,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "native-tls",
+ "serde_json",
  "ssd-api",
  "ssd-core",
  "ssd-platform-windows",

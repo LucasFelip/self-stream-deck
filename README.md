@@ -98,6 +98,20 @@ cd agent; cargo build --release
 
 `--fake-platform` troca o PC por um PC de mentira (é o que os testes usam); `--no-tray` não cria o ícone.
 
+### Atualizações
+
+O agente só procura versões novas se você apontar um manifesto em `update.url` do `config.json`; **não há servidor padrão**. O manifesto é um JSON pequeno, que `agent/scripts/make-manifest.ps1` gera a partir de um MSI assinado:
+
+```json
+{ "channels": { "stable": { "version": "0.2.0", "url": "https://exemplo.com/SelfStreamDeck-0.2.0.msi", "sha256": "…64 dígitos…" },
+                "test":   { "version": "0.3.0-rc1", "url": "https://…", "sha256": "…" } } }
+```
+
+- `ssd.exe update` mostra se há versão nova no canal (`update.channel`, padrão `stable`; `--channel test` troca); `ssd.exe update --apply` baixa, confere e instala (o instalador para o agente e sobe o novo em segundos); `--no-install` só baixa e confere.
+- `"update": { "auto": true }` faz isso sozinho: uma verificação um minuto depois de o agente subir e uma por dia. O resultado aparece no `server.log`.
+- **Antes de instalar qualquer coisa:** manifesto e pacote vêm por **HTTPS** (HTTP só para este PC, em testes); a versão é mais nova; o pacote tem o **SHA-256** do manifesto; e o pacote está **assinado pelo mesmo certificado do agente em execução** (ou pela impressão digital em `update.signer`). Um manifesto num servidor invadido não faz o agente instalar nada que você não assinou, e um agente sem assinatura e sem `update.signer` **recusa** atualizar.
+- Para assinar: `build-msi.ps1 -Sign` (certificado próprio, ou um `.pfx` pelo `sign.ps1`). Num PC que recebe a atualização, o agente instalado precisa ter sido assinado pelo mesmo certificado, ou ponha a impressão digital em `update.signer`.
+
 ### Abrir no celular via USB
 
 Com a depuração USB ativa, rode uma vez a cada vez que plugar: `adb reverse tcp:7878 tcp:7878` (o `adb` de `.tools/platform-tools/` serve) e abra o app.
@@ -168,6 +182,7 @@ sem baixar o brilho. USB: não há equivalente ao `adb reverse`; use o Wi-Fi (ou
 | `powerControls` | `false` remove as ações de energia da API. |
 | `notifications` | `{ "enabled": true, "apps": ["whatsapp"] }`: mostra no deck as notificações do Windows desses apps (palavras que casam com o nome ou o id do app), mesmo com Não Incomodar ou jogo ligado. WhatsApp Web no navegador chega como o app do navegador e o texto não cita o WhatsApp: use `["brave"]` (ou `"chrome"`, `"edge"`), o que mostra as notificações de qualquer site desse navegador. `enabled: false` desliga. |
 | `miniPlayer` | `false` desliga o aviso de faixa nova . |
+| `update` | Atualização (veja "Atualizações"): `{ "url": "https://…/manifest.json", "channel": "stable", "auto": false, "signer": "" }`. Sem `url` o agente não contata ninguém. |
 | `token` | Token de pareamento. Apague e reinicie para gerar outro. |
 
 Ao iniciar, o agente confere o arquivo e avisa no log de valores errados (tipo errado, id repetido, texto com caracteres danificados), sem parar.

@@ -2,6 +2,7 @@
 //!
 //!   ssd [--data-dir DIR] [--web-dir DIR] [--port N] [--no-tray] [--migrate-from DIR] [--fake-platform]
 //!   ssd diagnose [--out FILE]      one report to read (or send) when something does not work
+//!   ssd update [--apply] [--no-install] [--channel NAME] [--url ADDRESS]    look for (and install) a newer version
 //!   ssd --version
 //!
 //! An installed agent needs nothing else: the interface is packed inside the executable and the files live in `%APPDATA%\SelfStreamDeck`.
@@ -10,6 +11,7 @@ mod data;
 mod diagnose;
 mod lan;
 mod tray;
+mod update;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -27,9 +29,11 @@ struct Args {
     migrate_from: Option<PathBuf>,
     diagnose: bool,
     out: Option<PathBuf>,
+    /// `ssd update …`: what follows the word
+    update: Option<Vec<String>>,
 }
 
-const USAGE: &str = "usage: ssd [--data-dir DIR] [--web-dir DIR] [--port N] [--no-tray] [--migrate-from DIR] [--fake-platform]\n       ssd diagnose [--out FILE]\n       ssd --version";
+const USAGE: &str = "usage: ssd [--data-dir DIR] [--web-dir DIR] [--port N] [--no-tray] [--migrate-from DIR] [--fake-platform]\n       ssd diagnose [--out FILE]\n       ssd update [--apply] [--no-install] [--channel NAME] [--url ADDRESS]\n       ssd --version";
 
 fn parse_args() -> Result<Args, String> {
     let mut args = Args {
@@ -43,11 +47,26 @@ fn parse_args() -> Result<Args, String> {
         migrate_from: None,
         diagnose: false,
         out: None,
+        update: None,
     };
     let mut it = std::env::args().skip(1).peekable();
     if it.peek().is_some_and(|first| first == "diagnose") {
         args.diagnose = true;
         it.next();
+    }
+    if it.peek().is_some_and(|first| first == "update") {
+        it.next();
+        // `--data-dir` belongs to this program; everything else goes to the update command
+        let mut rest = Vec::new();
+        while let Some(word) = it.next() {
+            if word == "--data-dir" {
+                args.data_dir = it.next().ok_or("--data-dir needs a value")?.into();
+            } else {
+                rest.push(word);
+            }
+        }
+        args.update = Some(rest);
+        return Ok(args);
     }
     while let Some(flag) = it.next() {
         let mut value = |name: &str| it.next().ok_or_else(|| format!("{name} needs a value"));
@@ -82,7 +101,7 @@ fn children_end_with_me() {
     use windows::Win32::System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
         SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+        JOB_OBJECT_LIMIT_BREAKAWAY_OK, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
     use windows::Win32::System::Threading::GetCurrentProcess;
     unsafe {
@@ -90,7 +109,9 @@ fn children_end_with_me() {
             return;
         };
         let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
-        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        // the installer of an update must be able to leave the job (update.rs), or it would end with the agent it replaces
+        info.BasicLimitInformation.LimitFlags =
+            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
         let _ = SetInformationJobObject(
             job,
             JobObjectExtendedLimitInformation,
@@ -202,6 +223,9 @@ async fn run() -> Result<(), String> {
     }
 
     let config = Config::load(&args.data_dir).map_err(|e| e.to_string())?;
+    if let Some(rest) = &args.update {
+        return update::command(&config, rest);
+    }
     let port = args.port.unwrap_or_else(|| config.port());
     let machine = std::env::var("COMPUTERNAME").unwrap_or_default();
 
@@ -244,6 +268,8 @@ async fn run() -> Result<(), String> {
     let scripts = lan::extract_scripts()?;
     let app = router(state);
     lan::start(&config, &args.data_dir, &scripts, app.clone()).await;
+    // with "update": { "auto": true } in config.json: look for a newer version a minute from now, then once a day
+    tokio::spawn(update::run_forever(config.clone()));
 
     let serve = axum::serve(
         listener,

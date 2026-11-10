@@ -38,6 +38,8 @@ Cada gravação guarda a versão anterior em `config.json.bak` e move o novo arq
 
 **Dados.** `%APPDATA%\SelfStreamDeck\` (`--data-dir` troca; `--migrate-from` copia o token e os certificados de uma instalação anterior só quando não há config). Contém `config.json`, `.bak`, `tls/`, `icons/`, `vcam/`, `server.log`.
 
+**Atualização.** `update.rs`: `ssd update [--apply]` e, com `update.auto`, uma verificação por dia. Baixa por `curl.exe` (HTTPS, tamanho máximo), confere o SHA-256 do manifesto e a assinatura Authenticode (`Get-AuthenticodeSignature`) contra o certificado do próprio agente ou `update.signer`, e só então roda o `msiexec /qn`, fora do job object do agente (`JOB_OBJECT_LIMIT_BREAKAWAY_OK`) para o instalador sobreviver ao agente que ele troca.
+
 **Operação.** `ssd.exe` roda como tarefa agendada no logon (administrador, sem janela, reinício automático); a bandeja dá o painel, o código de pareamento e o registro; `ssd diagnose` junta o estado para investigar.
 Um objeto de job do Windows mata o que o agente iniciou (PowerShell do firewall, auxiliares) se ele cair.
 
@@ -98,6 +100,7 @@ A lista da barra de tarefas fica em cache (`taskbar-cache.json`) e só é relida
 | `npm test` em `web/` | Tipos gerados do contrato, `tsc --strict`, ESLint e Vitest (regras puras) | Node |
 | `npm run test:e2e` em `web/` | Build e a interface em um navegador sem tela (Chrome, Brave ou Edge; `CHROME_PATH` aponta outro) contra um servidor falso que obedece ao contrato | Node + navegador |
 | `npm test` em `tools/contract-test/` | O `ssd.exe` num PC de mentira contra `contracts/openapi.yaml`: cada operação, esquemas, segurança, eventos (casos que dependem dos ids da fixture ficam como `skip` neste agente) | `cargo build --release` |
+| `powershell -File tools/update-check/run.ps1` | A atualização contra um feed local: mesma versão, versão nova, sem assinatura, signatário certo e errado, hash errado, pacote alterado depois de assinado | `ssd.exe` e um `.msi` em `dist/` |
 | `node tools/agent-check/run.js` | De fora para dentro: Host, token, pareamento, cookie, cabeçalhos, ETag, câmera, energia, editor, monitor, notificações, bloqueio | `cargo build --release` + `web/dist` |
 | `node tools/check.js [--full]` | Tudo | Windows |
 
