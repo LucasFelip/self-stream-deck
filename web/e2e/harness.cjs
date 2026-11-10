@@ -207,8 +207,8 @@ data: ${JSON.stringify(model.notifications)}
     if (key === 'GET /api/camera/status') return sendJson(res, 200, { ...model.cameraStatus, link: 'http://127.0.0.1:7878/camera.html', direct: model.direct });
     if (key === 'POST /api/camera/frame') {
       model.frames += 1;
-      res.writeHead(204, { 'X-Camera-Wanted': model.cameraWanted ? '1' : '0' });
-      return res.end();
+      // the PC takes a while to answer (a link with some latency): model.frameDelayMs
+      return setTimeout(() => { res.writeHead(204, { 'X-Camera-Wanted': model.cameraWanted ? '1' : '0' }); res.end(); }, model.frameDelayMs || 0);
     }
     if (key === 'POST /api/camera/direct/install' || key === 'POST /api/camera/direct/uninstall') {
       model.direct = { ...model.direct, installed: key.endsWith('/install') };

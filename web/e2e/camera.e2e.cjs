@@ -29,6 +29,22 @@ const FAKE_CAMERA = `
     return stream;
   };
 `;
+// a camera that makes 30 pictures a second and remembers what it was asked for
+const FAKE_CAMERA_30 = `
+  window.__gum = 0;
+  navigator.mediaDevices.getUserMedia = async (constraints) => {
+    window.__gum += 1;
+    window.__constraints = constraints;
+    const canvas = document.createElement('canvas');
+    canvas.width = 1280; canvas.height = 720;
+    const g = canvas.getContext('2d');
+    let n = 0;
+    setInterval(() => { g.fillStyle = 'hsl(' + ((n += 1) * 7 % 360) + ', 60%, 50%)'; g.fillRect(0, 0, 1280, 720); }, 16);
+    const stream = canvas.captureStream(30);
+    window.__tracks = stream.getVideoTracks();
+    return stream;
+  };
+`;
 const BLOCKED_CAMERA = `
   window.__gum = 0;
   navigator.mediaDevices.getUserMedia = async () => { window.__gum += 1; throw Object.assign(new Error('blocked'), { name: 'NotAllowedError' }); };
@@ -110,9 +126,9 @@ const BLOCKED_CAMERA = `
         await sleep(2000);
         assert.ok(frames() - before >= 8, `frames reach the PC at speed: ${frames() - before}`);
         deck.model.cameraStatus = { live: true, fps: 24, kbps: 310, viewers: 0, wanted: true, ageMs: 40 };
-        await page.waitFor(`/^Transmitindo · 24 fps · 310 KB\\/s · nenhum app usando ainda$/.test(document.querySelector('.cam-status').textContent)`, 'the status line', 6000);
+        await page.waitFor(`/^Transmitindo · 24 fps · 310 KB\\/s · nenhum app usando ainda( · câmera \\d+ fps · cod\\. \\d+ ms)?$/.test(document.querySelector('.cam-status').textContent)`, 'the status line', 6000);
         deck.model.cameraStatus = { live: true, fps: 24, kbps: 310, viewers: 1, wanted: true, ageMs: 40 };
-        await page.waitFor(`/OBS conectado$/.test(document.querySelector('.cam-status').textContent)`, 'OBS connected', 6000);
+        await page.waitFor(`/OBS conectado( · câmera \\d+ fps · cod\\. \\d+ ms)?$/.test(document.querySelector('.cam-status').textContent)`, 'OBS connected', 6000);
         // closing the sheet does not stop the picture
         await page.eval(`document.querySelector('.camera-page').closest('.overlay').querySelector('.overlay-close').click()`);
         const afterClose = frames();
@@ -197,18 +213,55 @@ const BLOCKED_CAMERA = `
         assert.deepStrictEqual(posts(deck, '/api/camera/direct/install').map((x) => x.body), [{ confirm: true }]);
         assert.match(await page.eval(`document.querySelector('.cam-dest small').textContent`), /Instalada como “Stream Deck Camera”/);
         deck.model.calls.length = 0;
-        await tapUntil(page, '.cam-dest:nth-of-type(3) .cam-act', `document.getElementById('toast').textContent.startsWith('Link copiado')`, 'the copy notice');
+        await tapUntil(page, '.cam-dest:nth-of-type(4) .cam-act', `document.getElementById('toast').textContent.startsWith('Link copiado')`, 'the copy notice');
         assert.ok(posts(deck, '/api/camera/copy-link').length >= 1);
       } finally { deck.model.direct = { name: 'Stream Deck Camera', installed: false, inUse: false, busy: false }; close(); }
+    });
+
+    await test('Câmera do celular: 720p and 30 fps by default; 60 fps asks the camera again for that rate', async () => {
+      const { page, close } = await open(FAKE_CAMERA_30);
+      try {
+        await openSheet(page);
+        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.cam-row [data-group="fps"] .chip')].map((c) => [c.textContent, c.getAttribute('aria-pressed')])`), [['30 fps', 'true'], ['60 fps', 'false']]);
+        await page.tap('.cam-placeholder button');
+        await page.waitFor(`window.__gum === 1`, 'the camera opening');
+        assert.strictEqual(await page.eval(`window.__constraints.video.frameRate.ideal`), 30);
+        assert.strictEqual(await page.eval(`window.__constraints.video.width.ideal`), 1280);
+        await page.tap('.cam-row [data-group="fps"] .chip:nth-child(2)');
+        await page.waitFor(`window.__gum === 2 && window.__constraints.video.frameRate.ideal === 60`, 'the camera opened again for 60 fps');
+        assert.strictEqual(await page.eval(`document.querySelector('.cam-row [data-group="fps"] .chip:nth-child(2)').getAttribute('aria-pressed')`), 'true');
+      } finally { close(); }
+    });
+
+    await test('Câmera do celular: pictures do not wait for the PC\'s answer: with 60 ms of latency it still sends about as many as the camera makes', async () => {
+      const { page, close } = await open(FAKE_CAMERA_30);
+      deck.model.frameDelayMs = 60;
+      deck.model.cameraWanted = true;
+      try {
+        await openSheet(page);
+        await page.tap('.cam-send');
+        await page.waitFor(`document.querySelector('.cam-send').dataset.on === 'true'`, 'transmitting');
+        await new Promise((resolve) => setTimeout(resolve, 800)); // let it warm up
+        const before = deck.model.frames;
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        const perSecond = (deck.model.frames - before) / 3;
+        // one picture at a time would be 1 / (60 ms + encoding), about 14 a second: well under 22
+        assert.ok(perSecond >= 22, `${perSecond.toFixed(1)} pictures a second reached the PC`);
+        assert.ok(perSecond <= 36, `${perSecond.toFixed(1)} is more than the 30 fps ceiling`);
+      } finally {
+        deck.model.frameDelayMs = 0;
+        deck.model.cameraWanted = false;
+        close();
+      }
     });
 
     await test('Câmera do celular: the sheet closes with Back, the quality chips switch, and the page raised no script errors', async () => {
       const { page, close } = await open(FAKE_CAMERA);
       try {
         await openSheet(page);
-        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.cam-row .chip')].map((c) => [c.textContent, c.getAttribute('aria-pressed')])`), [['480p', 'true'], ['720p', 'false']]);
-        await page.tap('.cam-row .chip:nth-child(2)');
-        await page.waitFor(`document.querySelector('.cam-row .chip:nth-child(2)').getAttribute('aria-pressed') === 'true'`, '720p');
+        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.cam-row [data-group="quality"] .chip')].map((c) => [c.textContent, c.getAttribute('aria-pressed')])`), [['480p', 'false'], ['720p', 'true']]);
+        await page.tap('.cam-row [data-group="quality"] .chip:nth-child(1)');
+        await page.waitFor(`document.querySelector('.cam-row [data-group="quality"] .chip:nth-child(1)').getAttribute('aria-pressed') === 'true'`, '480p');
         assert.strictEqual(await page.eval('Deck.back()'), true);
         await page.waitFor(`document.querySelector('.camera-page').closest('.overlay').hidden`, 'closed');
         assert.strictEqual(await sheetOpen(page), false);

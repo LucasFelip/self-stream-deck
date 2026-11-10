@@ -591,6 +591,7 @@ button.chip:active { background: var(--border); }
 .cam-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; }
 .cam-row .bigbtn { height: 52px; }
 .cam-row .chips { flex-wrap: nowrap; }
+.cam-row .cam-label { color: var(--muted); font-size: 0.8rem; font-weight: 600; }
 .cam-status { font-size: 0.7rem; line-height: 1.35; font-variant-numeric: tabular-nums; }
 .cam-help { margin: 0; font-size: 0.66rem; line-height: 1.4; }
 

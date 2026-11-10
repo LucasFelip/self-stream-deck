@@ -228,7 +228,7 @@ Há duas saídas para os apps do PC enxergarem a imagem como câmera, e as duas 
 - **Via OBS:** na tela da câmera toque em **Copiar link**, no OBS adicione uma fonte **Captura de navegador** e cole o link (Ctrl+V), depois clique
   em **Iniciar câmera virtual** e escolha **OBS Virtual Camera** no app.
 
-Sem sinal do celular, o stream mostra uma imagem "Sem sinal". Controles: **Virar câmera** (frontal/traseira) e qualidade **480p/720p**.
+Sem sinal do celular, o stream mostra uma imagem "Sem sinal". Controles: **Virar câmera** (frontal/traseira), qualidade **480p/720p** (o padrão é **720p**) e teto de **30 ou 60 quadros por segundo** (o padrão é 30). O teto é só um limite: quem manda é a câmera do aparelho (o Galaxy A31 faz até 30 fps e menos em pouca luz, e 60 só em celulares cuja câmera entrega 60). A linha de status mostra o que o PC recebe e o que o celular mede ("câmera 30 fps · cod. 42 ms"), para separar uma câmera lenta de uma codificação lenta.
 O celular precisa ficar com o app aberto e a tela ligada enquanto transmite; nada é gravado nem guardado, só o último quadro fica em memória.
 
 ## Compilando o APK

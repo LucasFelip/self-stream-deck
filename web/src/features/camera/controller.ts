@@ -6,10 +6,12 @@ type CameraStatus = components['schemas']['CameraStatus'];
 type VirtualCamera = components['schemas']['VirtualCamera'];
 export type Facing = 'user' | 'environment';
 export type Quality = 'leve' | 'hd';
+export type Fps = 30 | 60;
 
 export const QUALITIES: Record<Quality, { label: string; width: number }> = { leve: { label: '480p', width: 854 }, hd: { label: '720p', width: 1280 } };
 
-const FRAME_MS = 40; // 25 frames a second at best; slower when the link or the phone cannot keep up
+export const FPS_OPTIONS: Fps[] = [30, 60]; // 60 only when the phone's camera delivers it: the camera sets the pace, this is the ceiling
+const MAX_IN_FLIGHT = 4; // pictures being encoded or on their way to the PC at the same time; one more is dropped instead of piling up
 const JPEG_QUALITY = 0.72;
 // When nobody uses the picture (no OBS source watching, no app with the virtual camera open) one frame a second is enough: the PC says so
 // in every answer, and the phone goes back to full speed on the first answer that says someone does.
@@ -30,11 +32,29 @@ export interface CameraState {
   offerPreview: boolean;
   mirror: boolean;
   quality: Quality;
+  /** the most pictures a second that are sent */
+  fps: Fps;
   statusText: string;
   direct: VirtualCamera;
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** `requestVideoFrameCallback` is in newer WebViews only: the lib's type says it always exists, so it is read as what it really is, maybe missing. */
+type MaybeFrameCallback = { requestVideoFrameCallback?: (callback: () => void) => number };
+
+/**
+ * Resolves when the camera has a new picture (requestVideoFrameCallback: no duplicates, no drift against the camera's own clock), or after
+ * `fallbackMs` where the WebView does not have it (then it is a plain timer), or a little after the pace when the camera stalls.
+ */
+function nextPicture(video: HTMLVideoElement, fallbackMs: number): Promise<void> {
+  const callback = (video as unknown as MaybeFrameCallback).requestVideoFrameCallback;
+  return new Promise((resolve) => {
+    const finish = () => { clearTimeout(timer); resolve(); };
+    const timer = setTimeout(finish, callback ? fallbackMs + 250 : fallbackMs);
+    if (callback) callback.call(video, finish);
+  });
+}
 
 /**
  * "Câmera do celular": the phone's camera as a webcam for the PC. It asks the phone for its camera, draws frames into a canvas and posts
@@ -49,13 +69,15 @@ class CameraController {
   private loopId = 0; // a running loop stops when this changes
   private nobody = 0;
   private idle = false;
+  private encodeMs = 0; // how long the phone takes to encode one picture (moving average), for the status line
+  private cameraFps = 0; // what the camera itself delivers (moving average of the pictures it makes)
   private sheetOpen = false;
   private status: CameraStatus | null = null;
   private listeners = new Set<() => void>();
   private capture: HTMLVideoElement | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private state: CameraState = {
-    sending: false, streaming: false, streamVersion: 0, message: WAITING, offerPreview: true, mirror: true, quality: 'leve',
+    sending: false, streaming: false, streamVersion: 0, message: WAITING, offerPreview: true, mirror: true, quality: 'hd', fps: 30,
     statusText: 'Câmera desligada: toque em Ver prévia ou Transmitir ao PC.', direct: { name: 'Stream Deck Camera', installed: false, inUse: false, busy: false },
   };
 
@@ -101,7 +123,7 @@ class CameraController {
     this.say('Ligando a câmera…');
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: this.facing }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+        video: { facingMode: { ideal: this.facing }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: this.state.fps } },
         audio: false,
       });
     } catch (error) {
@@ -144,45 +166,89 @@ class CameraController {
 
   setQuality(quality: Quality): void { this.set({ quality }); }
 
+  /** the ceiling of pictures a second; a camera that is already on is asked again, because the rate is part of what it is opened with */
+  async setFps(fps: Fps): Promise<void> {
+    if (fps === this.state.fps) return;
+    this.set({ fps });
+    if (!this.stream) return;
+    this.stopCamera();
+    this.say('Ajustando a câmera…');
+    await this.startCamera();
+  }
+
+  /**
+   * Takes a picture of the camera, encodes it and posts it; the next one is taken while that one is still being encoded or on its way (up to
+   * MAX_IN_FLIGHT), instead of waiting for the PC's answer first: waiting made every picture cost encode + the whole round trip, ~14 a second.
+   * (A Worker doing the encoding and the upload was tried on a Galaxy A31: its encoder took 121 ms a picture against 53 ms for the page's own
+   * toBlob, and the rate fell, so it stayed on this thread.)
+   */
   private async loop(id: number): Promise<void> {
     this.nobody = 0;
     this.idle = false;
     const capture = this.ensureCapture();
     const canvas = this.canvas as HTMLCanvasElement;
-    while (this.sending && id === this.loopId) {
-      const started = performance.now();
-      if (capture.readyState >= 2 && capture.videoWidth > 0 && !document.hidden) {
-        const width = Math.min(QUALITIES[this.state.quality].width, capture.videoWidth);
-        const height = Math.round((width * capture.videoHeight) / capture.videoWidth);
-        if (canvas.width !== width || canvas.height !== height) {
-          canvas.width = width;
-          canvas.height = height;
+    // A canvas kept in software: encoding a picture out of a GPU canvas has to read it back from the GPU first, which on a modest phone was most of
+    // the time (124 ms for a 720p picture on a Galaxy A31, 53 ms like this). The first getContext decides, so it is asked for here.
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    let inFlight = 0; // pictures being encoded or on their way; each one lowers it when it is done
+    let pauseUntil = 0;
+    let lastAt = 0;
+    let lastSeen = 0;
+    const post = async (blob: Blob): Promise<void> => {
+      try {
+        const response = await fetch('/api/camera/frame', { method: 'POST', body: blob, headers: { 'Content-Type': 'image/jpeg' } });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (id !== this.loopId) return;
+        if (response.headers.get('X-Camera-Wanted') === '0') {
+          this.nobody += 1;
+          if (this.nobody >= IDLE_AFTER) this.idle = true;
+        } else {
+          this.nobody = 0;
+          this.idle = false;
         }
-        canvas.getContext('2d')?.drawImage(capture, 0, 0, width, height);
-        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY));
-        if (!blob) continue;
-        try {
-          const response = await fetch('/api/camera/frame', { method: 'POST', body: blob, headers: { 'Content-Type': 'image/jpeg' } });
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          if (response.headers.get('X-Camera-Wanted') === '0') {
-            this.nobody += 1;
-            if (this.nobody >= IDLE_AFTER) this.idle = true;
-          } else {
-            this.nobody = 0;
-            this.idle = false;
-          }
-        } catch {
-          await sleep(600); // the PC is unreachable for a moment: do not spin
-        }
-      } else {
-        await sleep(200);
+      } catch {
+        pauseUntil = performance.now() + 600; // the PC is unreachable for a moment: do not spin
+      } finally {
+        inFlight -= 1;
       }
-      await sleep(Math.max(0, (this.idle ? IDLE_FRAME_MS : FRAME_MS) - (performance.now() - started)));
+    };
+    while (this.sending && id === this.loopId) {
+      const now = performance.now();
+      if (now < pauseUntil) { await sleep(pauseUntil - now); continue; }
+      if (capture.readyState < 2 || capture.videoWidth === 0 || document.hidden) { await sleep(200); continue; }
+      const gap = this.idle ? IDLE_FRAME_MS : 1000 / this.state.fps;
+      if (this.idle) await sleep(gap); else await nextPicture(capture, gap);
+      if (id !== this.loopId || !this.sending) break;
+      const seen = performance.now();
+      if (lastSeen > 0 && !this.idle) this.cameraFps = this.cameraFps === 0 ? 1000 / (seen - lastSeen) : this.cameraFps * 0.9 + (1000 / Math.max(1, seen - lastSeen)) * 0.1;
+      lastSeen = seen;
+      // a camera faster than the ceiling is thinned out; one that is slower sets the pace by itself
+      if (performance.now() - lastAt < gap * 0.85) continue;
+      if (inFlight >= MAX_IN_FLIGHT) continue; // the PC or the link is behind: drop this picture rather than queue it
+      lastAt = performance.now();
+      const width = Math.min(QUALITIES[this.state.quality].width, capture.videoWidth);
+      const height = Math.round((width * capture.videoHeight) / capture.videoWidth);
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+      context?.drawImage(capture, 0, 0, width, height);
+      // encoded off this loop: the next picture is taken while this one is still being encoded (toBlob keeps a copy of what was drawn)
+      inFlight += 1;
+      const encodeStart = performance.now();
+      canvas.toBlob((blob) => {
+        const took = performance.now() - encodeStart;
+        this.encodeMs = this.encodeMs === 0 ? took : this.encodeMs * 0.9 + took * 0.1;
+        if (blob && id === this.loopId) void post(blob);
+        else inFlight -= 1;
+      }, 'image/jpeg', JPEG_QUALITY);
     }
   }
 
   async startSending(): Promise<void> {
     if (!(await this.startCamera())) return;
+    this.encodeMs = 0;
+    this.cameraFps = 0;
     this.sending = true;
     this.loopId += 1;
     this.set({ sending: true });
@@ -226,6 +292,12 @@ class CameraController {
     }
   }
 
+  /** what the phone itself measures, to tell a slow camera (low light) from a slow encoder or link: " · câmera 30 · cod. 24 ms" */
+  private measured(): string {
+    if (this.cameraFps === 0 || this.encodeMs === 0) return '';
+    return ` · câmera ${Math.round(this.cameraFps)} fps · cod. ${Math.round(this.encodeMs)} ms`;
+  }
+
   private paintStatus(): void {
     const status = this.status;
     let statusText: string;
@@ -235,7 +307,7 @@ class CameraController {
       const direct = this.state.direct;
       const watching = status.viewers > 0 ? 'OBS conectado' : direct.inUse ? 'câmera direta em uso' : 'nenhum app usando ainda';
       if (status.live && !status.wanted) statusText = 'Transmitindo em espera: nenhum app usa a câmera (1 quadro/s, economiza bateria)';
-      else statusText = status.live ? `Transmitindo · ${status.fps} fps · ${status.kbps} KB/s · ${watching}` : 'Aguardando o PC receber…';
+      else statusText = status.live ? `Transmitindo · ${status.fps} fps · ${status.kbps} KB/s · ${watching}${this.measured()}` : 'Aguardando o PC receber…';
     }
     this.set({ statusText });
   }

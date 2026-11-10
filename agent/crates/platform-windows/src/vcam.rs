@@ -102,36 +102,13 @@ impl Filter {
 
     /// Decodes a JPEG and publishes it. False when nobody is receiving (or the frame does not fit).
     fn send(&self, jpeg: &[u8]) -> bool {
-        let mut decoder = jpeg_decoder::Decoder::new(jpeg);
-        let Ok(pixels) = decoder.decode() else {
+        let Some((width, height, rgba)) = decode_bottom_up_rgba(jpeg) else {
             return false;
         };
-        let Some(info) = decoder.info() else {
-            return false;
-        };
-        let (width, height) = (usize::from(info.width), usize::from(info.height));
-        let bytes = width * height * 4;
+        let bytes = rgba.len();
         unsafe {
             if bytes as i64 > i64::from((self.view as *const i32).read_unaligned()) {
                 return false;
-            }
-        }
-        // RGBA, rows bottom-up: the filter takes Unity's orientation (origin at the bottom), so a top-down picture would reach the apps upside down
-        let mut rgba = vec![255u8; bytes];
-        let components = match info.pixel_format {
-            jpeg_decoder::PixelFormat::L8 => 1,
-            jpeg_decoder::PixelFormat::RGB24 => 3,
-            _ => return false,
-        };
-        for y in 0..height {
-            for x in 0..width {
-                let source = (y * width + x) * components;
-                let target = ((height - 1 - y) * width + x) * 4;
-                if components == 3 {
-                    rgba[target..target + 3].copy_from_slice(&pixels[source..source + 3]);
-                } else {
-                    rgba[target..target + 3].fill(pixels[source]);
-                }
             }
         }
         unsafe {
@@ -152,6 +129,33 @@ impl Filter {
         let _ = self.want;
         true
     }
+}
+
+/// A JPEG as RGBA with the rows bottom-up: the filter takes Unity's orientation (origin at the bottom), so a top-down picture would reach the
+/// apps upside down. `(width, height, bytes)`.
+fn decode_bottom_up_rgba(jpeg: &[u8]) -> Option<(usize, usize, Vec<u8>)> {
+    let mut decoder = jpeg_decoder::Decoder::new(jpeg);
+    let pixels = decoder.decode().ok()?;
+    let info = decoder.info()?;
+    let (width, height) = (usize::from(info.width), usize::from(info.height));
+    let mut rgba = vec![255u8; width * height * 4];
+    let components = match info.pixel_format {
+        jpeg_decoder::PixelFormat::L8 => 1,
+        jpeg_decoder::PixelFormat::RGB24 => 3,
+        _ => return None,
+    };
+    for y in 0..height {
+        for x in 0..width {
+            let source = (y * width + x) * components;
+            let target = ((height - 1 - y) * width + x) * 4;
+            if components == 3 {
+                rgba[target..target + 3].copy_from_slice(&pixels[source..source + 3]);
+            } else {
+                rgba[target..target + 3].fill(pixels[source]);
+            }
+        }
+    }
+    Some((width, height, rgba))
 }
 
 struct Feeder {
@@ -439,6 +443,24 @@ mod tests {
             vcam.feed(&[0xff, 0xd8, 0xff]); // not installed: costs nothing and starts nothing
             assert!(vcam.feeder.lock().unwrap().is_none());
         }
+    }
+
+    /// Not a check, a measurement: `SSD_BENCH_JPEG=frame.jpg cargo test --release -p ssd-platform-windows -- --ignored --nocapture frame_cost`.
+    #[test]
+    #[ignore]
+    fn frame_cost() {
+        let path = std::env::var("SSD_BENCH_JPEG").expect("SSD_BENCH_JPEG names a JPEG");
+        let jpeg = std::fs::read(path).unwrap();
+        let _ = decode_bottom_up_rgba(&jpeg); // warm up
+        let started = Instant::now();
+        let rounds = 60;
+        let mut size = (0, 0);
+        for _ in 0..rounds {
+            let (w, h, _) = decode_bottom_up_rgba(&jpeg).unwrap();
+            size = (w, h);
+        }
+        let each = started.elapsed().as_secs_f64() * 1000.0 / f64::from(rounds);
+        println!("{}x{}: {each:.1} ms per frame (decode and convert), at most {:.0} frames/s on one thread", size.0, size.1, 1000.0 / each);
     }
 
     #[test]

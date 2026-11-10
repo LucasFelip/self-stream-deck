@@ -4,7 +4,7 @@ import { HoldButton } from '../../ui/HoldButton';
 import { Icon } from '../../ui/Icon';
 import { Overlay } from '../../ui/Overlay';
 import { useToast } from '../../ui/Toast';
-import { QUALITIES, camera, useCamera, type Quality } from './controller';
+import { FPS_OPTIONS, QUALITIES, camera, useCamera, type Quality } from './controller';
 
 const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
@@ -71,9 +71,17 @@ export function CameraOverlay({ open, onClose }: { open: boolean; onClose: () =>
           </button>
           <div className="cam-row">
             <button type="button" className="bigbtn" onClick={() => void camera.flip()}><Icon name="swap" size={24} /><span>Virar câmera</span></button>
-            <div className="chips">
+            <div className="chips" data-group="quality">
               {(Object.entries(QUALITIES) as Array<[Quality, { label: string }]>).map(([key, value]) => (
                 <button key={key} type="button" className="chip big-chip" aria-pressed={key === state.quality} onClick={() => camera.setQuality(key)}>{value.label}</button>
+              ))}
+            </div>
+          </div>
+          <div className="cam-row">
+            <span className="cam-label">Quadros por segundo</span>
+            <div className="chips" data-group="fps">
+              {FPS_OPTIONS.map((fps) => (
+                <button key={fps} type="button" className="chip big-chip" aria-pressed={fps === state.fps} onClick={() => void camera.setFps(fps)}>{fps} fps</button>
               ))}
             </div>
           </div>
