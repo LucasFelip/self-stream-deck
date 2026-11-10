@@ -17,6 +17,8 @@ import android.net.http.SslCertificate
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.text.InputType
@@ -62,6 +64,16 @@ class MainActivity : Activity() {
     private var candidates: List<String> = emptyList()
     private var candidateIndex = 0
 
+    // What stands between the person and the page while the PC is being looked for: "Conectando…", or "Sem conexão com o PC". The WebView is
+    // only given an address that answered (see Probe), so the browser's own error page never shows.
+    private var frame: FrameLayout? = null
+    private var overlay: View? = null
+    private var connecting = false // an address answered and the page is loading: the overlay goes away when it is done
+    private var noConnectionShown = false
+    private var round = 0 // which search for the PC is current: an answer of an older one is ignored
+    private val handler = Handler(Looper.getMainLooper())
+    private val tryAgain = Runnable { if (noConnectionShown && !showingSetup) connect(quiet = true) }
+
     private var clock: LinearLayout? = null // the little clock over the deck: "14:35" and under it "07/11" (day/month)
     private var clockTime: TextView? = null
     private var clockDate: TextView? = null
@@ -78,9 +90,11 @@ class MainActivity : Activity() {
             addAction(Intent.ACTION_TIMEZONE_CHANGED)
         })
         updateClock()
+        if (noConnectionShown) scheduleTryAgain()
     }
 
     override fun onStop() {
+        handler.removeCallbacks(tryAgain)
         unregisterReceiver(clockTick)
         super.onStop()
     }
@@ -223,20 +237,23 @@ class MainActivity : Activity() {
 
         view.addJavascriptInterface(Bridge(), "Android")
         view.webViewClient = object : WebViewClient() {
+            // An address that answered the probe still failed to load: start over from the screen that says so.
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                if (!request.isForMainFrame) return
-                // this address did not answer: try the next one before giving up
-                if (candidateIndex + 1 < candidates.size) {
-                    candidateIndex += 1
-                    view.loadUrl(candidates[candidateIndex])
-                } else {
-                    showLoadError()
-                }
+                if (request.isForMainFrame) runOnUiThread { showNoConnection() }
             }
 
             // The home-network server's certificate is self-signed: accept it only if it is exactly the one paired with.
             override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
-                if (matchesPinnedCertificate(error.certificate)) handler.proceed() else handler.cancel()
+                if (matchesPinnedCertificate(error.certificate)) {
+                    handler.proceed()
+                } else {
+                    handler.cancel()
+                    runOnUiThread { showNoConnection() }
+                }
+            }
+
+            override fun onPageFinished(view: WebView, url: String?) {
+                if (connecting) runOnUiThread { hideOverlay() }
             }
         }
 
@@ -254,6 +271,10 @@ class MainActivity : Activity() {
         // The page, and over it the clock in the rail's free slot, right after the last tab and above the settings gear. The page puts the rail
         // after the display cut-out (env(safe-area-inset-left)), so the clock does too, to sit exactly under the tabs.
         val frame = FrameLayout(this)
+        this.frame = frame
+        overlay = null
+        noConnectionShown = false
+        connecting = false
         frame.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         val face = makeClock()
         clock = face
@@ -270,8 +291,67 @@ class MainActivity : Activity() {
         frame.requestApplyInsets()
         updateClock()
         setContentView(frame)
-        view.loadUrl(candidates[0])
         hideSystemBars()
+        connect()
+    }
+
+    /** Looks for the address that answers (USB first, then the home network), off the main thread, and only then gives it to the page. */
+    private fun connect(quiet: Boolean = false) {
+        val view = web ?: return
+        val mine = ++round
+        if (!quiet) showOverlay(connectingScreen(this))
+        val list = candidates
+        val pinned = prefs.getString(KEY_FP, null)
+        Thread {
+            val found = list.indexOfFirst { Probe.answers(it, pinned) }
+            runOnUiThread {
+                if (mine != round || web !== view) return@runOnUiThread
+                if (found >= 0) {
+                    candidateIndex = found
+                    connecting = true
+                    view.loadUrl(list[found])
+                } else {
+                    showNoConnection()
+                }
+            }
+        }.start()
+    }
+
+    private fun showOverlay(screen: View) {
+        val host = frame ?: return
+        overlay?.let { host.removeView(it) }
+        overlay = screen
+        host.addView(screen, 1, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)) // under the clock
+    }
+
+    private fun hideOverlay() {
+        handler.removeCallbacks(tryAgain)
+        overlay?.let { frame?.removeView(it) }
+        overlay = null
+        noConnectionShown = false
+        connecting = false
+    }
+
+    private fun scheduleTryAgain() {
+        handler.removeCallbacks(tryAgain)
+        handler.postDelayed(tryAgain, RETRY_MS)
+    }
+
+    /** Nothing answered: say so in the deck's look, and keep looking by itself; the deck opens as soon as the PC is back. */
+    private fun showNoConnection() {
+        connecting = false
+        if (!noConnectionShown) {
+            noConnectionShown = true
+            showOverlay(
+                noConnectionScreen(
+                    this,
+                    onTryNow = { handler.removeCallbacks(tryAgain); connect() },
+                    onAddress = { showSetup() },
+                    onLock = { lockPhone() },
+                ),
+            )
+        }
+        scheduleTryAgain()
     }
 
     private fun matchesPinnedCertificate(certificate: SslCertificate?): Boolean {
@@ -318,18 +398,6 @@ class MainActivity : Activity() {
         pendingCamera = null
     }
 
-    private fun showLoadError() {
-        val base = candidates.firstOrNull() ?: "about:blank"
-        val html = "<body style='background:#0e0f13;color:#eceef4;font-family:sans-serif;text-align:center;padding:48px 16px'>" +
-            "<h2>Sem conexão com o PC</h2>" +
-            "<p style='color:#8b90a0'>Confira se o agente está rodando (ícone perto do relógio) e se o celular está na mesma rede Wi-Fi (ou plugue o cabo USB).</p>" +
-            "<p><button style='font-size:1.1rem;padding:12px 24px' onclick='Android.retry()'>Tentar de novo</button></p>" +
-            "<p><button style='font-size:1.1rem;padding:12px 24px' onclick='Android.openSettings()'>Configurar endereço</button></p>" +
-            "<p><button style='font-size:1.1rem;padding:12px 24px' onclick='Android.lockScreen()'>Bloquear tela</button></p>" +
-            "</body>"
-        web?.loadDataWithBaseURL(base, html, "text/html", "UTF-8", null)
-    }
-
     private val lockAdmin by lazy { ComponentName(this, LockAdmin::class.java) }
 
     /**
@@ -357,6 +425,12 @@ class MainActivity : Activity() {
     }
 
     private fun destroyWebView() {
+        round += 1 // a search still going on is no longer wanted
+        handler.removeCallbacks(tryAgain)
+        overlay = null
+        frame = null
+        noConnectionShown = false
+        connecting = false
         web?.destroy()
         web = null
     }
@@ -368,26 +442,25 @@ class MainActivity : Activity() {
             runOnUiThread { showSetup() }
         }
 
-        /** The error screen's "Bloquear tela": locks the phone (the first time, the system asks to turn the device administrator role on). */
-        @JavascriptInterface
-        fun lockScreen() {
-            runOnUiThread { lockPhone() }
-        }
-
-        /** Starts over from the first address (the error screen's "try again"). */
-        @JavascriptInterface
-        fun retry() {
-            runOnUiThread { showDeck() }
-        }
-
-        /** The page lost the PC for a while: try the other address (USB <-> Wi-Fi), if there is one. */
+        /** The page lost the PC for a while: try the other address (USB <-> Wi-Fi), if there is one and it answers. */
         @JavascriptInterface
         fun reconnect() {
             runOnUiThread {
                 val view = web ?: return@runOnUiThread
                 if (candidates.size < 2) return@runOnUiThread
-                candidateIndex = (candidateIndex + 1) % candidates.size
-                view.loadUrl(candidates[candidateIndex])
+                val next = (candidateIndex + 1) % candidates.size
+                val address = candidates[next]
+                val pinned = prefs.getString(KEY_FP, null)
+                Thread {
+                    if (Probe.answers(address, pinned)) {
+                        runOnUiThread {
+                            if (web === view) {
+                                candidateIndex = next
+                                view.loadUrl(address)
+                            }
+                        }
+                    }
+                }.start()
             }
         }
 
@@ -495,12 +568,13 @@ class MainActivity : Activity() {
         const val USB_PORT = 7878
         const val REQUEST_CAMERA = 7
         const val REQUEST_ADMIN = 8
+        const val RETRY_MS = 5000L // how often the "no connection" screen looks for the PC again
         const val RAIL_TAB_WIDTH_DP = 70 // a tab of the rail: 72 (--rail-w) minus its 1 px of padding on each side
         const val RAIL_TAB_HEIGHT_DP = 48 // --touch
         const val CLOCK_TIME_DP = 14f // where a tab has its 20 px icon
         const val CLOCK_DATE_DP = 11.5f // a little over the 9.6 of a tab's label, which was too small to read at a glance
         const val CLOCK_BOTTOM_DP = 65 // the slot after the sixth tab, above the settings gear (a 48 slot at the bottom)
-        val BACKGROUND = Color.parseColor("#0E0F13")
+        val BACKGROUND = Palette.BACKGROUND // the page's --bg, so the app's own screens and the page are one
 
         /** Accepts "ip:port/?token=x" without a scheme and rejects anything that is not http(s). */
         fun normalize(raw: String?): String? {
