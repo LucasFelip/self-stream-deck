@@ -245,3 +245,10 @@ Pronto quando: máquina limpa instala, pareia o celular e funciona após reinici
 - Haverá distribuição para outras pessoas (precisa de certificado de assinatura "de verdade") ou é uso próprio?
 - Aceita-se trocar o Rust por Go/.NET se o spike mostrar que o COM/WinRT cobra caro?
 - A câmera virtual precisa continuar nativa, ou aceitamos mantê-la como um componente C# separado indefinidamente?
+
+### Incidente: o agente travou depois de o celular ser bloqueado (0.1.3, 10/11/2026 17:59:46)
+
+O `ssd.exe` caiu com violação de acesso (`0xc0000005`, evento do Windows 1000) na chamada `UserNotificationListener::Current()`, um ponteiro de fábrica WinRT inválido, cerca de 17 s depois de o celular ser bloqueado. **Nada o reiniciou:** o `wscript` do lançador saía logo, o Agendador considerava a tarefa concluída (resultado 0) e o painel ficou fora do ar até alguém subir a tarefa à mão.
+- **Reinício automático** (`launch-hidden.vbs`): o lançador agora fica vivo e sobe o agente de novo 3 s depois de qualquer saída que não seja limpa (código 0: "Sair" da bandeja), registrando o código no log; desiste depois de 5 quedas seguidas em menos de 20 s. Verificado com uma instância de teste (kill duas vezes, voltou nas duas).
+- **Causa provável, não provada:** o apartamento COM multithread do processo só vive enquanto alguma thread o mantém, e o pool do Tokio encerra threads ociosas. `com()` agora chama `CoIncrementMTAUsage` uma vez, para o apartamento durar o processo todo. Um teste (`a_read_from_a_new_thread_after_the_first_one_ended_works`) tenta reproduzir e **passa mesmo sem a correção**, então ele guarda contra regressão mas não prova a causa.
+- O mesmo instalador da 0.1.4 leva as duas mudanças.

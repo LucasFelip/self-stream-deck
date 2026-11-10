@@ -77,6 +77,13 @@ fn failed(error: windows::core::Error) -> PortError {
 /// COM must be initialised once on every thread that calls it; the API calls this crate from a pool of blocking threads.
 pub(crate) fn com() {
     thread_local! { static INIT: () = unsafe { let _ = CoInitializeEx(None, COINIT_MULTITHREADED); }; }
+    // The pool's threads come and go (Tokio lets idle ones end), and the multithreaded apartment lives only while some thread keeps it:
+    // when the last one was gone, what WinRT had cached (a class factory) was torn down under it, and the next call crashed the agent
+    // (access violation in `UserNotificationListener::Current`, seen once). This keeps the apartment for as long as the process lives.
+    static KEEP_APARTMENT: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+    KEEP_APARTMENT.get_or_init(|| unsafe {
+        let _ = windows::Win32::System::Com::CoIncrementMTAUsage();
+    });
     INIT.with(|_| {});
 }
 

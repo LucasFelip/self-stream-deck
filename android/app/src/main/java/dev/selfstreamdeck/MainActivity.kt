@@ -2,6 +2,8 @@ package dev.selfstreamdeck
 
 import android.Manifest
 import android.app.Activity
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -323,8 +325,35 @@ class MainActivity : Activity() {
             "<p style='color:#8b90a0'>Confira se o agente está rodando (ícone perto do relógio) e se o celular está na mesma rede Wi-Fi (ou plugue o cabo USB).</p>" +
             "<p><button style='font-size:1.1rem;padding:12px 24px' onclick='Android.retry()'>Tentar de novo</button></p>" +
             "<p><button style='font-size:1.1rem;padding:12px 24px' onclick='Android.openSettings()'>Configurar endereço</button></p>" +
+            "<p><button style='font-size:1.1rem;padding:12px 24px' onclick='Android.lockScreen()'>Bloquear tela</button></p>" +
             "</body>"
         web?.loadDataWithBaseURL(base, html, "text/html", "UTF-8", null)
+    }
+
+    private val lockAdmin by lazy { ComponentName(this, LockAdmin::class.java) }
+
+    /**
+     * Locks the screen. Android only lets an app do it as a device administrator (just the `force-lock` policy, see LockAdmin): when the
+     * role is not on yet, the system's own dialog asks for it, and the screen locks as soon as it is granted.
+     */
+    private fun lockPhone() {
+        val policy = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        if (policy.isAdminActive(lockAdmin)) {
+            policy.lockNow()
+            return
+        }
+        startActivityForResult(
+            Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                .putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, lockAdmin)
+                .putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Só para o botão \"Bloquear tela\": o Stream Deck poderá bloquear o celular, e nada mais."),
+            REQUEST_ADMIN,
+        )
+    }
+
+    @Deprecated("The result of the administrator dialog")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_ADMIN && resultCode == RESULT_OK) lockPhone()
     }
 
     private fun destroyWebView() {
@@ -337,6 +366,12 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun openSettings() {
             runOnUiThread { showSetup() }
+        }
+
+        /** The error screen's "Bloquear tela": locks the phone (the first time, the system asks to turn the device administrator role on). */
+        @JavascriptInterface
+        fun lockScreen() {
+            runOnUiThread { lockPhone() }
         }
 
         /** Starts over from the first address (the error screen's "try again"). */
@@ -459,6 +494,7 @@ class MainActivity : Activity() {
         const val KEY_FP = "fp" // the certificate's SHA-256, lower-case hex
         const val USB_PORT = 7878
         const val REQUEST_CAMERA = 7
+        const val REQUEST_ADMIN = 8
         const val RAIL_TAB_WIDTH_DP = 70 // a tab of the rail: 72 (--rail-w) minus its 1 px of padding on each side
         const val RAIL_TAB_HEIGHT_DP = 48 // --touch
         const val CLOCK_TIME_DP = 14f // where a tab has its 20 px icon

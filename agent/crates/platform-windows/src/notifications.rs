@@ -96,6 +96,22 @@ impl NotificationsPort for WindowsNotifications {
 mod tests {
     use super::*;
 
+    /// The crash this guards against (agent 0.1.3, 17:59:46): the API reads from a pool of blocking threads that Tokio lets go when they are idle.
+    /// When the last thread that had started COM is gone the process's multithreaded apartment is torn down, and the WinRT factory that was
+    /// cached on the first call pointed into it: the next call, from a new thread, jumped through a dead pointer (access violation).
+    /// Reading from one thread, letting it end, and reading from another has to work.
+    #[test]
+    fn a_read_from_a_new_thread_after_the_first_one_ended_works() {
+        for _ in 0..3 {
+            std::thread::spawn(|| WindowsNotifications.list().map(|_| ()))
+                .join()
+                .expect("the thread did not crash")
+                .expect("the listener answers");
+            // give Windows time to tear the apartment down, as the idle pool does
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        }
+    }
+
     /// Read-only: lists what the Action Center holds on this PC (nothing, or "denied", are fine answers).
     #[test]
     fn the_real_notification_list_reads() {
