@@ -181,20 +181,14 @@ impl WindowsVcam {
         self.dir.join("UnityCaptureFilter64.dll")
     }
 
-    /// Is the filter registered, and pointing at our DLL?
-    fn is_installed(&self, force: bool) -> bool {
-        let mut cache = self.installed.lock().unwrap();
-        if let (false, Some((at, value))) = (force, cache.as_ref()) {
-            if at.elapsed() < Duration::from_secs(5) {
-                return *value;
-            }
-        }
+    /// Where Windows says the filter's DLL is (the registration of its class), if it is registered at all.
+    fn registered_dll(&self) -> Option<PathBuf> {
         let key = wide(&format!(
             "SOFTWARE\\Classes\\CLSID\\{CLSID}\\InprocServer32"
         ));
         let mut buffer = [0u16; 1024];
         let mut bytes = (buffer.len() * 2) as u32;
-        let registered = unsafe {
+        let found = unsafe {
             RegGetValueW(
                 HKEY_LOCAL_MACHINE,
                 PCWSTR(key.as_ptr()),
@@ -205,14 +199,27 @@ impl WindowsVcam {
                 Some(&mut bytes),
             )
             .0 == 0
+        };
+        found.then(|| {
+            PathBuf::from(String::from_utf16_lossy(
+                &buffer[..buffer.iter().position(|&c| c == 0).unwrap_or(0)],
+            ))
+        })
+    }
+
+    /// Is the filter registered, and is its DLL there? Wherever it is: the filter and the agent talk through shared memory by name, so a
+    /// filter registered from an earlier install's folder (the data folder moved to %APPDATA%) works as well as one from ours, and the frames
+    /// must not be dropped because of the folder. Reinstalling from the app registers it from our folder.
+    fn is_installed(&self, force: bool) -> bool {
+        let mut cache = self.installed.lock().unwrap();
+        if let (false, Some((at, value))) = (force, cache.as_ref()) {
+            if at.elapsed() < Duration::from_secs(5) {
+                return *value;
+            }
         }
-        .then(|| {
-            String::from_utf16_lossy(&buffer[..buffer.iter().position(|&c| c == 0).unwrap_or(0)])
-        });
-        let value = registered.is_some_and(|path| {
-            path.to_lowercase()
-                .contains(&self.dll().to_string_lossy().to_lowercase())
-        }) && self.dll().exists();
+        let value = self
+            .registered_dll()
+            .is_some_and(|path| is_filter_dll(&path) && path.exists());
         *cache = Some((Instant::now(), value));
         value
     }
@@ -358,6 +365,13 @@ impl VcamPort for WindowsVcam {
 
     fn uninstall(&self) -> PortResult<()> {
         *self.feeder.lock().unwrap() = None;
+        // unregister from where it is registered (it may be an earlier install's folder), and from ours
+        if let Some(path) = self
+            .registered_dll()
+            .filter(|p| is_filter_dll(p) && p.exists())
+        {
+            regsvr32(&["/u", &path.to_string_lossy()])?;
+        }
         if self.dll().exists() {
             regsvr32(&["/u", &self.dll().to_string_lossy()])?;
         }
@@ -371,6 +385,14 @@ impl VcamPort for WindowsVcam {
         let _ = std::fs::remove_dir_all(&self.dir);
         Ok(())
     }
+}
+
+/// Is this the filter's DLL (by name: the registration holds a path, nothing else tells it apart from another COM server)?
+fn is_filter_dll(path: &std::path::Path) -> bool {
+    path.file_name().is_some_and(|name| {
+        name.to_string_lossy()
+            .eq_ignore_ascii_case("UnityCaptureFilter64.dll")
+    })
 }
 
 /// `regsvr32 /s ...`: (success, exit code, output).
@@ -400,19 +422,34 @@ fn _path(_: &Path) {}
 mod tests {
     use super::*;
 
-    /// Read-only: whether the camera is installed on this PC, whichever the answer.
+    /// Read-only: whether the camera is installed on this PC, whichever the answer. "Installed" is where Windows registered the filter, not
+    /// where this instance keeps its own copy (the data folder moved once, and the filter stayed registered in the old one).
     #[test]
     fn the_status_reads_without_installing_anything() {
         let vcam =
             WindowsVcam::new(std::env::temp_dir().join(format!("ssd-vcam-{}", std::process::id())));
         let status = vcam.status().unwrap();
         assert_eq!(status["name"], NAME);
-        assert_eq!(
-            status["installed"], false,
-            "a folder that never had the DLL cannot be installed"
-        );
+        let registered = vcam
+            .registered_dll()
+            .is_some_and(|path| is_filter_dll(&path) && path.exists());
+        assert_eq!(status["installed"], registered);
         assert_eq!(status["inUse"], false);
-        vcam.feed(&[0xff, 0xd8, 0xff]); // not installed: costs nothing and starts nothing
-        assert!(vcam.feeder.lock().unwrap().is_none());
+        if !registered {
+            vcam.feed(&[0xff, 0xd8, 0xff]); // not installed: costs nothing and starts nothing
+            assert!(vcam.feeder.lock().unwrap().is_none());
+        }
+    }
+
+    #[test]
+    fn only_the_filters_dll_counts_wherever_it_lives() {
+        assert!(is_filter_dll(Path::new(
+            "E:/old/data/vcam/UnityCaptureFilter64.dll"
+        )));
+        assert!(is_filter_dll(Path::new(
+            "C:/Roaming/SelfStreamDeck/vcam/unitycapturefilter64.DLL"
+        )));
+        assert!(!is_filter_dll(Path::new("C:/Windows/System32/quartz.dll")));
+        assert!(!is_filter_dll(Path::new("")));
     }
 }

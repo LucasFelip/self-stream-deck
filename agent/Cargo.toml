@@ -4,7 +4,7 @@ members = ["crates/core", "crates/api", "crates/agent", "crates/platform-windows
 
 [workspace.package]
 edition = "2021"
-version = "0.1.5"
+version = "0.1.6"
 publish = false
 
 [profile.release]
