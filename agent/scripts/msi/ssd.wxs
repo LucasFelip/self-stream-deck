@@ -17,7 +17,7 @@
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="x64"
              Description="Self Stream Deck: o celular como painel de controle do PC" />
     <MediaTemplate EmbedCab="yes" />
-    <MajorUpgrade Schedule="afterInstallInitialize" DowngradeErrorMessage="Uma versão mais nova do Self Stream Deck já está instalada." />
+    <MajorUpgrade Schedule="afterInstallInitialize" AllowSameVersionUpgrades="yes" DowngradeErrorMessage="Uma versão mais nova do Self Stream Deck já está instalada." />
 
     <Property Id="MIGRATEFROM" Secure="yes" />
     <Property Id="NOSTART" Secure="yes" />
@@ -66,16 +66,16 @@
     <!-- The deferred actions run as SYSTEM, so what they need from the installing user (name, %APPDATA%) goes on the command line,
          which the immediate "Set" actions build (a deferred action reads its command line from the property named like itself). -->
     <CustomAction Id="RegisterTask.Cmd" Property="RegisterTask"
-        Value="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]task-register.ps1&quot; -Data &quot;[%APPDATA]\SelfStreamDeck&quot; -User &quot;[%USERDOMAIN]\[%USERNAME]&quot; -From &quot;[MIGRATEFROM]&quot; -NoStart &quot;[NOSTART]&quot;" />
+        Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]task-register.ps1&quot; -Data &quot;[%APPDATA]\SelfStreamDeck&quot; -User &quot;[%USERDOMAIN]\[%USERNAME]&quot; -From &quot;[MIGRATEFROM]&quot; -NoStart &quot;[NOSTART]&quot;" />
     <CustomAction Id="RegisterTask" BinaryKey="WixCA" DllEntry="WixQuietExec64" Execute="deferred" Return="check" Impersonate="no" />
     <CustomAction Id="RemoveTask.Cmd" Property="RemoveTask"
-        Value="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]task-remove.ps1&quot;" />
+        Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]task-remove.ps1&quot;" />
     <CustomAction Id="RemoveTask" BinaryKey="WixCA" DllEntry="WixQuietExec64" Execute="deferred" Return="ignore" Impersonate="no" />
 
     <InstallExecuteSequence>
       <!-- stop what is running before its files are replaced or removed (on an upgrade too) -->
-      <Custom Action="RemoveTask.Cmd" After="InstallInitialize">(REMOVE~="ALL") OR WIX_UPGRADE_DETECTED</Custom>
-      <Custom Action="RemoveTask" After="RemoveTask.Cmd">(REMOVE~="ALL") OR WIX_UPGRADE_DETECTED</Custom>
+      <Custom Action="RemoveTask.Cmd" After="InstallInitialize">1</Custom>
+      <Custom Action="RemoveTask" After="RemoveTask.Cmd">1</Custom>
       <Custom Action="RegisterTask.Cmd" After="InstallFiles">NOT (REMOVE~="ALL")</Custom>
       <Custom Action="RegisterTask" After="RegisterTask.Cmd">NOT (REMOVE~="ALL")</Custom>
     </InstallExecuteSequence>
