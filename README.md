@@ -71,7 +71,9 @@ Discreto de propósito: as abas e o menu **⚙** Configurações (nome do PC, Ed
 
 ## Instalando e rodando o agente
 
-**Instalar (pacote pronto):** gere o pacote com `powershell -File agent/scripts/package.ps1` (cria `dist/SelfStreamDeck-<versão>.zip`), descompacte e rode:
+**Instalar com o MSI:** `powershell -File agent/scripts/msi/build-msi.ps1` gera `dist/SelfStreamDeck-<versão>.msi` (precisa do WiX, veja o CONTRIBUTING); dê dois cliques ou rode `msiexec /i SelfStreamDeck-0.1.0.msi [MIGRATEFROM="pasta\de\dados\antiga"]`. Ele faz o mesmo que o `install.ps1` abaixo e desinstala pelo "Aplicativos instalados" do Windows.
+
+**Instalar (zip com script):** gere o pacote com `powershell -File agent/scripts/package.ps1` (cria `dist/SelfStreamDeck-<versão>.zip`), descompacte e rode:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File install.ps1 [-From "pasta\de\dados\antiga"]
