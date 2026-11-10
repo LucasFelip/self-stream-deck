@@ -563,10 +563,10 @@ pub struct FakeMonitor;
 impl MonitorPort for FakeMonitor {
     fn sample(&self) -> PortResult<serde_json::Value> {
         Ok(serde_json::json!({
-            "cpu": { "usage": 12.5, "cores": [10, 15], "freqMHz": 3600, "temp": null, "power": null, "tempSource": null, "processes": 200, "threads": 2500 },
+            "cpu": { "usage": 12.5, "cores": [10, 15], "freqMHz": 3600, "temp": 50, "power": 40, "tempSource": "fake", "processes": 200, "threads": 2500 },
             "memory": { "totalMB": 16384, "usedMB": 8192, "usedPct": 50, "commitUsedMB": 9000, "commitLimitMB": 20000 },
             "gpu": null, "fps": null,
-            "disk": { "disks": [], "total": null, "drives": [{ "name": "C:", "label": "", "totalGB": 500, "freeGB": 250.5 }] },
+            "disk": { "disks": [], "total": { "active": 5, "readBps": 1000, "writeBps": 2000 }, "drives": [{ "name": "C:", "label": "", "totalGB": 500, "freeGB": 250.5 }] },
             "network": [], "uptime": 3600
         }))
     }
@@ -584,9 +584,9 @@ impl MonitorPort for FakeMonitor {
 
     fn info(&self) -> PortResult<serde_json::Value> {
         Ok(
-            serde_json::json!({ "host": "FAKE-PC", "user": "fake", "os": { "name": "Windows", "version": "10", "build": "1", "arch": "64-bit", "installed": null, "lastBoot": null },
+            serde_json::json!({ "host": "FAKE-PC", "user": "fake", "os": { "name": "Windows", "version": "10", "build": "1", "arch": "64-bit", "installed": "2024-01-01T00:00:00", "lastBoot": "2024-06-01T08:00:00" },
             "cpu": { "name": "Fake CPU", "cores": 2, "threads": 4, "maxMHz": 3600, "l2KB": 512, "l3KB": 4096, "socket": "AM5" },
-            "memory": { "totalGB": 16, "modules": [] }, "gpus": [], "board": { "maker": "Fake", "model": "Board", "bios": "1", "biosDate": null },
+            "memory": { "totalGB": 16, "modules": [] }, "gpus": [], "board": { "maker": "Fake", "model": "Board", "bios": "1", "biosDate": "2024-01-01" },
             "storage": [], "drives": [], "network": [], "monitors": [] }),
         )
     }

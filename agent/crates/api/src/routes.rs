@@ -1,4 +1,4 @@
-//! The routes already answered by this agent (plan 3.2, in order). Anything not listed here goes to the Node agent through the proxy.
+//! The routes already answered by this agent (plan 3.2, in order).
 //! Ported so far: the ones that only read or write `config.json` (`/api/pair-code`, `/api/layout`) and the audio module
 //! (`/api/volume`, `/api/mic`, `/api/audio*`), the last one only when the agent has an `AudioPort`.
 #![allow(clippy::result_large_err)] // the Err of a route step is the whole HTTP answer to send

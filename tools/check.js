@@ -2,9 +2,9 @@
 
 // One command for "is everything still fine?" (docs/adr/0006). Runs the checks of every part of the repository that exists.
 //
-//   node tools/check.js             fast: lint + unit tests + contract tests   (what the pre-push hook runs)
-//   node tools/check.js --full      also the interface tests (needs Chrome/Brave/Edge) and the integration tests (needs the real PC)
-//   node tools/check.js --ci        fast + interface tests; no integration (a CI runner is not your PC)
+//   node tools/check.js             fast: lint + unit tests + the Rust agent against the contract   (what the pre-push hook runs)
+//   node tools/check.js --full      also the interface tests (needs Chrome/Brave/Edge)
+//   node tools/check.js --ci        the same as --full (a CI runner is not your PC)
 //
 // Parts are added here as they appear (web/ since Phase 2, agent/ in Phase 3).
 
@@ -22,23 +22,19 @@ process.env.PATH = `${path.join(process.env.USERPROFILE || process.env.HOME || '
 const steps = [];
 const add = (name, cwd, command, argv, when = true) => { if (when && fs.existsSync(path.join(ROOT, cwd))) steps.push({ name, cwd, command, argv }); };
 
-// legacy Node server
-add('legacy: lint', 'legacy/server', npm, ['run', 'lint']);
-add('legacy: unit tests', 'legacy/server', npm, ['test']);
-add('contract tests', 'tools/contract-test', npm, ['test']);
-add('legacy: integration tests (real PC)', 'legacy/server', npm, ['run', 'test:integration'], full);
-
 // the new interface: generated API types up to date, tsc --strict, ESLint, Vitest; then its build and browser tests (same harness as the old UI)
 add('web: types + lint + unit tests', 'web', npm, ['test']);
 add('web: build + browser tests', 'web', npm, ['run', 'test:e2e'], full || ci);
 
-// the Rust agent (agent/): format, lints as errors, unit tests, then the release build checked from outside (security + proxy to Node)
+// the Rust agent (agent/): format, lints as errors, unit tests, then the release build checked from outside (contract + security)
 const hasAgent = fs.existsSync(path.join(ROOT, 'agent', 'Cargo.toml'));
 add('agent: cargo fmt --check', 'agent', 'cargo', ['fmt', '--all', '--check'], hasAgent);
 add('agent: cargo clippy', 'agent', 'cargo', ['clippy', '--workspace', '--all-targets', '--', '-D', 'warnings'], hasAgent);
 add('agent: cargo test', 'agent', 'cargo', ['test', '--workspace'], hasAgent);
-add('agent: release build', 'agent', 'cargo', ['build', '--release', '-p', 'ssd-agent'], hasAgent && (full || ci));
-if (hasAgent && (full || ci)) steps.push({ name: 'agent: conformance (security + proxy to Node)', cwd: 'tools/agent-check', command: process.execPath, argv: ['run.js'] });
+add('agent: release build', 'agent', 'cargo', ['build', '--release', '-p', 'ssd-agent'], hasAgent);
+// the contract (every operation, schemas, security) and the outside-in checks run against that build, on a fake PC
+add('contract tests (agent on a fake PC)', 'tools/contract-test', npm, ['test']);
+if (hasAgent) steps.push({ name: 'agent: conformance (security, pairing, static files, camera)', cwd: 'tools/agent-check', command: process.execPath, argv: ['run.js'] });
 
 const results = [];
 for (const step of steps) {

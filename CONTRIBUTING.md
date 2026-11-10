@@ -4,36 +4,46 @@ Para entender como as peças se encaixam, leia [docs/ARQUITETURA.md](docs/ARQUIT
 
 ## Rodando
 
+O Rust e o Node ficam no PATH (o Rust vem do `rustup`; o alvo é `x86_64-pc-windows-gnu`, veja `rust-toolchain.toml`).
+
 ```powershell
-cd legacy/server
-npm install            # só para as ferramentas de desenvolvimento (ESLint); o servidor em si não tem dependências
-npm run dev            # servidor reiniciando a cada mudança
-npm run lint           # ESLint
-npm test               # lógica e servidor, sem Windows nem navegador
-npm run test:ui        # a interface em um navegador sem tela (CHROME_PATH aponta outro navegador)
-npm run test:integration   # helper nativo x PowerShell, no PC real
-npm run check          # tudo isso
+cd agent
+cargo build --release                       # o agente (ssd.exe), com a interface de web/dist dentro
+cargo fmt --all                             # formatação (a verificação usa --check)
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace                      # lógica pura, rotas com portas falsas, TLS, eventos
+
+cd ..\web
+npm install
+npm run dev                                 # a interface com recarga automática
+npm test                                    # tipos gerados do contrato, tsc --strict, ESLint, Vitest
+npm run test:e2e                            # build e a interface num navegador sem tela (CHROME_PATH aponta outro)
 ```
 
-Antes de abrir um commit, `node tools/check.js` (na raiz) precisa passar: roda lint, testes e testes de contrato; `--full` inclui a interface e a integração. O hook de `pre-push` (`git config core.hooksPath tools/hooks`) roda a versão rápida. `npm run check` dentro de `legacy/server` continua valendo para só o servidor. Mudou só texto ou documentação: `npm run lint` basta.
+Antes de abrir um commit, `node tools/check.js` (na raiz) precisa passar: formatação, lints e testes do Rust e da interface, e o agente **contra o contrato da API** (`tools/contract-test` sobe o `ssd.exe` num PC de mentira) e contra as checagens de fora para dentro (`tools/agent-check`: Host, token, pareamento, câmera, arquivos estáticos). `--full` inclui a interface num navegador. O hook de `pre-push` (`git config core.hooksPath tools/hooks`) roda a versão rápida. Mudou só texto ou documentação: o que mudou basta.
 
 ## Convenções
 
-- **Sem dependências no servidor.** `devDependencies` só para ferramentas.
 - **Comentários e identificadores em inglês; textos que a pessoa vê em português do Brasil.**
-- **Um erro engolido precisa de motivo.** `catch {}` vazio não passa no lint: comente por que é inofensivo ou use `swallow('[tag] o que falhou', err)`
-  (`src/log.js`), que registra no nível `debug`. Mensagens do servidor usam `log.info/warn/error` com o prefixo `[tag]`.
-- **C# dos helpers é C# 5** (o compilador que vem no Windows): sem `?.`, interpolação de texto, `nameof`, `=>` em membros. Quando ficar em dúvida, compile (`npm run test:integration`).
-- **O cliente só dispara o que o servidor lista.** Uma rota nova valida tudo que recebe (ids contra as listas do servidor, números com limites) e devolve 400/404 com um motivo.
+- **O contrato manda.** Uma rota nova entra primeiro em `contracts/openapi.yaml`; a interface gera os tipos a partir dele (`npm run gen:api` em `web/`) e o `contract-test` confere o agente contra ele.
+- **O cliente só dispara o que o agente lista.** Uma rota nova valida tudo que recebe (ids contra as listas do agente, números com limites) e devolve 400/404 com um motivo.
+- **O Windows fica atrás de uma porta.** A lógica (`agent/crates/core`) só conhece os traits de `ports.rs` e tem um `Fake*` de cada; só `agent/crates/platform-windows` chama a API do Windows. Assim tudo se testa sem tocar no PC (`--fake-platform`).
+- **`unsafe` só no `platform-windows`, com um comentário do que o Windows promete.**
 - **Não coloque dados da máquina ou pessoais no código nem nos testes** (token, nome do PC, IPs, números de série).
 
 ## Adicionar uma rota
 
-1. Escolha o arquivo de `legacy/server/src/routes/` pelo assunto (ou crie um e inclua o nome em `MODULES` em `routes/index.js`).
-2. Registre com `on('POST', '/api/algo/:id', async ({ req, res, params }) => { ... })`. Use `ctx.system`, `ctx.media`... (nunca `require` o módulo do PC direto: é por `ctx` que os testes trocam por falsos).
-3. Valide com `src/validate.js` (`badRequest`, `notFound`, `number`, `percent`) e responda com `sendJson`.
-4. Acrescente os casos em `test/routes.test.js` (entrada inválida, id desconhecido, o que chega ao módulo do PC).
-5. Se for algo que a interface precisa saber na hora, avalie um tópico novo em `routes/events.js` (o produtor só roda enquanto alguém escuta).
+1. Descreva em `contracts/openapi.yaml` (caminho, corpo, respostas, `operationId`, tag) e rode `npm run gen:api` em `web/`.
+2. Se for uma operação do PC, acrescente o método ao trait certo em `agent/crates/core/src/ports.rs` (e ao `Fake*` dele).
+3. Registre a rota em `agent/crates/api/src/routes.rs` (função `answer`, ou o módulo do assunto: `winroutes`, `powerroutes`, `monitorroutes`, `editor`, `camera`). Valide o corpo antes de usar e devolva 400/404 com `error`.
+4. Acrescente os casos em `tools/contract-test/cases.js` (entrada inválida, id desconhecido, o caso de sucesso) e um teste de unidade ao lado do código.
+5. Se for algo que a interface precisa saber na hora, avalie um tópico novo em `agent/crates/api/src/events.rs` (o produtor só roda enquanto alguém escuta).
+
+## Adicionar uma operação do Windows
+
+1. A API do Windows em `agent/crates/platform-windows/src/<assunto>.rs`, implementando o trait de `ports.rs`.
+2. Um teste no PC de verdade só quando não houver como falsear; marque-o `#[ignore]` e documente como rodar.
+3. Confira no seu PC com `ssd diagnose` (ele lê cada parte e mostra o que falhou).
 
 ## Adicionar uma página na interface
 
@@ -42,9 +52,6 @@ Antes de abrir um commit, `node tools/check.js` (na raiz) precisa passar: roda l
 3. Regras sem tela (ordem, geometria, formatação) ficam em módulos puros com teste Vitest ao lado.
 4. Para algo que vale proteger de regressão no navegador, acrescente um caso em `web/e2e/*.e2e.cjs` (o servidor falso está em `web/e2e/harness.cjs`).
 
-## Adicionar uma operação a um helper
+## Empacotar
 
-1. **Nativo:** escreva a operação em `legacy/server/native/` (`InputOps.cs`, `MediaOps.cs` ou `MonitorOps.cs`) e registre com `host.On("nomeDaOp", r => ...)`.
-2. **PowerShell (plano B):** a mesma operação no `switch` do script do helper em `legacy/server/scripts/`. O C# de `DeckNative.cs` e `VCam.cs` é o mesmo nos dois lados: mexa só nos arquivos de `native/`.
-3. Exponha em `legacy/server/src/system.js` (ou `media.js`/`monitor.js`). Se for **só leitura**, inclua o nome em `retryOps` do `Host` para ser repetida quando o helper morrer no meio. **Ações nunca entram aí.**
-4. Acrescente a comparação em `test/native-parity.test.js` (leituras e escritas que não mudam nada), com os dois helpers respondendo igual.
+`powershell -File agent/scripts/package.ps1 [-Sign]` constrói a interface e o agente (em `agent/target-pkg`, para não brigar com um agente em uso) e gera `dist/SelfStreamDeck-<versão>.zip` com `install.ps1` e `uninstall.ps1`.

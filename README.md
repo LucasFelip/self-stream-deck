@@ -1,6 +1,6 @@
 # self-stream-deck
 
-> **Estrutura em transição.** O servidor Node atual está em `legacy/server/` (Fase 1 de [docs/plano-reestruturacao.md](docs/plano-reestruturacao.md)). O contrato da API fica em `contracts/`, os verificadores em `tools/` e as decisões em `docs/adr/`. O comando único de verificação é `node tools/check.js`.
+> O agente do PC é um programa em Rust (`agent/`), a interface é React + TypeScript (`web/`), o app é Android (`android/`). O contrato da API fica em `contracts/`, os verificadores em `tools/` e as decisões em `docs/adr/`. O plano e o estado das fases estão em [docs/plano-reestruturacao.md](docs/plano-reestruturacao.md). O comando único de verificação é `node tools/check.js`.
 
 Transforma um celular Android (feito para o Galaxy A31) em um painel de controle do PC com Windows:
 abrir/focar aplicativos, atalhos de teclado, volume e áudio avançado, mídia tocando agora, monitor do
@@ -8,13 +8,14 @@ sistema e controles de energia.
 
 ```
 ┌──────────────┐   HTTP (USB/adb reverse) ou HTTPS (Wi-Fi opcional)   ┌──────────────────────────┐
-│ App Android  │ ───────────────────────────────────────────▶ │ server/ (Node, no PC)    │
-│ (WebView)    │ ◀── interface web, ícones, dados ─────────── │  • helpers nativos        │
+│ App Android  │ ───────────────────────────────────────────▶ │ ssd.exe (Rust, no PC)    │
+│ (WebView)    │ ◀── interface web, ícones, dados ─────────── │  • Windows por API direta │
 └──────────────┘                                               └──────────────────────────┘
 ```
 
-- `legacy/server/` — servidor no PC. Node 20+, **sem dependências** (não precisa de `npm install`).
-  Serve também a interface web (o build de `web/`, React + TypeScript), então a lógica do painel fica toda no PC.
+- `agent/` — o agente no PC (`ssd.exe`, Rust). Um só processo (~60 MB), **sem Node e sem instalar nada além dele** (só os scripts de certificado e do firewall usam o PowerShell que já vem no Windows).
+  A interface web (o build de `web/`) vai **dentro** do `.exe`, então a lógica do painel fica toda no PC.
+- `web/` — a interface (React + TypeScript, PWA).
 - `android/` — app Android fino (Java, sem libs): guarda o endereço do PC, mantém a tela ligada,
   vibra ao toque e mostra a página. Mudar a interface **não exige recompilar o APK**.
 
@@ -68,95 +69,79 @@ mostra isso. Para remover essas ações da API: `"powerControls": false` no `con
 
 Discreto de propósito: as abas e o menu **⚙** Configurações (nome do PC, Editar botões, Câmera do celular, Escurecer após… (apaga a tela depois de 1, 2 ou 5 min sem toque; o primeiro toque só acorda), Endereço do PC no app e Atualizar; em retrato abre como folha inferior). Durante um desligamento agendado aparece a contagem regressiva.
 
-## Rodando o servidor
+## Instalando e rodando o agente
+
+**Instalar (pacote pronto):** gere o pacote com `powershell -File agent/scripts/package.ps1` (cria `dist/SelfStreamDeck-<versão>.zip`), descompacte e rode:
 
 ```powershell
-cd legacy/server
-npm run phone      # servidor + abre o painel no celular via USB
-npm start          # só o servidor
+powershell -ExecutionPolicy Bypass -File install.ps1 [-From "pasta\de\dados\antiga"]
 ```
 
-Na primeira execução é gerado um token em `legacy/server/data/config.json` e impresso o endereço de pareamento.
+Pede UAC uma vez e: copia o `ssd.exe` para `Program Files\Self Stream Deck`, traz o token e os certificados de uma instalação anterior (`-From`: o celular continua pareado),
+registra a tarefa "Self Stream Deck" (no logon, **sem janela**, como administrador, reinicia sozinha até 3 vezes se cair) e cria o atalho no Menu Iniciar.
+`uninstall.ps1` desfaz (os dados em `%APPDATA%\SelfStreamDeck` ficam, a menos de `-RemoveData`).
 
-### Iniciar com o Windows
+- **Dados:** `%APPDATA%\SelfStreamDeck\` (`config.json` com o token, `tls/`, `icons/`, `vcam/`, `server.log`, que gira em 2 MB). Fora do git.
+- **Ícone na bandeja:** abrir painel, mostrar o código de pareamento, abrir o registro, sair.
+- **Algo errado?** `ssd.exe diagnose` (ou `diagnose --out arquivo.txt`) junta versão, config (token mascarado), portas, certificados, tarefa, firewall, o que cada parte do PC responde e o fim do log.
+- `SSD_LOG=debug` (variável de ambiente) mostra também os erros que o agente ignora de propósito.
+- **Assinatura:** `agent/scripts/sign.ps1` assina o `.exe` (certificado próprio, ou um `.pfx` com `-Pfx`); `package.ps1 -Sign` faz isso ao empacotar.
+
+**Rodar direto do código** (desenvolvimento):
 
 ```powershell
-npm run autostart:install     # registra uma tarefa agendada (pede UAC uma vez)
-npm run autostart:status
-npm run autostart:uninstall
+cd agent; cargo build --release
+.\target\release\ssd.exe --data-dir .\dados-teste --port 7878    # --web-dir ..\web\dist serve a interface de uma pasta
 ```
 
-A tarefa roda no logon, **sem janela**, como administrador (necessário para os atalhos chegarem a janelas
-elevadas) e escreve em `legacy/server/data/server.log` (rotaciona em 2 MB). Pare o servidor manual antes: só uma
-instância pode usar a porta.
-
-O log mostra o essencial; `SSD_LOG=debug` (variável de ambiente) mostra também os erros que o servidor ignora de propósito, útil para investigar algo estranho.
-
-A tarefa inicia um **supervisor** (`src/supervisor.js`) que sobe o servidor e o reinicia sozinho se ele cair ou for encerrado
-(espera 2 s, aumentando até 30 s se falhar logo ao iniciar). O motivo de cada parada fica no `server.log`
-(`[server] stopping (SIGTERM)`, `[server] uncaught exception…`, `[supervisor] server exited (code …)`). Para reiniciar de propósito,
-encerre o processo do servidor (o supervisor o sobe de novo) ou pare a tarefa e inicie-a outra vez.
+`--fake-platform` troca o PC por um PC de mentira (é o que os testes usam); `--no-tray` não cria o ícone.
 
 ### Abrir no celular via USB
 
-Com a depuração USB ativa, `npm run phone` fica vigiando o `adb` (usa `.tools/platform-tools/adb.exe` se
-existir, senão o do PATH). Ao plugar o celular ele faz `adb reverse` e abre o **app** (se instalado, já
-pareado por intent) ou o navegador. Em `127.0.0.1` o navegador trata a página como contexto seguro, então
-ela mantém a tela ligada sozinha.
+Com a depuração USB ativa, rode uma vez a cada vez que plugar: `adb reverse tcp:7878 tcp:7878` (o `adb` de `.tools/platform-tools/` serve) e abra o app.
+Em `127.0.0.1` o navegador trata a página como contexto seguro, então ela mantém a tela ligada sozinha. (O vigia que fazia isso sozinho era do servidor Node e ainda não foi portado; pelo Wi-Fi não precisa de nada disso.)
 
 ### Conectar pelo Wi-Fi (rede da casa)
 
-Além do USB, o celular pode falar com o PC pela rede local, sem cabo e sem serviços de terceiros:
+Além do USB, o celular pode falar com o PC pela rede local, sem cabo e sem serviços de terceiros. Edite o `config.json` e reinicie o agente (encerre o processo: a tarefa o sobe de novo):
 
-```powershell
-cd legacy/server
-npm run lan -- on        # liga (config.json: "lan": true); depois reinicie o servidor (encerre o processo: o supervisor o sobe)
-npm run lan -- status    # mostra a regra de firewall, a impressão digital do certificado e o link de pareamento
-```
-
-- **HTTPS na porta 7879** (`httpsPort`), só quando `lan` está ligado. O servidor HTTP da porta 7878 continua **só em 127.0.0.1**.
-- **Certificado próprio** (RSA 2048, 5 anos), criado na primeira vez em `legacy/server/data/tls/`. O app **fixa a impressão digital (SHA-256)** do
+- `"lan": true` liga o **HTTPS na porta 7879** (`httpsPort`). O HTTP da porta 7878 continua **só em 127.0.0.1**.
+- **Certificado próprio** (RSA 2048, 5 anos), criado na primeira vez em `%APPDATA%\SelfStreamDeck\tls\`. O app **fixa a impressão digital (SHA-256)** do
   certificado: só aceita exatamente aquele, então ninguém na rede consegue se passar pelo servidor, e a câmera do celular funciona (precisa de HTTPS).
   O certificado não contém IPs, então trocar o IP do PC não exige gerar outro.
-- **Firewall:** o servidor cria a regra "Self Stream Deck (rede local)": só TCP 7879, só da **sub-rede local** (não da internet), em qualquer perfil
-  (a rede da casa costuma estar como "Pública"). Precisa de administrador, que a tarefa de autostart já tem.
-- **Parear sem digitar nada:** plugue o celular **uma vez** com `npm run phone` rodando (ou com o autostart): o app recebe o endereço USB e o do Wi-Fi.
-  Depois funciona sem cabo. Sem cabo, dá para colar o link `https://IP:7879/?token=…&fp=…` na tela "Conectar ao PC" do app.
+- **Firewall:** o agente cria a regra "Self Stream Deck (rede local)": só TCP 7879, só da **sub-rede local** (não da internet), em qualquer perfil
+  (a rede da casa costuma estar como "Pública"). Precisa de administrador, que a tarefa já tem.
+- **Parear:** o registro (`server.log`) e o menu da bandeja mostram o link `https://IP:7879/?token=…&fp=…`; cole-o na tela "Conectar ao PC" do app. Plugando o celular uma vez
+  com o USB e `adb reverse`, o app recebe os dois endereços sozinho.
 - **Qual endereço o app usa:** tenta primeiro o USB (`127.0.0.1`, que falha na hora sem cabo) e depois o Wi-Fi. Se o PC some por uns 12 s, a página pede
   ao app para trocar de caminho (USB ↔ Wi-Fi).
-- **IP do PC:** reserve o IP no roteador (DHCP fixo) para o endereço não mudar; se mudar, plugue o celular de novo (ou cole o novo link).
-- `npm run lan -- off` desliga e remove a regra de firewall.
+- **IP do PC:** reserve o IP no roteador (DHCP fixo) para o endereço não mudar; se mudar, cole o novo link.
+- `"lan": false` desliga.
 
 ### Abrir no iPhone (Safari / app na Tela de Início)
 
 O iPhone não tem o app Android (nem `adb reverse`): ele abre o painel no **Safari** pelo Wi-Fi e pode virar um app em tela cheia na Tela de Início.
-Serve o iOS que roda o Safari com HTTPS (Wake Lock a partir do 16.4; o toque de háptico, a partir do 18).
+Serve o iOS que roda o Safari com HTTPS (Wake Lock a partir do 16.4; o toque de háptico, a partir do 18). Ligue com `"ios": true` no `config.json` e reinicie o agente.
 
-```powershell
-cd legacy/server
-npm run lan -- ios on       # liga (config.json: "ios": true); reinicie o servidor
-npm run lan -- ios          # mostra os links e os passos abaixo (e confere o certificado)
-```
-
-1. **Instale o certificado uma vez.** No Safari do iPhone abra `http://IP-DO-PC:7881/` (ou o `nome-do-pc.local`), confira a impressão digital da página com a
-   do comando acima, toque em *Baixar certificado*, depois *Ajustes → Perfil Baixado → Instalar* e *Ajustes → Geral → Sobre → Ajustes de Confiança do
+1. **Instale o certificado uma vez.** No Safari do iPhone abra `http://IP-DO-PC:7881/` (ou o `nome-do-pc.local`; os links também estão no registro), confira a impressão digital da página com a
+   do registro, toque em *Baixar certificado*, depois *Ajustes → Perfil Baixado → Instalar* e *Ajustes → Geral → Sobre → Ajustes de Confiança do
    Certificado* → ativar. Esse certificado é só a **autoridade** (AC) do deck: ele não muda quando o IP do PC muda.
-2. **Abra o painel:** `https://IP-DO-PC:7880/?token=…` (o link aparece no comando). Aceite o aviso de *Rede Local*. Depois, *Compartilhar → Adicionar à Tela de Início*.
+2. **Abra o painel:** `https://IP-DO-PC:7880/?token=…` (o link aparece no registro). Aceite o aviso de *Rede Local*. Depois, *Compartilhar → Adicionar à Tela de Início*.
 3. **Se o app da Tela de Início pedir o código** (ele guarda cookies separados do Safari): no Safari abra ⚙ → *Código de pareamento* (copia o código), abra o
    app e cole na tela de pareamento (vale também colar o link inteiro).
 
 Como funciona: o Safari confere os nomes dentro do certificado, ao contrário do app Android (que fixa a impressão digital). Por isso o iPhone tem **a sua
 própria porta HTTPS** (`iosPort`, 7880) com um certificado de 1 ano que lista o nome do PC, `nome.local` e os IPs atuais, assinado por uma AC local criada na
-primeira vez em `legacy/server/data/tls/ios/`. Quando os IPs mudam, o servidor gera outro certificado sozinho (a cada 5 min ele confere) **sem exigir nada no iPhone**. A porta
-HTTP `7881` (`iosCaPort`) só entrega o certificado público da AC, sem token; a chave privada nunca sai da pasta. A regra de firewall "Self Stream Deck (iPhone)" libera só essas
-duas portas, só para a sub-rede local. O Android e a porta 7879 não mudam. `npm run lan -- ios off` desliga e remove a regra.
+primeira vez em `%APPDATA%\SelfStreamDeck\tls\ios\`. A porta HTTP `7881` (`iosCaPort`) só entrega o certificado público da AC, sem token; a chave privada nunca sai da pasta.
+A regra de firewall "Self Stream Deck (iPhone)" libera só essas duas portas, só para a sub-rede local. **Limite atual:** o certificado do iPhone só é refeito quando falta; se o IP
+do PC mudar, o nome `.local` continua valendo, mas o IP novo só entra no certificado se você apagar a pasta `tls\ios\` (menos `ca.*`) e reiniciar o agente.
 
 Limites no iPhone: sem vibração do navegador (o háptico usa um truque do iOS 18); a tela só fica ligada com a Wake Lock; o escurecimento (⚙ → *Escurecer após…*) é um véu preto,
 sem baixar o brilho. USB: não há equivalente ao `adb reverse`; use o Wi-Fi (ou o *Acesso Pessoal* por USB, com o Apple Devices/iTunes no Windows).
 
 ### Segurança
 
-- **Por padrão só escuta em `127.0.0.1`** (PC e USB). O Wi-Fi é opcional (`npm run lan -- on`) e usa **HTTPS** com certificado fixado pelo app,
+- **Por padrão só escuta em `127.0.0.1`** (PC e USB). O Wi-Fi é opcional (`"lan": true`) e usa **HTTPS** com certificado fixado pelo app,
   numa porta separada e com firewall só para a sub-rede local; quem estiver na rede ainda precisa do token para controlar o PC.
 - Toda requisição exige o token (cookie, header `x-token` ou `?token=`); 10 falhas bloqueiam o IP por 1 min. Só o manifest, os ícones e o `pair.js` abrem sem token
   (nada privado), e quem abre `/` sem token no navegador vê a página de pareamento, não um erro. A porta HTTP do iPhone (7881) serve apenas o certificado público da AC.
@@ -164,14 +149,14 @@ sem baixar o brilho. USB: não há equivalente ao `adb reverse`; use o Wi-Fi (ou
 - O cliente só dispara o que está nas listas do servidor, por id: apps da barra de tarefas, atalhos do
   `config.json`, dispositivos de áudio existentes. Nunca caminhos ou teclas arbitrárias.
 
-## Configuração (`legacy/server/data/config.json`)
+## Configuração (`%APPDATA%\SelfStreamDeck\config.json`)
 
 | Campo | Descrição |
 |---|---|
 | `port` | Porta (padrão `7878`; `SSD_PORT` sobrescreve só naquela execução). |
-| `lan` | `true` liga o acesso pelo Wi-Fi (HTTPS na `httpsPort`, padrão 7879). Use `npm run lan -- on/off/status`. Padrão `false`. |
+| `lan` | `true` liga o acesso pelo Wi-Fi (HTTPS na `httpsPort`, padrão 7879). Padrão `false`. |
 | `httpsPort` | Porta do HTTPS da rede local (padrão `7879`). |
-| `ios` | `true` liga o acesso do iPhone (HTTPS na `iosPort`, padrão 7880, e a porta HTTP `iosCaPort`, padrão 7881, que só entrega o certificado da AC). Use `npm run lan -- ios on/off`. Padrão `false`. |
+| `ios` | `true` liga o acesso do iPhone (HTTPS na `iosPort`, padrão 7880, e a porta HTTP `iosCaPort`, padrão 7881, que só entrega o certificado da AC). Padrão `false`. |
 | `iosPort` / `iosCaPort` | Portas do iPhone (padrão `7880` e `7881`). |
 | `hidden` | Ids de apps a esconder (veja `GET /api/apps`). |
 | `editor` | `false` desliga o editor de botões do app (atalhos, macros e apps só mudam aqui no arquivo). Padrão: `true`. |
@@ -180,15 +165,14 @@ sem baixar o brilho. USB: não há equivalente ao `adb reverse`; use o Wi-Fi (ou
 | `shortcuts` | Atalhos: `{ "id", "label", "keys" }`, com `keys` como `ctrl+shift+esc`. |
 | `powerControls` | `false` remove as ações de energia da API. |
 | `notifications` | `{ "enabled": true, "apps": ["whatsapp"] }`: mostra no deck as notificações do Windows desses apps (palavras que casam com o nome ou o id do app), mesmo com Não Incomodar ou jogo ligado. WhatsApp Web no navegador chega como o app do navegador e o texto não cita o WhatsApp: use `["brave"]` (ou `"chrome"`, `"edge"`), o que mostra as notificações de qualquer site desse navegador. `enabled: false` desliga. |
-| `miniPlayer` | `false` desliga o aviso de faixa nova (e dispensa manter o helper de mídia ligado, ~90 MB). |
-| `autoOpenPhone` | `true` para sempre abrir no celular via USB ao iniciar. |
+| `miniPlayer` | `false` desliga o aviso de faixa nova . |
 | `token` | Token de pareamento. Apague e reinicie para gerar outro. |
 
-Ao iniciar, o servidor confere o arquivo e avisa no log de valores errados (tipo errado, id repetido, texto com caracteres danificados), sem parar.
-O editor do app recusa salvar algo assim. **Cada gravação guarda a versão anterior em `config.json.bak`**, e se o `config.json` ficar ilegível o servidor não sobe nem o sobrescreve
+Ao iniciar, o agente confere o arquivo e avisa no log de valores errados (tipo errado, id repetido, texto com caracteres danificados), sem parar.
+O editor do app recusa salvar algo assim. **Cada gravação guarda a versão anterior em `config.json.bak`**, e se o `config.json` ficar ilegível o agente não sobe nem o sobrescreve
 (isso trocaria o token): conserte-o ou copie o `.bak` por cima.
 
-Atalhos: teclas em `legacy/server/src/keys.js` (`ctrl`, `shift`, `alt`, `win`, letras, números, `f1`–`f24`, setas,
+Atalhos: teclas em `agent/crates/core/src/keys.rs` (`ctrl`, `shift`, `alt`, `win`, letras, números, `f1`–`f24`, setas,
 `esc`, `tab`, `enter`, `space`, `printscreen`, teclas de mídia…). Atalhos inválidos são ignorados com aviso.
 
 ## Reorganizar os botões e editor de macros
@@ -214,7 +198,7 @@ pelo celular; se não quiser isso, ponha `"editor": false` no `config.json`.
 
 O celular vira a webcam do PC. O jeito mais rápido é a tecla **Câmera** na tela de Apps: um toque liga ou desliga a transmissão (fica
 vermelha enquanto transmite). As opções abrem pelo ícone vermelho do cabeçalho ou pelo menu **⚙ → Câmera do celular → Transmitir ao PC**. O app pede a permissão da câmera na primeira vez
-("Durante o uso do app"). O deck manda os quadros em JPEG para o servidor (`POST /api/camera/frame`) e o servidor os republica como
+("Durante o uso do app"). O deck manda os quadros em JPEG para o agente (`POST /api/camera/frame`) e o agente os republica como
 um stream MJPEG (`GET /api/camera/stream`). Enquanto transmite, um ícone vermelho de câmera aparece no cabeçalho para voltar à tela.
 
 Há duas saídas para os apps do PC enxergarem a imagem como câmera, e as duas funcionam ao mesmo tempo:
@@ -242,12 +226,11 @@ cd android
 & "$t\platform-tools\adb.exe" install -r app\build\outputs\apk\debug\app-debug.apk
 ```
 
-Com o app instalado, `npm run phone` abre o app (já pareado, via intent `--es url`) em vez do navegador.
 O app expõe duas funções à página: `Android.openSettings()` e `Android.vibrate(ms)`, e libera a câmera do celular só para a página do PC pareado (permissão CAMERA).
 
 ## Para quem vai mexer no código
 
-- [docs/ARQUITETURA.md](docs/ARQUITETURA.md): como o servidor, os helpers nativos, a atualização por push e a interface se encaixam; consumo medido; testes; variáveis de ambiente; a API completa.
-- [CONTRIBUTING.md](CONTRIBUTING.md): como rodar os testes e o lint, e como adicionar uma rota, uma página ou uma operação de helper.
+- [docs/ARQUITETURA.md](docs/ARQUITETURA.md): como o agente, a interface e o app se encaixam; consumo; testes; variáveis de ambiente; a API.
+- [CONTRIBUTING.md](CONTRIBUTING.md): como rodar os testes e o lint, e como adicionar uma rota, uma página ou uma operação do Windows.
 
-`npm run check` roda tudo (lint, testes de lógica, da interface e dos helpers nativos).
+`node tools/check.js` (na raiz) roda tudo: formatação, lints e testes do Rust e da interface, e o agente contra o contrato da API (`--full` inclui a interface num navegador).

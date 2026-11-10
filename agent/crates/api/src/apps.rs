@@ -111,13 +111,7 @@ pub async fn icon(state: &AppState, id: &str) -> Response {
 
 pub async fn refresh_route(state: &Arc<AppState>) -> Response {
     match refresh(state, true).await {
-        Ok(_) => {
-            // the Node agent behind this one keeps its own copy of the list for the routes it still serves
-            if let Some(upstream) = state.upstream {
-                crate::proxy::notify(upstream, state.guard.token(), "/api/refresh").await;
-            }
-            crate::json(StatusCode::OK, json!({ "count": visible(state).len() }))
-        }
+        Ok(_) => crate::json(StatusCode::OK, json!({ "count": visible(state).len() })),
         Err(problem) => error_json(StatusCode::INTERNAL_SERVER_ERROR, &problem),
     }
 }

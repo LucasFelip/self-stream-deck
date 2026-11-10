@@ -8,8 +8,6 @@ publish.workspace = true
 ssd-core = { path = "../core" }
 axum = { version = "0.7", default-features = false, features = ["http1", "tokio", "macros"] }
 tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "time", "fs"] }
-hyper = { version = "1", features = ["client", "http1"] }
-hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
 http-body-util = "0.1"
 tokio-stream = "0.1"
 rust-embed = { version = "8", features = ["debug-embed"] }

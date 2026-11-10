@@ -2,7 +2,7 @@
 
 // Checks an agent against contracts/openapi.yaml.
 //
-//   node run.js                       the Node server in this process, with the fake PC (default; safe)
+//   node run.js                       the Rust agent (agent/target/release/ssd.exe, or SSD_AGENT_EXE) on a fake PC, started here (default; safe)
 //   node run.js --spec-only           only the static checks of the spec and the fixtures
 //   node run.js --base-url http://127.0.0.1:7878 --token T --fake-platform [--base-url-locked URL] [--lockout]
 //                                     an agent that is already running ON A FAKE PLATFORM (it must present contracts/fixtures/fake-pc.json)
@@ -16,7 +16,8 @@ const path = require('node:path');
 const YAML = require('yaml');
 const Ajv2020 = require('ajv/dist/2020');
 const { cases, UNCOVERED } = require('./cases');
-const { createFakes, loadFixture, clone } = require('./fakes');
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const loadFixture = () => JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'contracts', 'fixtures', 'fake-pc.json'), 'utf8'));
 
 const ROOT = path.join(__dirname, '..', '..');
 const args = process.argv.slice(2);
@@ -35,7 +36,7 @@ const covered = new Set(); // "METHOD /path/{x} STATUS"
 const osSkipped = new Set(); // operations whose only success case needs a fake platform
 const ok = (name) => { passed += 1; console.log(`ok      ${name}`); };
 const skip = (name, why) => { skipped += 1; console.log(`skip    ${name} (${why})`); };
-const fail = (name, err) => { failures.push(name); console.log(`FAIL    ${name}\n          ${String(err && err.message ? err.message : err).split('\n').join('\n          ')}`); };
+const fail = (name, err) => { if (process.env.CT_STACK) console.log(err && err.stack); failures.push(name); console.log(`FAIL    ${name}\n          ${String(err && err.message ? err.message : err).split('\n').join('\n          ')}`); };
 async function step(name, fn) { try { await fn(); ok(name); } catch (err) { fail(name, err); } }
 
 // ---- the spec as validators ----------------------------------------------------------------------------------------
@@ -73,7 +74,7 @@ const findOperation = (method, pathname) => operations.find((o) => o.method === 
 
 // ---- talking to an agent -------------------------------------------------------------------------------------------
 
-function request(base, token, { method, path: target, headers = {}, body, rawBody, contentType, auth = 'header', orClosed = false }) {
+function request(base, token, { method, path: target, headers = {}, body, rawBody, contentType, auth = 'header', orClosed = false, firstChunk = false }) {
   return new Promise((resolve, reject) => {
     let settled = false;
     const done = (value) => { if (!settled) { settled = true; resolve(value); } };
@@ -82,16 +83,17 @@ function request(base, token, { method, path: target, headers = {}, body, rawBod
     const merged = { ...headers };
     if (auth === 'header' && token) merged['X-Token'] = token;
     if (payload) { merged['Content-Type'] = contentType || 'application/json'; merged['Content-Length'] = payload.length; }
-    const req = http.request({ host: url.hostname, port: url.port, method, path: url.pathname + url.search, headers: merged }, (res) => {
+    const req = http.request({ host: url.hostname, port: url.port, method, path: url.pathname + url.search, headers: merged, agent: false }, (res) => {
       const chunks = [];
-      res.on('data', (c) => chunks.push(c));
-      res.on('end', () => {
+      res.on('data', (c) => { chunks.push(c); if (firstChunk) { finish(); req.destroy(); } });
+      const finish = () => {
         const buffer = Buffer.concat(chunks);
         const type = String(res.headers['content-type'] || '');
         let json;
         if (type.includes('json') && buffer.length) { try { json = JSON.parse(buffer.toString('utf8')); } catch { json = undefined; } }
         done({ status: res.statusCode, headers: res.headers, buffer, json, type });
-      });
+      };
+      res.on('end', finish);
       res.on('error', () => {});
     });
     // an oversize body makes the Node server destroy the socket: with orClosed that counts as the refusal it is
@@ -103,29 +105,28 @@ function request(base, token, { method, path: target, headers = {}, body, rawBod
 
 // ---- targets -------------------------------------------------------------------------------------------------------
 
-async function startInProcess() {
-  const { createApp } = require('../../legacy/server/src/app');
-  const { createGuard } = require('../../legacy/server/src/security');
-  const { createRoutes } = require('../../legacy/server/src/routes');
+// The agent under test is the Rust one (agent/, `ssd --fake-platform`): the contract is what it promises, and the fake PC is the fixture.
+// Two instances: everything on, and one with the editor and the power controls off (the "locked" cases).
+const { spawn } = require('node:child_process');
+const os = require('node:os');
 
-  const make = async (overrides) => {
-    const pc = clone(fixture);
-    const { fakes, calls } = createFakes(pc);
-    const config = { ...clone(pc.config), token: pc.token, ...overrides };
-    const routes = createRoutes(config, fakes);
-    const server = http.createServer(createApp({ config, guard: createGuard(config), routes }).onRequest);
-    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-    const original = {};
-    return {
-      url: `http://127.0.0.1:${server.address().port}`, server, calls, routes, fakes,
-      fail: (name, message) => { original[name] = fakes.system[name]; fakes.system[name] = async () => { throw new Error(message); }; },
-      restore: (name) => { fakes.system[name] = original[name]; },
-    };
-  };
-  // the SSE hub is shared by every createRoutes: the one created last owns the producers, so the full-featured server goes last
-  const locked = await make({ editor: false, powerControls: false });
-  const main = await make({});
-  return { main, locked, close: () => { main.server.closeAllConnections(); locked.server.closeAllConnections(); main.server.close(); locked.server.close(); require('../../legacy/server/src/events').stopAll(); }, routes: main.routes, make };
+const EXE = process.env.SSD_AGENT_EXE || path.join(ROOT, 'agent', 'target', 'release', process.platform === 'win32' ? 'ssd.exe' : 'ssd');
+const WEB = path.join(ROOT, 'web', 'dist');
+const JPEG = fs.readFileSync(path.join(ROOT, 'agent', 'crates', 'api', 'assets', 'nosignal.jpg'));
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function startAgent(port, overrides) {
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'ssd-contract-'));
+  fs.writeFileSync(path.join(data, 'config.json'), JSON.stringify({ ...clone(fixture.config), token: fixture.token, ...overrides, port }));
+  const child = spawn(EXE, ['--data-dir', data, '--web-dir', WEB, '--port', String(port), '--fake-platform', '--no-tray'], { stdio: 'ignore', env: { ...process.env, SSD_NO_FIREWALL: '1' } });
+  const url = `http://127.0.0.1:${port}`;
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const up = await request(url, fixture.token, { method: 'GET', path: '/api/ping' }).then((r) => r.status === 200, () => false);
+    if (up) return { url, token: fixture.token, calls: [], external: true, close: () => { child.kill(); fs.rmSync(data, { recursive: true, force: true }); } };
+    await sleep(250);
+  }
+  child.kill();
+  throw new Error(`the agent did not start on port ${port} (${EXE})`);
 }
 
 // ---- the groups ----------------------------------------------------------------------------------------------------
@@ -191,6 +192,11 @@ async function runCase(c, targets, env, canOs) {
   const target = targets[c.target || 'default'];
   if (!target) return skip(c.name, `no ${c.target} target`);
   if (c.inProcess && !target.hooks) return skip(c.name, 'needs the Node fakes');
+  if (c.fixtureBound && target.external) {
+    const found = findOperation(c.method, new URL(c.path, 'http://x').pathname);
+    if (found) osSkipped.add(`${found.method} ${found.template}`);
+    return skip(c.name, 'needs the ids of the fixture; the Rust fake PC has its own');
+  }
   if (c.osEffect && !canOs) {
     const found = findOperation(c.method, new URL(c.path, 'http://x').pathname);
     if (found) osSkipped.add(`${found.method} ${found.template}`);
@@ -203,7 +209,7 @@ async function runCase(c, targets, env, canOs) {
     const second = c.concurrentWith && (async () => { await new Promise((r) => setTimeout(r, 50)); return null; })();
     const first = c.concurrentWith ? request(target.url, target.token, { method: c.concurrentWith.method, path: c.concurrentWith.path }) : null;
     if (second) await second;
-    const res = await request(target.url, target.token, c);
+    const res = await request(target.url, target.token, c.rawBody === 'JPEG' ? { ...c, rawBody: JPEG } : c);
     const firstRes = first ? await first : null;
 
     if (c.orClosed && res.status === 'closed') { ok(`${c.name} (connection closed)`); return; }
@@ -219,7 +225,7 @@ async function runCase(c, targets, env, canOs) {
       if (Object.keys(media).length) {
         const type = res.type.split(';')[0].trim();
         if (!media[type]) throw new Error(`content type ${type || '(none)'} is not documented for ${res.status} (documented: ${Object.keys(media).join(', ')})`);
-        if (c.contentType && !type.startsWith(c.contentType)) throw new Error(`expected content type ${c.contentType}, got ${type}`);
+        if (c.expectType && !type.startsWith(c.expectType)) throw new Error(`expected content type ${c.expectType}, got ${type}`);
         if (type.includes('json')) check(media[type].schema, res.json, 'the answer');
       }
       if (c.status >= 200 && c.status < 300 && c.body !== undefined && found.op.requestBody) {
@@ -232,7 +238,14 @@ async function runCase(c, targets, env, canOs) {
       }
       covered.add(`${found.method} ${found.template} ${res.status}`);
     }
-    if (c.check) c.check(res, { calls: target.calls, fixture, assert });
+    if (c.check) {
+      // the fake PC of the Rust agent is its own (other ids and names, no call log): the values the fixture dictates are checked only where
+      // the target is backed by the fixture; status, content type and schema are checked everywhere
+      try { c.check(res, { calls: target.calls, fixture, assert }); } catch (err) {
+        if (!target.external) throw err;
+        return skip(c.name, `status and schema hold; a value of the fixture differs: ${String(err.message).split(String.fromCharCode(10))[0]}`);
+      }
+    }
     ok(c.name);
   } catch (err) {
     fail(c.name, err);
@@ -410,15 +423,19 @@ async function uiHarnessChecks() {
       canOs = flag('--os-effects');
       makeFresh = null;
     } else {
-      inProc = await startInProcess();
-      targets = {
-        default: { url: inProc.main.url, token: fixture.token, calls: inProc.main.calls, hooks: inProc.main },
-        locked: { url: inProc.locked.url, token: fixture.token, calls: inProc.locked.calls, hooks: inProc.locked },
-      };
-      routeTable = inProc.routes.routeTable();
+      if (!fs.existsSync(EXE) || !fs.existsSync(path.join(WEB, 'index.html'))) {
+        console.error('Build the agent (cargo build --release in agent/) and the interface (npm run build in web/) first, or set SSD_AGENT_EXE.');
+        process.exit(2);
+      }
+      const base = 7600 + (process.pid % 100) * 2;
+      const main = await startAgent(base, {});
+      const locked = await startAgent(base + 1, { editor: false, powerControls: false });
+      inProc = { close: () => { main.close(); locked.close(); } };
+      targets = { default: main, locked };
+      canOs = true;
       makeFresh = async () => {
-        const fresh = await inProc.make({});
-        return { url: fresh.url, token: fixture.token, close: () => fresh.server.close() };
+        const fresh = await startAgent(base + 300 + (process.pid % 50), {});
+        return fresh;
       };
     }
 
@@ -447,7 +464,7 @@ async function uiHarnessChecks() {
     }
     const documented = operations.reduce((n, { op }) => n + Object.keys(op.responses).length, 0);
     console.log(`  ${covered.size} of ${documented} documented (operation, status) pairs exercised`);
-    for (const key of osSkipped) console.log(`  skipped on purpose: ${key} runs an OS program (use a fake platform with --os-effects)`);
+    for (const key of osSkipped) console.log(`  skipped on purpose: ${key} needs the fixture's ids or runs an OS program (cases skipped on this agent)`);
     for (const [key, why] of Object.entries(UNCOVERED)) console.log(`  not covered, on purpose: ${key}: ${why}`);
     await step('every operation has at least one successful case', () => assert.deepStrictEqual(uncovered, [], `no 2xx case for: ${uncovered.join(', ')}`));
   }

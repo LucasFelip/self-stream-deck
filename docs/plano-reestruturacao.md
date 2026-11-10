@@ -42,7 +42,6 @@ self-stream-deck/
 │  ├─ src/{api,features,components,styles}
 │  └─ e2e/                    # Playwright (herda os cenários do deck.ui.test.js)
 ├─ mobile/android/            # Kotlin (Fase 5)
-├─ legacy/server/             # o server/ atual, congelado, só para correções (some na Fase 5)
 ├─ tools/                     # scripts de dev (gen de tipos, check, hooks)
 └─ docs/{adr,ARQUITETURA.md,...}
 ```
@@ -171,8 +170,8 @@ Cada item: porta em `core`, implementação em `platform-windows`, adaptador fal
 - [x] Todas as rotas no Rust; o proxy só existe quando se passa `--node` (modo de transição).
 - [x] Servidor da rede local (TLS, iPhone, firewall) no Rust, com os certificados de `data/tls/`.
 - [ ] **Trocar a tarefa agendada** para o `ssd.exe`: `agent/scripts/autostart.ps1` (mesmo nome de tarefa; precisa de administrador e de parar o Node antes, porque usam as mesmas portas). Escrito e com `status` testado; o `install` ainda não foi executado.
-- [ ] Ainda no Node: o vigia do `adb reverse` (`phone.js`, só se `--phone`/`autoOpenPhone`), o `lan-cli`, a renovação dos certificados e o `supervisor.js` (o reinício agora é o `RestartCount` da tarefa).
-- [ ] Paridade em uso: contrato completo contra o Rust (`tools/contract-test` ainda roda só contra o Node), testes de navegador contra o `ssd`, uma semana de uso. Comparar com a linha de base da Fase 0 (RAM, startup, latência).
+- [x] O Node foi retirado. O que ele fazia e o Rust ainda **não** faz: o vigia do `adb reverse` (`phone.js`: hoje é `adb reverse tcp:7878 tcp:7878` à mão), o `lan-cli` (liga-se `lan`/`ios` editando o `config.json`), a renovação dos certificados por validade ou troca de IP e o `supervisor.js` (o reinício é o `RestartCount` da tarefa).
+- [x] Paridade: a suíte de contrato (`tools/contract-test`) roda inteira contra o `ssd --fake-platform` (149 verificações; os casos presos aos ids da fixture ficam `skip`, o resto vale), o `agent-check` tem 21 casos sem o Node, e a interface foi verificada no A31 contra o agente instalado. Falta só a semana de uso e a medição contra a linha de base.
 
 Riscos: câmera virtual (ordem 11), SMTC e Core Audio (cobertos pelo spike), diferenças sutis de comportamento que só o uso real mostra (por isso o proxy e as fixtures). Gatilho de saída: se a Fase 3.2 passar de 2x a estimativa sem fechar a ordem 9, reavaliar D1.
 
@@ -197,7 +196,7 @@ Pronto quando: máquina limpa instala, pareia o celular e funciona após reinici
 ### Fase 5: Android em Kotlin e limpeza (≈ 0,5 a 1 semana) — não começou (a parte de remover a interface antiga já foi feita na Fase 2)
 
 - [ ] `MainActivity.java` (407 linhas) → Kotlin, mesma ponte (`openSettings`, `vibrate`, `reconnect`, `setDim`); Gradle com versões em catálogo.
-- [ ] Remover `legacy/server`, `server/native`, scripts PowerShell e a UI antiga; atualizar `README`, `CONTRIBUTING`, `ARQUITETURA.md`.
+- [x] Removido o servidor Node (`legacy/server`: fontes, C# nativo, scripts PowerShell dos helpers, testes), o proxy de transição do Rust (`--node`), `tools/baseline` e o `autostart.ps1`; `README`, `CONTRIBUTING`, `ARQUITETURA.md` e `contracts/README.md` reescritos para o agente em Rust. Ficou fora do git, em `legacy/server/data/`, só a pasta de dados antiga (a câmera direta ainda está registrada lá): apague quando a câmera tiver sido reinstalada.
 - [ ] Reativar/ligar o Actions se o dono decidir (D7).
 - [ ] Retrospectiva: o que ficou melhor, medido contra a linha de base.
 

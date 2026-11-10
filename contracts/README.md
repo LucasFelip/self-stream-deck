@@ -1,7 +1,7 @@
 # Contrato da API
 
-`openapi.yaml` é a **fonte única** do que o agente (hoje o servidor Node, depois o agente em Rust) expõe ao celular.
-`fixtures/fake-pc.json` descreve o **PC de mentira** que qualquer implementação precisa conseguir apresentar para ser testada.
+`openapi.yaml` é a **fonte única** do que o agente (o agente em Rust) expõe ao celular.
+`fixtures/fake-pc.json` descreve o **PC de mentira** que um agente precisa conseguir apresentar para ser testada.
 
 ```
 contracts/
@@ -9,7 +9,6 @@ contracts/
 ├─ fixtures/fake-pc.json   apps, janelas, áudio, mídia, monitor, energia... determinísticos
 └─ README.md
 tools/contract-test/       o verificador (Node, 2 dependências: ajv e yaml)
-tools/baseline/            números de partida (tamanho do código e da interface, latência, memória)
 ```
 
 ## Rodar
@@ -17,7 +16,7 @@ tools/baseline/            números de partida (tamanho do código e da interfac
 ```bash
 cd tools/contract-test
 npm install        # uma vez
-npm test           # o servidor Node atual, em processo, com o PC de mentira (seguro: não toca no Windows)
+npm test           # o agente em Rust (ssd.exe, precisa de cargo build --release) num PC de mentira (seguro: não toca no Windows)
 npm run lint:spec  # só as checagens estáticas do contrato e das fixtures
 ```
 
@@ -31,24 +30,18 @@ O que o `npm test` confere (hoje 167 verificações):
 | segurança | token (cabeçalho, query, cookie), `Host` estranho (421), `Origin` de outro site (403), página de pareamento sem token, cookie `HttpOnly; SameSite=Lax`, cabeçalhos de proteção, corpo inválido (400) e grande demais, caminhos fora de `public/`, bloqueio após 10 falhas (429) |
 | cobertura | toda operação tem ao menos um caso de sucesso (as que executam programas do SO ficam de fora do teste em processo e são listadas) |
 
-## Rodar contra outro agente (o de Rust, na Fase 3)
+## Como o agente é testado
+
+`npm test` sobe **duas instâncias** do `ssd.exe` (`agent/target/release/ssd.exe`, ou `SSD_AGENT_EXE`) com `--fake-platform --no-tray` e uma pasta de dados temporária, uma com tudo ligado e outra com
+`"editor": false` e `"powerControls": false` (os casos 403). O PC de mentira do Rust tem os próprios ids e nomes; os casos que dependem dos ids da fixture (`fixtureBound`) ou de valores dela
+ficam como `skip` (status, tipo e esquema continuam valendo nos outros). Dá para apontar para um agente já em execução:
 
 ```bash
 node run.js --base-url http://127.0.0.1:9000 --token contract-token-0123456789abcdef --fake-platform \
             --base-url-locked http://127.0.0.1:9001 [--os-effects] [--lockout]
 ```
 
-Regras para o agente ser testável:
-
-1. Aceitar `--fake-platform <contracts/fixtures/fake-pc.json>`: nenhum módulo do Windows é usado, tudo responde a partir da fixture e as
-   mudanças (volume, mudo, agendamento de energia, atalhos salvos) **ficam** até o fim da execução.
-2. Aceitar uma config de arquivo com o `token` da fixture e `hidden`, `shortcuts`, `macros` iguais aos da fixture.
-3. Uma segunda instância com `"editor": false` e `"powerControls": false` (`--base-url-locked`) para os casos 403.
-4. `--fake-platform` é obrigatório no verificador por segurança: os casos desligam o PC, escondem apps e reescrevem a config.
-   Nunca aponte `--base-url` para um agente que controla o seu PC de verdade.
-
-Casos que dependem de ganchos do Node (`inProcess`, falha injetada num módulo do PC) ficam como `skip` para os outros agentes até
-existir um jeito equivalente de injetar falhas.
+`--fake-platform` é obrigatório por segurança: os casos desligam o PC, escondem apps e reescrevem a config. **Nunca aponte `--base-url` para um agente que controla o seu PC de verdade.**
 
 ## Mudar a API
 
@@ -58,7 +51,7 @@ existir um jeito equivalente de injetar falhas.
 
 ## O que a Fase 0 descobriu (e o contrato registra do jeito que é)
 
-- **413 vira conexão fechada.** `readJson`/`readBuffer` (`legacy/server/src/http.js`) chamam `req.destroy()` ao passar do limite, então o cliente
+- **413 vira conexão fechada.** `readJson`/`readBuffer` (no servidor Node de antes) chamavam `req.destroy()` ao passar do limite, então o cliente
   recebe `socket hang up` em vez do 413 que o código tenta enviar. O contrato documenta o 413 e os testes aceitam as duas coisas
   (`orClosed`). Um agente novo deve responder 413 de verdade e então fechar a conexão.
 - **`iconVersion` era número na interface de teste, texto no servidor.** O contrato manda texto (o hash do ícone, `""` sem ícone).

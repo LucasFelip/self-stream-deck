@@ -1,6 +1,4 @@
-//! The HTTP side of the agent: the same request flow as `legacy/server/src/app.js` (Host check, lockout, token, Origin, static files, routes),
-//! then a transition proxy that hands every route not yet ported to the Node agent running as a child on an internal port (plan 3.1).
-//! Each route that gets ported is answered here and stops being proxied.
+//! The HTTP side of the agent: the request flow (Host check, lockout, token, Origin, static files, routes); what no route answers is a JSON 404.
 mod apps;
 mod camera;
 mod editor;
@@ -8,7 +6,6 @@ pub mod embedded;
 mod events;
 mod monitorroutes;
 mod powerroutes;
-mod proxy;
 mod routes;
 mod statics;
 mod stats;
@@ -42,7 +39,7 @@ pub const SECURITY_HEADERS: [(&str, &str); 5] = [
     ("cross-origin-resource-policy", "same-origin"),
 ];
 
-/// The ports of the PC. `None` leaves that module to the Node agent behind this one.
+/// The ports of the PC. A module without its port answers 404.
 #[derive(Clone, Default)]
 pub struct Platform {
     pub audio: Option<Arc<dyn AudioPort>>,
@@ -66,9 +63,7 @@ pub struct AppState {
     pub config: Mutex<Config>,
     /// the build of web/ (web/dist); an empty path means the interface packed inside the executable
     pub web_dir: PathBuf,
-    /// where the Node agent listens while it still serves the routes that are not ported
-    pub upstream: Option<SocketAddr>,
-    /// what the PC offers (or fakes of it): a module without its port stays with the Node agent
+    /// what the PC offers (or fakes of it): a module without its port answers 404
     pub platform: Platform,
     /// cover art of the tracks already fetched
     pub art: Mutex<ArtCache>,
@@ -97,7 +92,6 @@ impl AppState {
         config: Config,
         machine_name: &str,
         web_dir: PathBuf,
-        upstream: Option<SocketAddr>,
         platform: Platform,
     ) -> Arc<Self> {
         let guard = Guard::new(config.token(), machine_name);
@@ -114,7 +108,6 @@ impl AppState {
             playing_cache: Mutex::new(None),
             config: Mutex::new(config),
             web_dir,
-            upstream,
             platform,
             art: Mutex::new(ArtCache::default()),
             counts: Mutex::new(HashMap::new()),
@@ -304,7 +297,6 @@ async fn handle(State(state): State<Arc<AppState>>, request: Request) -> Respons
         return statics::serve(&state, if_none_match.as_deref(), &path).await;
     }
 
-    // routes ported to Rust are answered here; the rest still belongs to the Node agent
     if routes::is_ported(&state, &method, &path) {
         let body = if method == Method::GET {
             Default::default()
@@ -321,13 +313,10 @@ async fn handle(State(state): State<Arc<AppState>>, request: Request) -> Respons
         };
         return routes::answer(&state, &method, &path, &query, &body).await;
     }
-    match state.upstream {
-        Some(upstream) => proxy::forward(upstream, guard.token(), request).await,
-        None => json(
-            StatusCode::NOT_FOUND,
-            serde_json::json!({ "error": "not found" }),
-        ),
-    }
+    json(
+        StatusCode::NOT_FOUND,
+        serde_json::json!({ "error": "not found" }),
+    )
 }
 
 #[cfg(test)]
@@ -375,7 +364,7 @@ mod tests {
         std::fs::write(config_dir.join("config.json"), config_json).unwrap();
         let config = Config::load(&config_dir).unwrap();
         (
-            router(AppState::new(config, "PC", dir.clone(), None, platform)),
+            router(AppState::new(config, "PC", dir.clone(), platform)),
             dir,
         )
     }
@@ -483,7 +472,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_post_from_another_origin_is_refused_and_with_no_upstream_an_unported_route_is_404() {
+    async fn a_post_from_another_origin_is_refused_and_an_unknown_route_is_404() {
         let (app, _) = app();
         let refused = call(
             &app,
@@ -588,7 +577,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn audio_routes_belong_to_node_until_the_agent_has_an_audio_port() {
+    async fn audio_routes_are_404_without_an_audio_port() {
         let (app, _) = app();
         assert_eq!(
             call(&app, "GET", "/api/volume", &[("x-token", "tok")])

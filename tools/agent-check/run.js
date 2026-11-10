@@ -14,10 +14,8 @@ const { spawn } = require('node:child_process');
 const ROOT = path.join(__dirname, '..', '..');
 const EXE = process.env.SSD_AGENT_EXE || path.join(ROOT, 'agent', 'target', 'release', process.platform === 'win32' ? 'ssd.exe' : 'ssd');
 const WEB = path.join(ROOT, 'web', 'dist');
-const NODE_INDEX = path.join(ROOT, 'legacy', 'server', 'src', 'index.js');
 const TOKEN = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
 const PORT = 7890 + (process.pid % 50);
-const NODE_PORT = PORT + 100;
 
 if (!fs.existsSync(EXE) || !fs.existsSync(path.join(WEB, 'index.html'))) {
   console.log('skipped (build the agent with `cargo build --release` in agent/ and the interface with `npm run build` in web/)');
@@ -43,7 +41,7 @@ const step = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
 (async () => {
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'ssd-agent-check-'));
   fs.writeFileSync(path.join(data, 'config.json'), JSON.stringify({ token: TOKEN, port: PORT }));
-  const agent = spawn(EXE, ['--data-dir', data, '--web-dir', WEB, '--port', String(PORT), '--node', NODE_INDEX, '--node-port', String(NODE_PORT), '--fake-platform', '--no-tray'], { stdio: 'ignore' });
+  const agent = spawn(EXE, ['--data-dir', data, '--web-dir', WEB, '--port', String(PORT), '--fake-platform', '--no-tray'], { stdio: 'ignore' });
   const stop = () => { agent.kill(); };
   process.on('exit', stop);
   try {
@@ -316,7 +314,7 @@ const step = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.strictEqual((await get('/api/monitor/info')).host, 'FAKE-PC');
     });
     await step('phone camera (fake direct camera): frames in, 204 with the wanted flag, stream, status, direct camera confirmation', async () => {
-      const jpeg = fs.readFileSync(path.join(ROOT, 'legacy', 'server', 'assets', 'nosignal.jpg'));
+      const jpeg = fs.readFileSync(path.join(ROOT, 'agent', 'crates', 'api', 'assets', 'nosignal.jpg'));
       const frame = (body) => new Promise((resolve, reject) => {
         const req = http.request({ host: '127.0.0.1', port: PORT, path: '/api/camera/frame', method: 'POST', headers: { ...auth, 'Content-Type': 'image/jpeg', 'Content-Length': body.length } }, (res) => { res.resume(); res.on('end', () => resolve(res)); });
         req.on('error', reject);

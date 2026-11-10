@@ -6,9 +6,6 @@
 //!
 //! An installed agent needs nothing else: the interface is packed inside the executable and the files live in `%APPDATA%\SelfStreamDeck`.
 //! `--web-dir` serves the interface from a folder instead (while it is being worked on).
-//!
-//! Transition mode (plan 3.1): with `--node PATH/index.js`, the Node agent runs as a child on `--node-port` (default 7870) and every route this
-//! agent does not answer is handed to it. Every route is answered here now, so this is only for comparing the two.
 mod data;
 mod diagnose;
 mod lan;
@@ -16,9 +13,7 @@ mod tray;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::process::Stdio;
 use std::sync::Arc;
-use std::time::Duration;
 
 use ssd_api::{router, AppState, Platform};
 use ssd_core::config::Config;
@@ -27,8 +22,6 @@ struct Args {
     data_dir: PathBuf,
     web_dir: Option<PathBuf>,
     port: Option<u16>,
-    node: Option<PathBuf>,
-    node_port: u16,
     fake_platform: bool,
     no_tray: bool,
     migrate_from: Option<PathBuf>,
@@ -45,8 +38,6 @@ fn parse_args() -> Result<Args, String> {
             .unwrap_or_else(data::default_dir),
         web_dir: std::env::var_os("SSD_WEB_DIST").map(PathBuf::from),
         port: std::env::var("SSD_PORT").ok().and_then(|p| p.parse().ok()),
-        node: None,
-        node_port: 7870,
         fake_platform: false,
         no_tray: false,
         migrate_from: None,
@@ -70,12 +61,6 @@ fn parse_args() -> Result<Args, String> {
                         .map_err(|_| "--port is not a number".to_string())?,
                 )
             }
-            "--node" => args.node = Some(value("--node")?.into()),
-            "--node-port" => {
-                args.node_port = value("--node-port")?
-                    .parse()
-                    .map_err(|_| "--node-port is not a number".to_string())?
-            }
             "--migrate-from" => args.migrate_from = Some(value("--migrate-from")?.into()),
             "--out" => args.out = Some(value("--out")?.into()),
             "--no-tray" => args.no_tray = true,
@@ -90,7 +75,7 @@ fn parse_args() -> Result<Args, String> {
     Ok(args)
 }
 
-/// Puts this process in a job that ends with it: whatever it started (the Node agent behind it) dies when this process does, however it ends
+/// Puts this process in a job that ends with it: whatever it started (PowerShell for the firewall, the notification helpers) dies when this process does, however it ends
 /// (a crash, a kill from the Task Manager), so no orphan keeps the port. The handle is never closed on purpose.
 #[cfg(windows)]
 fn children_end_with_me() {
@@ -220,30 +205,10 @@ async fn run() -> Result<(), String> {
     let port = args.port.unwrap_or_else(|| config.port());
     let machine = std::env::var("COMPUTERNAME").unwrap_or_default();
 
-    // the Node agent behind this one (kept alive for as long as this process lives)
-    let mut child = None;
-    let upstream = match &args.node {
-        Some(script) => {
-            let process = tokio::process::Command::new("node")
-                .arg(script)
-                .env("SSD_PORT", args.node_port.to_string())
-                .env("SSD_DATA_DIR", &args.data_dir)
-                .env("SSD_NO_LAN", "1")
-                .stdin(Stdio::null())
-                .kill_on_drop(true)
-                .spawn()
-                .map_err(|e| format!("could not start node: {e}"))?;
-            child = Some(process);
-            Some(SocketAddr::from(([127, 0, 0, 1], args.node_port)))
-        }
-        None => None,
-    };
-
     let state = AppState::new(
         config.clone(),
         &machine,
         web_dir.clone(),
-        upstream,
         platform(args.fake_platform, &args.data_dir),
     );
     let address = SocketAddr::from(([127, 0, 0, 1], port));
@@ -251,14 +216,13 @@ async fn run() -> Result<(), String> {
         .await
         .map_err(|e| format!("port {port} is not available: {e}"))?;
     tracing::info!(
-        "listening on http://{address}/?token={} (web: {}, node behind: {})",
+        "listening on http://{address}/?token={} (web: {})",
         config.token(),
         if embedded {
             "inside the executable".to_owned()
         } else {
             web_dir.display().to_string()
-        },
-        upstream.map_or("no".to_string(), |u| u.to_string())
+        }
     );
 
     #[cfg(windows)]
@@ -288,9 +252,5 @@ async fn run() -> Result<(), String> {
     tokio::select! {
         result = serve => result.map_err(|e| e.to_string()),
         _ = tokio::signal::ctrl_c() => Ok(()),
-        _ = async { match child.as_mut() { Some(c) => { let _ = c.wait().await; } None => std::future::pending::<()>().await } } => {
-            tokio::time::sleep(Duration::from_millis(50)).await;
-            Err("the Node agent behind this one stopped".into())
-        }
     }
 }

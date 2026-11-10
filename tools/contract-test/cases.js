@@ -6,6 +6,8 @@
 //   target: 'default' (everything on) or 'locked' (config.json with "editor": false and "powerControls": false)
 //   osEffect: the route itself runs an OS program (clipboard, display switcher): skipped unless the target runs on a fake platform
 //   orClosed: the server may drop the connection instead of sending the 413 (the Node server destroys the socket of an oversize body); both count
+//   fixtureBound: needs the ids of contracts/fixtures/fake-pc.json: skipped on an agent whose fake PC is its own
+//   expectType: the content type the answer must have; firstChunk: a stream: take the first chunk and hang up
 //   inProcess: needs a hook into the Node fakes (fault injection); other implementations cover it with their own fake platform
 //   check(res, env): extra assertions on the parsed answer; env = { calls, fixture, assert }
 
@@ -30,8 +32,8 @@ const cases = [
     e.assert.strictEqual(r.json.scheduled, null);
   } },
   { name: 'refresh reads the taskbar again', method: 'POST', path: '/api/refresh', status: 200, check: (r, e) => e.assert.strictEqual(r.json.count, FIXTURE_APPS.length) },
-  { name: 'launch focuses an app that already has a window', method: 'POST', path: '/api/launch/aaaaaaaa', status: 200, check: (r, e) => e.assert.strictEqual(r.json.action, 'focused') },
-  { name: 'launch starts an app without a window', method: 'POST', path: '/api/launch/dddddddd', status: 200, check: (r, e) => e.assert.strictEqual(r.json.action, 'launched') },
+  { name: 'launch focuses an app that already has a window', fixtureBound: true, method: 'POST', path: '/api/launch/aaaaaaaa', status: 200, check: (r, e) => e.assert.strictEqual(r.json.action, 'focused') },
+  { name: 'launch starts an app without a window', fixtureBound: true, method: 'POST', path: '/api/launch/dddddddd', status: 200, check: (r, e) => e.assert.strictEqual(r.json.action, 'launched') },
   { name: 'launch of a hidden app is 404', method: 'POST', path: '/api/launch/cccccccc', status: 404 },
   { name: 'launch never takes a path', method: 'POST', path: '/api/launch/..%2f..%2fwindows', status: 404 },
 
@@ -85,7 +87,7 @@ const cases = [
   { name: 'media control: negative position is 400', method: 'POST', path: '/api/media/control', body: { session: 's1', action: 'seek', position: -1 }, status: 400 },
   { name: 'media art: the current track', method: 'GET', path: '/api/media/art?session=s1&key=0123456789ab', status: 200, contentType: 'image/png' },
   { name: 'media art: a malformed key is 400', method: 'GET', path: '/api/media/art?session=s1&key=zz', status: 400 },
-  { name: 'media art: another track is 404', method: 'GET', path: '/api/media/art?session=s1&key=ffffffffffff', status: 404 },
+  { name: 'media art: another track is 404', fixtureBound: true, method: 'GET', path: '/api/media/art?session=s1&key=ffffffffffff', status: 404 },
 
   // ---- windows and screens
   { name: 'windows: shell windows are left out and apps are named', method: 'GET', path: '/api/windows', status: 200, check: (r, e) => {
@@ -110,9 +112,9 @@ const cases = [
   { name: 'window snap: a vanished window is 404', method: 'POST', path: '/api/windows/snap', body: { handle: 999, monitor: 0, zone: 'full' }, status: 404 },
   { name: 'screens', method: 'GET', path: '/api/screens', status: 200, check: (r, e) => e.assert.deepStrictEqual(r.json.monitors, e.fixture.screens) },
   { name: 'screens without the slow brightness reads', method: 'GET', path: '/api/screens?brightness=0', status: 200 },
-  { name: 'brightness of a known screen', method: 'POST', path: '/api/screens/brightness', body: { device: 'DISPLAY1', level: 10 }, status: 200 },
+  { name: 'brightness of a known screen', fixtureBound: true, method: 'POST', path: '/api/screens/brightness', body: { device: 'DISPLAY1', level: 10 }, status: 200 },
   { name: 'brightness of an unknown screen is 404', method: 'POST', path: '/api/screens/brightness', body: { device: 'nope', level: 10 }, status: 404 },
-  { name: 'brightness: text level is 400', method: 'POST', path: '/api/screens/brightness', body: { device: 'DISPLAY1', level: 'x' }, status: 400 },
+  { name: 'brightness: text level is 400', fixtureBound: true, method: 'POST', path: '/api/screens/brightness', body: { device: 'DISPLAY1', level: 'x' }, status: 400 },
   { name: 'screens off', method: 'POST', path: '/api/screens/off', status: 200 },
   { name: 'project: unknown mode is 400', method: 'POST', path: '/api/screens/project', body: { mode: 'banana' }, status: 400 },
   { name: 'project: single-screen mode needs confirm', method: 'POST', path: '/api/screens/project', body: { mode: 'first' }, status: 400 },
@@ -135,9 +137,9 @@ const cases = [
   { name: 'power: info says it is disabled', target: 'locked', method: 'GET', path: '/api/power', status: 200, check: (r, e) => e.assert.strictEqual(r.json.enabled, false) },
 
   // ---- camera
-  { name: 'camera frame: accepted, tells the phone nobody watches', method: 'POST', path: '/api/camera/frame', rawBody: big(2048), contentType: 'image/jpeg', status: 204, check: (r, e) => e.assert.strictEqual(r.headers['x-camera-wanted'], '0') },
+  { name: 'camera frame: accepted, tells the phone nobody watches', method: 'POST', path: '/api/camera/frame', rawBody: 'JPEG', contentType: 'image/jpeg', status: 204, check: (r, e) => e.assert.strictEqual(r.headers['x-camera-wanted'], '0') },
   { name: 'camera frame: too large is 413', method: 'POST', path: '/api/camera/frame', rawBody: big(4 * 1024 * 1024), contentType: 'image/jpeg', status: 413, orClosed: true },
-  { name: 'camera stream is multipart', method: 'GET', path: '/api/camera/stream', status: 200, contentType: 'multipart/x-mixed-replace' },
+  { name: 'camera stream is multipart', method: 'GET', path: '/api/camera/stream', status: 200, expectType: 'multipart/x-mixed-replace', firstChunk: true },
   { name: 'camera status', method: 'GET', path: '/api/camera/status', status: 200, check: (r, e) => e.assert.strictEqual(r.json.live, false) },
   { name: 'camera copy-link', method: 'POST', path: '/api/camera/copy-link', status: 200, osEffect: true },
   { name: 'virtual camera install needs confirm', method: 'POST', path: '/api/camera/direct/install', body: {}, status: 400, check: (r, e) => e.assert.ok(!e.calls.some((c) => c[0] === 'vcamInstall')) },
@@ -177,9 +179,9 @@ const cases = [
   { name: 'editor macros: a macro without steps is 400', method: 'POST', path: '/api/editor/macros', body: { items: [{ label: 'x', steps: [] }] }, status: 400 },
   { name: 'editor macros: put back', method: 'POST', path: '/api/editor/macros', body: { items: [{ id: 'foco', label: 'Foco', page: 'shortcuts', steps: [{ type: 'volume', level: 20 }, { type: 'mute', muted: false }] }, { id: 'lento', label: 'Lento', page: 'shortcuts', steps: [{ type: 'wait', ms: 400 }] }] }, status: 200 },
   { name: 'editor apps: an unknown app is 400', method: 'POST', path: '/api/editor/apps', body: { hidden: ['ghost'] }, status: 400 },
-  { name: 'editor apps: hide one', method: 'POST', path: '/api/editor/apps', body: { hidden: ['bbbbbbbb'] }, status: 200 },
+  { name: 'editor apps: hide one', fixtureBound: true, method: 'POST', path: '/api/editor/apps', body: { hidden: ['bbbbbbbb'] }, status: 200 },
   { name: 'editor apps: the deck list follows', method: 'GET', path: '/api/apps', status: 200, check: (r, e) => e.assert.deepStrictEqual(r.json.apps.map((a) => a.id), ['aaaaaaaa', 'cccccccc', 'dddddddd']) },
-  { name: 'editor apps: put back', method: 'POST', path: '/api/editor/apps', body: { hidden: ['cccccccc'] }, status: 200 },
+  { name: 'editor apps: put back', fixtureBound: true, method: 'POST', path: '/api/editor/apps', body: { hidden: ['cccccccc'] }, status: 200 },
   { name: 'editor off: data is 403', target: 'locked', method: 'GET', path: '/api/editor', status: 403 },
   { name: 'editor off: shortcuts are 403', target: 'locked', method: 'POST', path: '/api/editor/shortcuts', body: { items: [] }, status: 403 },
   { name: 'editor off: macros are 403', target: 'locked', method: 'POST', path: '/api/editor/macros', body: { items: [] }, status: 403 },

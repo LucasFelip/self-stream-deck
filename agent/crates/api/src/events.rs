@@ -1,9 +1,5 @@
-//! Server-sent events: the PC tells the phone when something changed instead of the phone asking every second or two. Same behavior as
-//! `legacy/server/src/events.js`: a topic's producer runs only while somebody listens to it, a new value is sent only when it differs from the
+//! Server-sent events: the PC tells the phone when something changed instead of the phone asking every second or two. A topic's producer runs only while somebody listens to it, a new value is sent only when it differs from the
 //! last one (by its signature), and a client that joins a running topic gets the last value at once.
-//!
-//! Transition: the topics this agent has the ports for are produced here; the others (state, power, notifications, monitor, processes, game)
-//! are read from the Node agent behind this one and merged into the same response, so the phone keeps a single stream.
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -13,9 +9,6 @@ use std::time::Duration;
 use axum::body::{Body, Bytes};
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::Response;
-use http_body_util::BodyExt;
-use hyper_util::client::legacy::Client;
-use hyper_util::rt::TokioExecutor;
 use serde_json::{json, Value};
 use ssd_core::windows::visible_windows;
 use tokio::sync::mpsc;
@@ -53,7 +46,7 @@ pub struct Hub {
     next_client: AtomicU64,
 }
 
-/// Does this agent produce the topic itself (it has the port), or does the Node agent behind it?
+/// Does this agent produce the topic itself (it has the port for it)?
 fn owned(state: &AppState, name: &str) -> bool {
     match name {
         "windows" => state.platform.windows.is_some(),
@@ -292,46 +285,6 @@ fn start_producer(state: &Arc<AppState>, name: &'static str) -> JoinHandle<()> {
     })
 }
 
-/// Reads the topics this agent does not produce from the Node agent behind it and passes them on, minus the stream's own first line.
-async fn relay_upstream(
-    state: Arc<AppState>,
-    topics: Vec<&'static str>,
-    sender: mpsc::Sender<Bytes>,
-) {
-    let Some(upstream) = state.upstream else {
-        return;
-    };
-    let uri = format!("http://{upstream}/api/events?topics={}", topics.join(","));
-    let Ok(request) = axum::http::Request::builder()
-        .uri(uri)
-        .header(header::HOST, upstream.to_string())
-        .header("x-token", state.guard.token())
-        .body(Body::empty())
-    else {
-        return;
-    };
-    let client: Client<_, Body> = Client::builder(TokioExecutor::new()).build_http();
-    let Ok(answer) = client.request(request).await else {
-        return;
-    };
-    let mut body = answer.into_body();
-    let mut first = true;
-    while let Some(Ok(frame)) = body.frame().await {
-        let Ok(mut data) = frame.into_data() else {
-            continue;
-        };
-        if first {
-            first = false;
-            if data.starts_with(RETRY_LINE) {
-                data = data.slice(RETRY_LINE.len()..);
-            }
-        }
-        if !data.is_empty() && sender.send(data).await.is_err() {
-            return; // the phone left: dropping the upstream connection stops what Node was producing for it
-        }
-    }
-}
-
 /// `GET /api/events?topics=windows,state`: keeps the response open and pushes a topic's new value when it changes.
 pub async fn subscribe(state: &Arc<AppState>, query: &str) -> Response {
     let requested: Vec<String> = query
@@ -372,8 +325,11 @@ pub async fn subscribe(state: &Arc<AppState>, query: &str) -> Response {
     let (sender, receiver) = mpsc::channel::<Bytes>(64);
     let _ = sender.try_send(Bytes::from_static(RETRY_LINE));
     let id = state.hub.next_client.fetch_add(1, Ordering::Relaxed);
-    let (mine, theirs): (Vec<&'static str>, Vec<&'static str>) =
-        wanted.iter().partition(|name| owned(state, name));
+    let mine: Vec<&'static str> = wanted
+        .iter()
+        .copied()
+        .filter(|name| owned(state, name))
+        .collect();
 
     {
         let mut topics = state.hub.topics.lock().unwrap();
@@ -393,9 +349,6 @@ pub async fn subscribe(state: &Arc<AppState>, query: &str) -> Response {
                 _ => {}
             }
         }
-    }
-    if !theirs.is_empty() {
-        tokio::spawn(relay_upstream(state.clone(), theirs, sender.clone()));
     }
     // the keep-alive comment, and the cleanup when the phone goes away (the receiver is dropped with the response)
     let guard = state.clone();
