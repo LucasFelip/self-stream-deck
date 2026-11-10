@@ -13,7 +13,7 @@ Como o self-stream-deck funciona por dentro. Para usar o painel, veja o [README]
 
 | Pasta | O que tem |
 |---|---|
-| `android/` | App Android fino (Java, sem bibliotecas): guarda o endereço, mantém a tela ligada, vibra, expõe `Android.openSettings/vibrate/reconnect` à página. |
+| `android/` | App Android fino (Kotlin, sem bibliotecas; versões no catálogo `android/gradle/libs.versions.toml`): guarda o endereço, mantém a tela ligada, vibra, expõe `Android.openSettings/vibrate/reconnect` à página. |
 | `agent/crates/core/` | A lógica sem Windows: `guard` (Host, token, bloqueio, Origin), `config`, `ports` (um trait por parte do PC e um `Fake*` de cada), `keys`, `macros`, `media`, `taskbar`, `windows`, `power`, `notices`, `sha1`/`sha256`. |
 | `agent/crates/api/` | O HTTP (axum): `lib.rs` (o fluxo do pedido), `routes.rs` e os módulos por assunto (`winroutes`, `powerroutes`, `monitorroutes`, `editor`, `camera`, `apps`), `events.rs` (SSE), `statics.rs` + `embedded.rs` (a interface dentro do `.exe`). |
 | `agent/crates/platform-windows/` | Os adaptadores: Core Audio, SMTC, teclas, barra de tarefas, janelas (DWM), energia, monitor (PDH, `nvidia-smi`, RTSS, WMI), notificações, câmera virtual, rede. É o único lugar com `unsafe`. |

@@ -16,7 +16,7 @@ sistema e controles de energia.
 - `agent/` — o agente no PC (`ssd.exe`, Rust). Um só processo (~60 MB), **sem Node e sem instalar nada além dele** (só os scripts de certificado e do firewall usam o PowerShell que já vem no Windows).
   A interface web (o build de `web/`) vai **dentro** do `.exe`, então a lógica do painel fica toda no PC.
 - `web/` — a interface (React + TypeScript, PWA).
-- `android/` — app Android fino (Java, sem libs): guarda o endereço do PC, mantém a tela ligada,
+- `android/` — app Android fino (Kotlin, sem bibliotecas além do Android): guarda o endereço do PC, mantém a tela ligada,
   vibra ao toque e mostra a página. Mudar a interface **não exige recompilar o APK**.
 
 ## Páginas
