@@ -1,6 +1,6 @@
 # Mexendo no código
 
-Para entender como as peças se encaixam, leia [docs/ARQUITETURA.md](docs/ARQUITETURA.md). Aqui está só o que se faz no dia a dia.
+Para entender como as peças se encaixam, leia [docs/ARQUITETURA.md](docs/ARQUITETURA.md); o ambiente, os testes e o empacotamento estão em [docs/desenvolvimento.md](docs/desenvolvimento.md) e o índice de toda a documentação em [docs/README.md](docs/README.md). Aqui está só o que se faz no dia a dia.
 
 ## Rodando
 

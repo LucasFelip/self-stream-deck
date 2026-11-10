@@ -1,6 +1,6 @@
 # Arquitetura
 
-Como o self-stream-deck funciona por dentro. Para usar o painel, veja o [README](../README.md); para mexer no código, o [CONTRIBUTING](../CONTRIBUTING.md).
+Como o self-stream-deck funciona por dentro. Para usar o painel, veja o [README](../README.md) e o [guia de uso](guia-de-uso.md); para compilar e testar, o [desenvolvimento](desenvolvimento.md); para mexer no código, o [CONTRIBUTING](../CONTRIBUTING.md). O [índice](README.md) lista tudo.
 
 ```
 ┌──────────────┐   HTTP (USB/adb reverse) ou HTTPS (Wi-Fi opcional)   ┌─────────────────────────────┐
