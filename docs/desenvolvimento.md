@@ -46,7 +46,7 @@ agent\target\release\ssd.exe --data-dir .\dados-teste --web-dir web\dist --port 
 
 `--fake-platform` troca o PC por um PC de mentira em memória (sem tocar no Windows): é o que os testes usam.
 
-Para o `check.js` rodar sozinho antes de cada `git push`: `git config core.hooksPath tools/hooks` (pule uma vez com `git push --no-verify`). O projeto não usa GitHub Actions por decisão registrada ([ADR 0006](adr/0006-verificacao-local-sem-actions.md)); um fluxo pronto fica em `docs/ci/` para ligar quando quiser.
+Para o `check.js` rodar sozinho antes de cada `git push`: `git config core.hooksPath tools/hooks` (pule uma vez com `git push --no-verify`). No GitHub, o fluxo `.github/workflows/build.yml` roda a cada push na `main` e em pull requests: `check.js --ci`, o MSI (WiX 3.14) e o APK de depuração, que ficam como artefatos da execução. Eles **não são assinados**: servem para conferir que compilam ([ADR 0006](adr/0006-verificacao-local-sem-actions.md)).
 
 ## Testes
 

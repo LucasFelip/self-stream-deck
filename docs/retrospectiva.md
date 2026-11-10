@@ -48,7 +48,7 @@ Estavam decididas e continuam valendo: o ícone de `wt.exe` e a versão do texto
 - **Teste em máquina limpa** (sem as pastas do projeto) e **o iPhone**, que não foi testado na reestruturação.
 - **Câmera e escurecimento no app Kotlin**: o código foi portado, mas não exercitado no celular.
 - **Semana de uso**: a paridade foi conferida por testes e pelo uso curto no A31 e no PC; falta o uso do dia a dia para achar o que só ele mostra.
-- **GitHub Actions (D7).** Decisão do dono: o fluxo fica pronto em `docs/ci/` e roda tudo local com o hook de `pre-push`; ligar quando quiser.
+- **GitHub Actions (D7).** Decisão do dono: o fluxo ficou pronto e desligado em `docs/ci/`; depois foi ligado em `.github/workflows/build.yml` (check, MSI e APK).
 - **A pasta `legacy/`**: sobrou `legacy/server/data/` (fora do git), porque a câmera direta ainda está registrada lá. Reinstale a câmera pelo app e apague a pasta.
 
 ## Se fosse começar de novo

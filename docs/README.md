@@ -20,7 +20,7 @@ Comece pelo [README](../README.md) para a visão geral e o início rápido. Aqui
 | [Desenvolvimento](desenvolvimento.md) | preparar o ambiente, compilar, testar, empacotar, assinar e publicar atualizações |
 | [Arquitetura](ARQUITETURA.md) | pastas, o fluxo de um pedido, portas e adaptadores, eventos, câmera, consumo e a tabela da API |
 | [Contrato da API](../contracts/README.md) | `openapi.yaml`, o PC de mentira e como rodar a verificação |
-| [Decisões de arquitetura](adr/README.md) | os porquês: Rust, React, OpenAPI, SSE, Kotlin, sem GitHub Actions |
+| [Decisões de arquitetura](adr/README.md) | os porquês: Rust, React, OpenAPI, SSE, Kotlin, GitHub Actions |
 | [Painel (web)](../web/README.md) | a estrutura do React e como acrescentar uma página |
 | [Como contribuir](../CONTRIBUTING.md) | convenções e as receitas do dia a dia |
 

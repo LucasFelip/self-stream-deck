@@ -1,0 +1,78 @@
+# Verifica o projeto e confere que o instalador (MSI) e o app (APK) compilam.
+# Os artefatos gerados aqui NÃO são assinados: servem para conferir o build, não para distribuir (assine localmente: docs/desenvolvimento.md).
+name: build
+
+on:
+  push: { branches: [main] }
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: check (lint, testes, contrato, navegador)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: npm, cache-dependency-path: '**/package-lock.json' }
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: agent }
+      - run: node tools/check.js --ci
+
+  msi:
+    name: MSI (WiX 3.14)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc, cache: npm, cache-dependency-path: '**/package-lock.json' }
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: agent, key: msi }
+      - name: Instala o WiX 3.14
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP 'wix.zip'
+          Invoke-WebRequest 'https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip' -OutFile $zip
+          $size = (Get-Item $zip).Length
+          if ($size -ne 41297555) { throw "tamanho inesperado do WiX: $size" }
+          Expand-Archive $zip (Join-Path $PWD '.tools\wix')
+      - run: npm ci
+        working-directory: web
+      - name: Gera o MSI
+        shell: pwsh
+        run: ./agent/scripts/msi/build-msi.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SelfStreamDeck-msi
+          path: |
+            dist/*.msi
+            dist/*.sha256
+          if-no-files-found: error
+
+  apk:
+    name: APK (Android)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.7' }
+      - name: Compila o APK de depuração
+        working-directory: android
+        run: gradle assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SelfStreamDeck-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
