@@ -7,6 +7,8 @@ export interface AndroidBridge {
   vibrate?: (ms: number) => void;
   reconnect?: () => void;
   setDim?: (on: boolean) => void;
+  /** locks the phone (the first time Android asks to turn on the device administrator role); newer APKs only */
+  lockScreen?: () => void;
 }
 
 declare global {

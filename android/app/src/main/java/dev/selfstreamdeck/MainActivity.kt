@@ -442,6 +442,12 @@ class MainActivity : Activity() {
             runOnUiThread { showSetup() }
         }
 
+        /** The page's "Bloquear tela" (in the bar that says the PC is gone): locks the phone; the first time, the system asks to turn the administrator role on. */
+        @JavascriptInterface
+        fun lockScreen() {
+            runOnUiThread { lockPhone() }
+        }
+
         /** The page lost the PC for a while: try the other address (USB <-> Wi-Fi), if there is one and it answers. */
         @JavascriptInterface
         fun reconnect() {

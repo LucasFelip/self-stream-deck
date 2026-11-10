@@ -22,10 +22,10 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
   const deck = await fakeDeck();
   const browser = await launchBrowser(); // a portrait phone, 412x915
   const extra = [];
-  const browser2 = async (width, height) => {
+  const browser2 = async (width, height, script) => {
     const other = await launchBrowser({ width, height });
     extra.push(other);
-    return other.open(`${deck.url}/`);
+    return other.open(`${deck.url}/`, script ? { script } : {});
   };
   try {
     const page = await browser.open(`${deck.url}/`);
@@ -69,6 +69,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
           const box = await offlinePage.eval(`(() => { const o = document.getElementById('offline').getBoundingClientRect(); const p = document.getElementById('pager').getBoundingClientRect(); const b = document.getElementById('offline-retry').getBoundingClientRect(); return { text: document.getElementById('offline-text').textContent, oBottom: o.bottom, pTop: p.top, bw: b.width, bh: b.height, right: b.right }; })()`);
           assert.strictEqual(box.text, 'PC desconectado');
           assert.ok(box.bw > 0 && box.bh > 0 && box.right <= width, JSON.stringify(box));
+          assert.strictEqual(await offlinePage.eval(`document.getElementById('offline-lock')`), null, 'a browser has no lock button');
           assert.ok(box.pTop >= box.oBottom - 1, `the pager sits under the notice: ${JSON.stringify(box)}`);
           deck.model.calls.length = 0;
           deck.model.down = false;
@@ -78,6 +79,28 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
         } finally {
           deck.model.down = false;
           offlinePage.close();
+        }
+      });
+    }
+
+    for (const [label, width, height] of [['landscape', 836, 387], ['portrait', 411, 914]]) {
+      await test(`offline in the Android app also offers "Bloquear tela" (${label}), which asks the app to lock the phone`, async () => {
+        const stub = 'window.Android = { lockScreen() { window.__locked = (window.__locked || 0) + 1; }, reconnect() {}, vibrate() {}, openSettings() {} };';
+        const appPage = await browser2(width, height, stub);
+        try {
+          await appPage.waitFor(`document.body.dataset.state === 'online'`, 'online first', 9000);
+          deck.model.down = true;
+          await appPage.waitFor(`document.body.dataset.state === 'offline'`, 'the offline state', 9000);
+          const box = await appPage.eval(`(() => { const o = document.getElementById('offline').getBoundingClientRect(); const p = document.getElementById('pager').getBoundingClientRect(); const r = document.getElementById('offline-retry').getBoundingClientRect(); const l = document.getElementById('offline-lock').getBoundingClientRect(); return { label: document.getElementById('offline-lock').textContent, oBottom: o.bottom, pTop: p.top, retryRight: r.right, lockLeft: l.left, lockRight: l.right, lockH: l.height, retryH: r.height }; })()`);
+          assert.strictEqual(box.label, 'Bloquear tela');
+          assert.ok(box.lockRight <= width && box.lockLeft >= box.retryRight, `the two buttons side by side inside the screen: ${JSON.stringify(box)}`);
+          assert.ok(box.lockH === box.retryH && box.lockH >= 32, `both buttons as tall as each other: ${JSON.stringify(box)}`);
+          assert.ok(box.pTop >= box.oBottom - 1, `the pager sits under the notice: ${JSON.stringify(box)}`);
+          await appPage.tap('#offline-lock');
+          assert.strictEqual(await appPage.eval(`window.__locked`), 1, 'the app was asked to lock once');
+        } finally {
+          deck.model.down = false;
+          appPage.close();
         }
       });
     }

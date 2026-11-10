@@ -220,8 +220,9 @@ body {
 body[data-state="offline"] .pager { opacity: 0.35; pointer-events: none; }
 
 /* offline notice: a real row above the pager, so the pager shrinks instead of being covered */
-.offline { display: none; align-items: center; justify-content: space-between; gap: 12px; flex: none; min-height: 40px; padding: 4px calc(16px + var(--safe-right)) 4px calc(16px + var(--safe-left)); border-bottom: 1px solid var(--border); background: rgba(229, 100, 107, 0.12); color: var(--err); font-size: 0.8rem; font-weight: 600; }
+.offline { display: none; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; flex: none; min-height: 40px; padding: 4px calc(16px + var(--safe-right)) 4px calc(16px + var(--safe-left)); border-bottom: 1px solid var(--border); background: rgba(229, 100, 107, 0.12); color: var(--err); font-size: 0.8rem; font-weight: 600; }
 body[data-state="offline"] .offline { display: flex; }
+.offline-actions { display: flex; flex: none; gap: 8px; margin-left: auto; }
 .offline button { height: 32px; padding: 0 14px; border: 1px solid var(--err); border-radius: 10px; background: transparent; color: var(--err); font: inherit; font-size: 0.78rem; font-weight: 600; touch-action: manipulation; }
 .offline button:active { background: rgba(229, 100, 107, 0.2); }
 .offline button:disabled { opacity: 0.5; }
