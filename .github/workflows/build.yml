@@ -89,3 +89,30 @@ jobs:
           name: SelfStreamDeck-apk
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+  # Mantém uma versão de pré-lançamento "latest-build" sempre apontando para o último commit da main que passou na pipeline.
+  # Os arquivos NÃO são assinados (o APK é o de depuração): servem para testar, não para distribuir.
+  release:
+    name: Release latest-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [check, msi, apk]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: artefatos }
+      - name: Publica
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir pub
+          cp artefatos/SelfStreamDeck-msi/*.msi pub/SelfStreamDeck.msi
+          cp artefatos/SelfStreamDeck-apk/*.apk pub/SelfStreamDeck-debug.apk
+          (cd pub && sha256sum SelfStreamDeck.msi SelfStreamDeck-debug.apk > SHA256SUMS.txt)
+          gh release delete latest-build --cleanup-tag --yes || true
+          gh release create latest-build pub/* --prerelease --target "$GITHUB_SHA" \
+            --title "Último build da main (${GITHUB_SHA::7})" \
+            --notes "Gerado automaticamente pela pipeline a partir do commit ${GITHUB_SHA}. **Sem assinatura**: o MSI faz o Windows mostrar \"editor desconhecido\" e o APK é o de depuração. Serve para testar; para distribuir, assine localmente (docs/desenvolvimento.md)."
