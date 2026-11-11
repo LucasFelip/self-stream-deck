@@ -29,7 +29,16 @@ jobs:
         working-directory: web
       - run: npm ci
         working-directory: tools/contract-test
-      - run: node tools/check.js --ci
+      - name: node tools/check.js --ci
+        shell: pwsh
+        run: |
+          node tools/check.js --ci 2>&1 | Tee-Object -FilePath check.log
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            $tail = (Get-Content check.log -Tail 40 | ForEach-Object { $_ -replace '\[[0-9;]*m','' }) -join '%0A'
+            Write-Host "::error title=check falhou::$tail"
+          }
+          exit $code
 
   msi:
     name: MSI (WiX 3.14)
