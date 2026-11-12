@@ -22,12 +22,14 @@ Comece pelo [README](../README.md) para a visão geral e o início rápido. Aqui
 | [Contrato da API](../contracts/README.md) | `openapi.yaml`, o PC de mentira e como rodar a verificação |
 | [Decisões de arquitetura](adr/README.md) | os porquês: Rust, React, OpenAPI, SSE, Kotlin, GitHub Actions |
 | [Painel (web)](../web/README.md) | a estrutura do React e como acrescentar uma página |
-| [Como contribuir](../CONTRIBUTING.md) | convenções e as receitas do dia a dia |
+| [Como contribuir](../CONTRIBUTING.md) | commits, branches, versões, convenções e as receitas do dia a dia |
+| [Segurança](../SECURITY.md) | como relatar uma falha e o que conta como uma |
 
 ## Histórico
 
 | Documento | Conteúdo |
 |---|---|
+| [Changelog](../CHANGELOG.md) | o que mudou em cada versão |
 | [Plano da reestruturação](plano-reestruturacao.md) | as fases, o que cada uma entregou e os incidentes que apareceram |
 | [Retrospectiva](retrospectiva.md) | o antes e o depois, em números, e o que ficou sem fazer |
 | [Plano de qualidade](plano-qualidade.md) · [Redesign](plano-redesign.md) | planos anteriores à reestruturação |

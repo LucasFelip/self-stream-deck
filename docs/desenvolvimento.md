@@ -6,7 +6,7 @@ Para entender como as peças se encaixam, leia a [arquitetura](ARQUITETURA.md). 
 
 | Para | Precisa de |
 |---|---|
-| Agente (Rust) | `rustup` com o Rust estável. O arquivo [`rust-toolchain.toml`](../rust-toolchain.toml) fixa o canal e os componentes (`rustfmt`, `clippy`). Compila com o alvo `x86_64-pc-windows-gnu` (MinGW; o desenvolvimento foi feito assim, sem Visual Studio) e também com `msvc` |
+| Agente (Rust) | `rustup` com o Rust estável. O arquivo [`rust-toolchain.toml`](../rust-toolchain.toml) fixa a **versão exata** do compilador e os componentes (`rustfmt`, `clippy`); o `rustup` a instala sozinho. Compila com os dois alvos: `x86_64-pc-windows-gnu` (MinGW; o desenvolvimento e os pacotes assinados são feitos assim, sem Visual Studio) e `x86_64-pc-windows-msvc` (o do runner do CI) |
 | Painel e ferramentas | Node 20+ (`npm`) |
 | Testes de navegador e capturas | Chrome, Brave ou Edge (`CHROME_PATH` aponta outro) |
 | App Android | JDK 17, Gradle 8.7, Android SDK 34 (a pasta `.tools/`, fora do git, guarda os seus) |
@@ -86,6 +86,20 @@ O instalador está em `agent/scripts/msi/ssd.wxs`: copia os arquivos, cria o ata
 
 `sign.ps1` assina com um certificado de código **próprio** (`CN=Self Stream Deck`, criado uma vez no repositório de certificados do usuário) ou com um `.pfx` seu (`-Pfx`, `-Password`). O Windows mostra "não confiável" para certificado próprio em outros PCs, o que é esperado; um certificado de uma autoridade remove o aviso. `-Timestamp` pede o carimbo de data ao servidor da DigiCert e é opcional (envia só o hash).
 
+## Publicar uma versão
+
+1. No `CHANGELOG.md`, renomeie "Não lançado" para `## [X.Y.Z] - AAAA-MM-DD`, abra um "Não lançado" vazio acima e acrescente o link de comparação no fim do arquivo.
+2. Mude a versão em `agent/Cargo.toml` (e rode `cargo build` para o `Cargo.lock`), `web/package.json` (`npm install --package-lock-only` em `web/`) e `android/app/build.gradle.kts` (`versionName` e `versionCode` = maior×10000 + menor×100 + correção). `node tools/version-check/run.cjs` diz o que ficou de fora.
+3. `node tools/check.js --full`, depois o commit `chore(release): vX.Y.Z` (por PR, como qualquer mudança).
+4. Na `main`, com esse commit: `git tag -a vX.Y.Z -m "Self Stream Deck X.Y.Z"` e `git push origin vX.Y.Z`.
+
+A tag dispara `.github/workflows/release.yml`: ele confere que a tag é a versão do projeto e que o CHANGELOG tem as notas, roda o mesmo `build` de todo commit e publica a release com `SelfStreamDeck-X.Y.Z.msi`, o APK, `SHA256SUMS.txt` e as notas.
+
+- **O MSI da release não é assinado** (a chave não sai do seu PC). Para o atualizador automático, gere e assine localmente (`build-msi.ps1 -Sign`) e troque o arquivo: `gh release upload vX.Y.Z dist\SelfStreamDeck-X.Y.Z.msi --clobber`.
+- **O APK sai assinado** quando o repositório tem os secrets `SSD_KEYSTORE_B64` (o `.jks` em base64), `SSD_KEYSTORE_PASSWORD`, `SSD_KEY_ALIAS` e `SSD_KEY_PASSWORD`; sem eles vai o APK de depuração, que não atualiza por cima de outro build (cada runner tem uma chave de depuração diferente). Crie a chave uma vez e guarde uma cópia fora do GitHub: perder a chave é não conseguir mais atualizar o app instalado.
+  `keytool -genkeypair -v -keystore ssd-release.jks -alias ssd -keyalg RSA -keysize 4096 -validity 10000`
+- A pré-release `latest-build` continua existindo: é o build do último commit da `main`, para testar, não uma versão.
+
 ## Publicar atualizações
 
 O agente só contata um endereço se `update.url` estiver configurado. Para publicar:
@@ -103,11 +117,13 @@ O agente confere, nesta ordem: HTTPS, versão mais nova (`0.2.0-rc1` vale menos 
 $t = "<repo>\.tools"
 $env:JAVA_HOME = "$t\jdk17"; $env:ANDROID_SDK_ROOT = "$t\android-sdk"
 cd android
-& "$t\gradle-8.7\bin\gradle.bat" assembleDebug
+.\gradlew testDebugUnitTest lint assembleDebug      # o Gradle Wrapper baixa o Gradle 8.7 (conferido por SHA-256) na primeira vez
 & "$t\platform-tools\adb.exe" install -r app\build\outputs\apk\debug\app-debug.apk
 ```
 
-As versões (AGP 8.5.2, Kotlin 1.9.24) ficam em `android/gradle/libs.versions.toml`. O app é uma casca: `MainActivity.kt` (a WebView, a ponte `Android.*`, o relógio, o bloqueio de tela) e `Connection.kt` (o teste dos endereços e as telas "Conectando" e "Sem conexão"). A ponte que a página enxerga é `openSettings`, `reconnect`, `setDim`, `vibrate` e `lockScreen`; todos opcionais do lado do painel, porque um APK antigo não tem os mais novos (veja `web/src/lib/android.ts`).
+`assembleRelease` gera o APK de release: assinado quando `SSD_KEYSTORE` (o caminho do `.jks`), `SSD_KEYSTORE_PASSWORD`, `SSD_KEY_ALIAS` e `SSD_KEY_PASSWORD` estão no ambiente, sem assinatura caso contrário.
+
+As versões (AGP 8.5.2, Kotlin 1.9.24) ficam em `android/gradle/libs.versions.toml`. O app é uma casca: `MainActivity.kt` (a WebView, a ponte `Android.*`, o relógio, o bloqueio de tela), `Connection.kt` (o teste dos endereços e as telas "Conectando" e "Sem conexão") e `Pairing.kt` (o que não depende do Android e por isso tem testes em `app/src/test`: o formato do endereço, a ordem das tentativas, quais origens são o painel e a conferência do certificado fixado). A ponte que a página enxerga é `openSettings`, `reconnect`, `setDim`, `vibrate` e `lockScreen`; todos opcionais do lado do painel, porque um APK antigo não tem os mais novos (veja `web/src/lib/android.ts`).
 
 Para parear por linha de comando (sem digitar):
 

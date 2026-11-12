@@ -1,0 +1,23 @@
+# What the dependencies of the agent may be (`cargo deny check`, run by the CI on every push and pull request).
+# A new advisory, a license outside the list or a crate from somewhere other than crates.io turns the check red.
+
+[graph]
+# the agent only exists for Windows: dependencies of other systems are not looked at
+targets = ["x86_64-pc-windows-msvc", "x86_64-pc-windows-gnu"]
+
+[advisories]
+version = 2
+
+[licenses]
+version = 2
+# every license in use today (permissive ones only); a new one is a decision, not an accident
+allow = ["MIT", "Apache-2.0", "BSD-3-Clause", "Zlib", "Unlicense", "0BSD", "Unicode-3.0"]
+
+[bans]
+# two versions of one crate make the executable bigger, not wrong
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

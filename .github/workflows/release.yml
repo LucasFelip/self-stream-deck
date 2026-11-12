@@ -1,0 +1,98 @@
+# Publica uma versão: uma tag vX.Y.Z vira uma release com o MSI, o APK, os SHA-256 e as notas do CHANGELOG.md.
+# Como lançar: docs/desenvolvimento.md ("Publicar uma versão"). O MSI sai SEM assinatura (a chave de assinatura não sai do PC do dono);
+# o APK sai assinado quando os secrets da chave existem, senão vai o de depuração.
+name: release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: read
+
+jobs:
+  versao:
+    name: tag, versão e notas
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version-file: .nvmrc }
+      - name: A tag é a versão do projeto
+        run: |
+          node tools/version-check/run.cjs
+          node tools/version-check/run.cjs --tag "$GITHUB_REF_NAME"
+      - name: O CHANGELOG tem as notas desta versão
+        run: node tools/version-check/run.cjs --notes "$GITHUB_REF_NAME" > notas.md && cat notas.md
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with: { name: notas, path: notas.md, if-no-files-found: error }
+
+  # o mesmo check, MSI e APK de depuração de todo commit (o job "release" de lá só roda na main, mas pede escrita: por isso a permissão aqui)
+  build:
+    needs: versao
+    uses: ./.github/workflows/build.yml
+    permissions:
+      contents: write
+
+  apk:
+    name: APK de release (se a chave existir)
+    needs: versao
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      KEYSTORE_B64: ${{ secrets.SSD_KEYSTORE_B64 }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1 # v4.4.4
+      - name: Compila e assina
+        if: env.KEYSTORE_B64 != ''
+        working-directory: android
+        env:
+          SSD_KEYSTORE_PASSWORD: ${{ secrets.SSD_KEYSTORE_PASSWORD }}
+          SSD_KEY_ALIAS: ${{ secrets.SSD_KEY_ALIAS }}
+          SSD_KEY_PASSWORD: ${{ secrets.SSD_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          SSD_KEYSTORE="$RUNNER_TEMP/release.jks" ./gradlew assembleRelease --no-daemon
+          rm -f "$RUNNER_TEMP/release.jks"
+      - name: Sem chave
+        if: env.KEYSTORE_B64 == ''
+        run: echo "::notice title=APK de depuração::Os secrets SSD_KEYSTORE_B64, SSD_KEYSTORE_PASSWORD, SSD_KEY_ALIAS e SSD_KEY_PASSWORD não existem; a release leva o APK de depuração."
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: SelfStreamDeck-apk-release
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: ignore
+
+  publica:
+    name: Publica a release
+    needs: [versao, build, apk]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with: { path: artefatos }
+      - name: Publica
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir pub
+          cp artefatos/SelfStreamDeck-msi/*.msi "pub/SelfStreamDeck-$version.msi"
+          if ls artefatos/SelfStreamDeck-apk-release/*.apk >/dev/null 2>&1; then
+            cp artefatos/SelfStreamDeck-apk-release/*.apk "pub/SelfStreamDeck-$version.apk"
+          else
+            cp artefatos/SelfStreamDeck-apk/*.apk "pub/SelfStreamDeck-$version-debug.apk"
+          fi
+          (cd pub && sha256sum * > SHA256SUMS.txt)
+          {
+            cat artefatos/notas/notas.md
+            printf '\n---\nO MSI **não é assinado** (o Windows mostra "editor desconhecido") e por isso não serve ao atualizador automático: para isso, assine localmente (docs/desenvolvimento.md). Confira os arquivos com `SHA256SUMS.txt`.\n'
+          } > corpo.md
+          gh release create "$GITHUB_REF_NAME" pub/* --verify-tag --title "Self Stream Deck $version" --notes-file corpo.md
