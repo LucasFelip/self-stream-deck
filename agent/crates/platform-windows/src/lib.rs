@@ -3,6 +3,8 @@
 #[cfg(windows)]
 mod audio;
 #[cfg(windows)]
+mod elevation;
+#[cfg(windows)]
 mod input;
 #[cfg(windows)]
 pub mod lan;
@@ -25,6 +27,8 @@ mod windows_mgmt;
 
 #[cfg(windows)]
 pub use audio::WindowsAudio;
+#[cfg(windows)]
+pub use elevation::is_elevated;
 #[cfg(windows)]
 pub use input::WindowsInput;
 #[cfg(windows)]

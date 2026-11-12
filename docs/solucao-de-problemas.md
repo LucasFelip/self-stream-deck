@@ -71,6 +71,8 @@ O código do produto muda a cada compilação; desinstale por *Aplicativos insta
 |---|---|
 | "no update address" | falta `update.url` no `config.json` |
 | "this agent is not signed and no `update.signer`" | o agente instalado não tem assinatura e não há `signer` configurado |
+| "this agent is not signed, so it does not update by itself" | a atualização automática só aceita o certificado do próprio agente; com um agente sem assinatura, use `ssd update --apply` |
+| "the \"update\" folder beside ssd.exe cannot be written" | o agente roda como administrador e não conseguiu criar `update\` na pasta do programa; ele não instala a partir de pasta temporária |
 | "the package is signed by X, not by Y" | o pacote foi assinado por outro certificado |
 | "the package does not match the manifest" | o SHA-256 do arquivo não bate com o do manifesto |
 | "the signature of the package is not good (HashMismatch)" | o pacote foi alterado depois de assinado |

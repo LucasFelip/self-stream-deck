@@ -28,18 +28,26 @@ pub struct Material {
     pub ca_der: Vec<u8>,
 }
 
-fn run_script(scripts: &Path, name: &str, args: &[String]) -> Result<(), String> {
+const TLS_CERT: &str = include_str!("../scripts/tls-cert.ps1");
+const TLS_IOS: &str = include_str!("../scripts/tls-ios.ps1");
+
+/// `'it''s'`: a PowerShell literal string.
+fn quoted(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
+
+/// Runs one of the certificate scripts packed in the executable. The script is handed to PowerShell as text, never as a file: the agent runs
+/// as administrator, and a script file in a folder any program can write (a temporary one) would be a way to run something else with those
+/// rights. The password travels in the environment of that one process, not on its command line (which every program on the PC can read).
+fn run_script(script: &str, args: &[(&str, &str)], password: &str) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
+    let mut command = format!("& {{\n{script}\n}} -Password $env:SSD_SECRET");
+    for (name, value) in args {
+        command.push_str(&format!(" -{name} {}", quoted(value)));
+    }
     let output = std::process::Command::new("powershell.exe")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-        ])
-        .arg(scripts.join(name))
-        .args(args)
+        .args(["-NoProfile", "-NonInteractive", "-Command", &command])
+        .env("SSD_SECRET", password)
         .creation_flags(0x0800_0000)
         .output()
         .map_err(|e| e.to_string())?;
@@ -56,23 +64,13 @@ fn run_script(scripts: &Path, name: &str, args: &[String]) -> Result<(), String>
     }
 }
 
+/// The password of a certificate file: 144 bits from the operating system's generator.
 fn random_secret() -> String {
-    use std::hash::{BuildHasher, Hasher};
-    (0..3)
-        .map(|_| {
-            format!(
-                "{:016x}",
-                std::collections::hash_map::RandomState::new()
-                    .build_hasher()
-                    .finish()
-            )
-        })
-        .collect::<String>()[..36]
-        .to_owned()
+    ssd_core::random::hex(18)
 }
 
 /// The certificate the Android app pins: made once, kept in `data/tls/`, nothing about the network in it.
-pub fn main_material(data: &Path, scripts: &Path) -> Result<Material, String> {
+pub fn main_material(data: &Path) -> Result<Material, String> {
     let dir = data.join("tls");
     let (pfx, cer, secret) = (
         dir.join("server.pfx"),
@@ -84,16 +82,12 @@ pub fn main_material(data: &Path, scripts: &Path) -> Result<Material, String> {
         let password = random_secret();
         std::fs::write(&secret, &password).map_err(|e| e.to_string())?;
         run_script(
-            scripts,
-            "tls-cert.ps1",
+            TLS_CERT,
             &[
-                "-PfxPath".into(),
-                pfx.display().to_string(),
-                "-CerPath".into(),
-                cer.display().to_string(),
-                "-Password".into(),
-                password,
+                ("PfxPath", &pfx.display().to_string()),
+                ("CerPath", &cer.display().to_string()),
             ],
+            &password,
         )?;
         println!("[tls] new certificate");
     }
@@ -110,12 +104,7 @@ pub fn main_material(data: &Path, scripts: &Path) -> Result<Material, String> {
 }
 
 /// The iPhone's material: an authority installed once on the phone and a server certificate that names this PC and its addresses.
-pub fn ios_material(
-    data: &Path,
-    scripts: &Path,
-    names: &[String],
-    ips: &[String],
-) -> Result<Material, String> {
+pub fn ios_material(data: &Path, names: &[String], ips: &[String]) -> Result<Material, String> {
     let dir = data.join("tls").join("ios");
     let files: Vec<PathBuf> = ["ca.pfx", "ca.cer", "leaf.pfx", "leaf.cer", "secret.txt"]
         .iter()
@@ -132,18 +121,13 @@ pub fn ios_material(
             .trim()
             .to_owned();
         run_script(
-            scripts,
-            "tls-ios.ps1",
+            TLS_IOS,
             &[
-                "-Dir".into(),
-                dir.display().to_string(),
-                "-Password".into(),
-                password,
-                "-Names".into(),
-                names.join(","),
-                "-Ips".into(),
-                ips.join(","),
+                ("Dir", &dir.display().to_string()),
+                ("Names", &names.join(",")),
+                ("Ips", &ips.join(",")),
             ],
+            &password,
         )?;
         println!(
             "[tls-ios] new certificate authority and server certificate for {}",
@@ -223,7 +207,7 @@ const CA_PAGE: &str = r##"<!doctype html>
 <h1>Self Stream Deck</h1>
 <p>Certificado para o iPhone confiar no painel.</p>
 <a class="b" href="/ca.cer">Baixar certificado</a>
-<p>Impressão digital (SHA-256). Confira com a que o PC mostra em <b>npm run lan -- ios</b>:</p>
+<p>Impressão digital (SHA-256). Confira com a que o PC mostra em <b>ssd pair</b>:</p>
 <code>FINGERPRINT</code>
 <p>Depois: Ajustes → Perfil Baixado → Instalar; e Ajustes → Geral → Sobre → Ajustes de Confiança do Certificado → ativar.</p>
 </body></html>"##;
@@ -312,31 +296,82 @@ fn firewall(ports: &[u16], rule: &str) {
     }
 }
 
-/// The two PowerShell scripts that make the certificates are packed into the executable; this writes them to a temporary folder.
-pub fn extract_scripts() -> Result<PathBuf, String> {
-    let dir = std::env::temp_dir().join(format!("ssd-scripts-{}", env!("CARGO_PKG_VERSION")));
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    for (name, text) in [
-        ("tls-cert.ps1", include_str!("../scripts/tls-cert.ps1")),
-        ("tls-ios.ps1", include_str!("../scripts/tls-ios.ps1")),
-    ] {
-        std::fs::write(dir.join(name), text).map_err(|e| e.to_string())?;
-    }
-    Ok(dir)
+fn port_of(config: &Config, key: &str, default: u16) -> u16 {
+    config
+        .get(key)
+        .and_then(|v| v.as_u64())
+        .and_then(|p| u16::try_from(p).ok())
+        .unwrap_or(default)
 }
 
-/// Starts what `config` asks for beyond the loopback port and prints how to pair a phone.
-pub async fn start(config: &Config, data: &Path, scripts: &Path, app: Router) {
-    let token = config.token().to_owned();
-    if !config.flag("lan") {
-        println!("\nWi-Fi access is off. Turn it on with: npm run lan -- on");
+fn fingerprint_of(file: &Path) -> Option<String> {
+    std::fs::read(file).ok().map(|der| sha256_hex(&der))
+}
+
+/// `ssd pair`: the links that pair a phone, with the token in them. They are printed only when asked for, on the screen of who asked: the
+/// agent's own output goes to `server.log`, and a secret does not belong in a log.
+pub fn print_pairing(config: &Config, port: u16, data: &Path) {
+    let token = config.token();
+    println!("Pairing code: {token}\n\nOn this PC (and a phone on the USB cable):\n  http://127.0.0.1:{port}/?token={token}");
+    let addresses = ssd_platform_windows::lan::home_addresses();
+    if config.flag("lan") {
+        let port = port_of(config, "httpsPort", 7879);
+        println!("\nAndroid app over Wi-Fi:");
+        match fingerprint_of(&data.join("tls").join("server.cer")) {
+            Some(fingerprint) => {
+                for ip in &addresses {
+                    println!("  https://{ip}:{port}/?token={token}&fp={fingerprint}");
+                }
+                if addresses.is_empty() {
+                    println!("  (no home-network address found: is this PC connected?)");
+                }
+            }
+            None => println!("  (the certificate is made the first time the agent starts)"),
+        }
     } else {
-        let port = config
-            .get("httpsPort")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(7879) as u16;
-        let (data, scripts) = (data.to_owned(), scripts.to_owned());
-        match tokio::task::spawn_blocking(move || main_material(&data, &scripts)).await {
+        println!("\nWi-Fi access is off (\"lan\": true in config.json turns it on).");
+    }
+    if config.flag("ios") {
+        let (port, ca_port) = (
+            port_of(config, "iosPort", 7880),
+            port_of(config, "iosCaPort", 7881),
+        );
+        let host = std::env::var("COMPUTERNAME")
+            .unwrap_or_default()
+            .to_lowercase();
+        let hosts: Vec<String> = addresses
+            .iter()
+            .cloned()
+            .chain([format!("{host}.local")])
+            .collect();
+        println!("\niPhone (Safari):");
+        match fingerprint_of(&data.join("tls").join("ios").join("ca.cer")) {
+            Some(fingerprint) => {
+                println!("  1. install the certificate once (fingerprint {fingerprint}):")
+            }
+            None => println!(
+                "  1. install the certificate once (it is made the first time the agent starts):"
+            ),
+        }
+        for host in &hosts {
+            println!("       http://{host}:{ca_port}/");
+        }
+        println!("  2. open the deck:");
+        for host in &hosts {
+            println!("       https://{host}:{port}/?token={token}");
+        }
+    }
+}
+
+/// Starts what `config` asks for beyond the loopback port and says where it listens. The pairing links (they carry the token) are not
+/// printed here: this output is the log. `ssd pair` and the icon by the clock show them.
+pub async fn start(config: &Config, data: &Path, app: Router) {
+    if !config.flag("lan") {
+        println!("\nWi-Fi access is off (\"lan\": true in config.json turns it on).");
+    } else {
+        let port = port_of(config, "httpsPort", 7879);
+        let data = data.to_owned();
+        match tokio::task::spawn_blocking(move || main_material(&data)).await {
             Ok(Ok(material)) => match serve_tls(
                 SocketAddr::from(([0, 0, 0, 0], port)),
                 &material,
@@ -348,13 +383,13 @@ pub async fn start(config: &Config, data: &Path, scripts: &Path, app: Router) {
                     tokio::task::spawn_blocking(move || {
                         firewall(&[port], ssd_platform_windows::lan::RULE)
                     });
-                    println!("\nOver the home network (Wi-Fi, HTTPS on port {port}):");
+                    println!(
+                        "\nOver the home network (Wi-Fi, HTTPS on port {port}, certificate {}); the pairing link: ssd pair",
+                        material.fingerprint
+                    );
                     let addresses = ssd_platform_windows::lan::home_addresses();
                     for ip in &addresses {
-                        println!(
-                            "  https://{ip}:{port}/?token={token}&fp={}",
-                            material.fingerprint
-                        );
+                        println!("  https://{ip}:{port}/");
                     }
                     if addresses.is_empty() {
                         println!("  (no home-network address found: is this PC connected?)");
@@ -368,14 +403,8 @@ pub async fn start(config: &Config, data: &Path, scripts: &Path, app: Router) {
     }
     if config.flag("ios") {
         let (port, ca_port) = (
-            config
-                .get("iosPort")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(7880) as u16,
-            config
-                .get("iosCaPort")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(7881) as u16,
+            port_of(config, "iosPort", 7880),
+            port_of(config, "iosCaPort", 7881),
         );
         let host = std::env::var("COMPUTERNAME")
             .unwrap_or_default()
@@ -386,13 +415,8 @@ pub async fn start(config: &Config, data: &Path, scripts: &Path, app: Router) {
             "localhost".to_owned(),
         ];
         let ips = ssd_platform_windows::lan::home_addresses();
-        let (d, s, n, i) = (
-            data.to_owned(),
-            scripts.to_owned(),
-            names.clone(),
-            ips.clone(),
-        );
-        match tokio::task::spawn_blocking(move || ios_material(&d, &s, &n, &i)).await {
+        let (d, n, i) = (data.to_owned(), names.clone(), ips.clone());
+        match tokio::task::spawn_blocking(move || ios_material(&d, &n, &i)).await {
             Ok(Ok(material)) => {
                 let material = Arc::new(material);
                 let started = serve_tls(SocketAddr::from(([0, 0, 0, 0], port)), &material, app)
@@ -409,9 +433,9 @@ pub async fn start(config: &Config, data: &Path, scripts: &Path, app: Router) {
                         for host in ips.iter().cloned().chain([format!("{host}.local")]) {
                             println!("       http://{host}:{ca_port}/");
                         }
-                        println!("  2. open the deck:");
+                        println!("  2. open the deck with the link of: ssd pair");
                         for host in ips.iter().cloned().chain([format!("{host}.local")]) {
-                            println!("       https://{host}:{port}/?token={token}");
+                            println!("       https://{host}:{port}/");
                         }
                     }
                     Err(message) => eprintln!("[ios] could not start the iPhone server: {message}"),
@@ -420,5 +444,32 @@ pub async fn start(config: &Config, data: &Path, scripts: &Path, app: Router) {
             Ok(Err(message)) => eprintln!("[ios] could not start the iPhone server: {message}"),
             Err(error) => eprintln!("[ios] could not start the iPhone server: {error}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_value_with_a_quote_stays_one_powershell_string() {
+        assert_eq!(quoted(r"C:\Users\o'brien\tls"), r"'C:\Users\o''brien\tls'");
+    }
+
+    /// The real thing: PowerShell gets the packed script as text and the password in its environment, and the files it writes open with it.
+    #[test]
+    fn the_packed_script_makes_a_certificate_that_opens_with_its_password() {
+        let data = std::env::temp_dir().join(format!("ssd-lan-o'test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&data);
+        let material = main_material(&data).unwrap();
+        assert_eq!(material.fingerprint.len(), 64);
+        assert_eq!(material.passphrase.len(), 36);
+        native_tls::Identity::from_pkcs12(&material.pfx, &material.passphrase).unwrap();
+        let again = main_material(&data).unwrap();
+        assert_eq!(
+            again.fingerprint, material.fingerprint,
+            "made once, then kept"
+        );
+        let _ = std::fs::remove_dir_all(&data);
     }
 }

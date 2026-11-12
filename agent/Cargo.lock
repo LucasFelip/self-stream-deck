@@ -1096,6 +1096,7 @@ dependencies = [
 name = "ssd-core"
 version = "0.1.7"
 dependencies = [
+ "getrandom",
  "serde",
  "serde_json",
  "thiserror 1.0.69",

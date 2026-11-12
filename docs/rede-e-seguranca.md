@@ -30,7 +30,7 @@ Edite o `config.json`, ligue o Wi-Fi e reinicie o agente:
 - O agente passa a escutar HTTPS na porta 7879 e cria a regra de firewall "Self Stream Deck (rede local)": só TCP, só da **sub-rede local** (nunca da internet), em qualquer perfil (a rede da casa costuma estar como "Pública"). Isso exige administrador, que a tarefa já tem. O HTTP da 7878 continua só em `127.0.0.1`.
 - O **certificado é próprio** (RSA 2048, 5 anos), criado na primeira vez em `%APPDATA%\SelfStreamDeck\tls\`, **sem IPs dentro**, então trocar o IP do PC não pede um novo.
 - O app **fixa a impressão digital SHA-256** do certificado: só aceita exatamente aquele. Ninguém na rede consegue se passar pelo servidor, e o HTTPS permite a câmera do celular (que exige contexto seguro).
-- **Parear:** o `server.log` e o ícone da bandeja mostram o link `https://IP:7879/?token=…&fp=…`. Cole-o na tela "Conectar ao PC" do app (ou ⚙ → *Endereço do PC…*). Se o celular está ligado por USB, o app recebe os dois endereços sozinho.
+- **Parear:** o comando `ssd.exe pair` (na pasta do programa) mostra o link `https://IP:7879/?token=…&fp=…`; o ícone da bandeja mostra o código e o endereço neste PC. O `server.log` não traz mais o token: um segredo não fica em arquivo de log. Cole-o na tela "Conectar ao PC" do app (ou ⚙ → *Endereço do PC…*). Se o celular está ligado por USB, o app recebe os dois endereços sozinho.
 - **Reserve o IP do PC no roteador** (DHCP fixo) para o endereço não mudar; se mudar, cole o link novo.
 - Para desligar: `"lan": false`.
 
@@ -38,8 +38,8 @@ Edite o `config.json`, ligue o Wi-Fi e reinicie o agente:
 
 O iPhone não tem o app Android nem o `adb reverse`: ele abre o painel no **Safari** pelo Wi-Fi e pode virar um app em tela cheia na Tela de Início. Precisa de iOS 16.4+ (a tela fica ligada pela *Wake Lock*; o toque de háptico só no iOS 18+). Ligue com `"ios": true` e reinicie o agente.
 
-1. **Instale o certificado uma vez.** No Safari abra `http://IP-DO-PC:7881/` (ou `http://nome-do-pc.local:7881/`; os links estão no `server.log`), confira a impressão digital da página com a do registro, toque em *Baixar certificado*, depois *Ajustes → Perfil Baixado → Instalar* e *Ajustes → Geral → Sobre → Ajustes de Confiança do Certificado* → ativar. Esse certificado é só a **autoridade** (AC) do painel: não muda quando o IP do PC muda.
-2. **Abra o painel:** `https://IP-DO-PC:7880/?token=…` (o link está no registro). Aceite o aviso de *Rede Local*. Depois, *Compartilhar → Adicionar à Tela de Início*.
+1. **Instale o certificado uma vez.** No Safari abra `http://IP-DO-PC:7881/` (ou `http://nome-do-pc.local:7881/`; o `ssd.exe pair` lista os links), confira a impressão digital da página com a que ele mostra, toque em *Baixar certificado*, depois *Ajustes → Perfil Baixado → Instalar* e *Ajustes → Geral → Sobre → Ajustes de Confiança do Certificado* → ativar. Esse certificado é só a **autoridade** (AC) do painel: não muda quando o IP do PC muda.
+2. **Abra o painel:** `https://IP-DO-PC:7880/?token=…` (o link completo sai no `ssd.exe pair`). Aceite o aviso de *Rede Local*. Depois, *Compartilhar → Adicionar à Tela de Início*.
 3. **Se o app da Tela de Início pedir o código** (ele guarda cookies separados do Safari): no Safari abra ⚙ → *Código de pareamento* (copia o código), abra o app e cole na tela de pareamento (vale colar o link inteiro).
 
 **Por que uma porta própria.** O Safari confere os nomes dentro do certificado, ao contrário do app Android (que fixa a impressão digital). Por isso o iPhone tem o **seu** HTTPS (7880) com um certificado de 1 ano que lista o nome do PC, `nome.local` e os IPs atuais, assinado por uma AC local criada na primeira vez em `tls\ios\`. A porta HTTP 7881 só entrega o certificado público da AC, sem token; **a chave privada nunca sai da pasta**.
@@ -59,7 +59,8 @@ O alvo é uma máquina de uma pessoa, na rede da casa: o painel dá controle do 
 | Bloqueio | dez falhas de token em um minuto bloqueiam o endereço por um minuto, **mesmo para o token certo** |
 | `Host` | validado (IP, `localhost`, nome do PC, `nome.local`): protege contra *DNS rebinding* |
 | `Origin` | um `POST` de outro site é recusado |
-| Entrada | o celular só dispara o que o agente **lista**: apps da barra de tarefas por identificador, atalhos do `config.json`, dispositivos de áudio que existem, passos de macro de uma lista fixa. **Nunca** caminhos, comandos, texto digitado ou teclas arbitrárias |
+| Entrada | o celular só dispara o que o agente **lista**: apps da barra de tarefas por identificador, atalhos do `config.json`, dispositivos de áudio que existem, passos de macro de uma lista fixa. **Nunca** caminhos, comandos ou texto digitado: um atalho ou passo de teclas criado pelo celular precisa de Ctrl, Alt ou Win (ou ser uma tecla que não escreve, como F5 ou uma seta); letra, número, Enter ou Espaço sozinhos são recusados, porque em sequência viram um teclado (`win+r`, `c`, `m`, `d`, Enter). Quem quer essas teclas liga `"typingKeys": true` no `config.json`, **no PC** (o editor do celular não altera essa chave) |
+| Privilégio | o agente roda como administrador, então nada do que ele executa ou em que confia fica em pasta que um programa comum consegue escrever: os scripts dos certificados vão ao PowerShell como texto (não como arquivo em `%TEMP%`), a atualização é baixada, conferida e instalada a partir de `update\` ao lado do `ssd.exe` (Arquivos de Programas), a atualização automática só aceita o certificado do próprio agente (o `update.signer` do `config.json` vale só para o `ssd update --apply` digitado por uma pessoa) e a DLL da câmera fica travada contra escrita entre a conferência e o registro |
 | Cabeçalhos | CSP restritiva, `X-Frame-Options: DENY`, `nosniff`, `no-referrer`, `no-store` |
 | Corpo | tamanho limitado por rota; JSON inválido é 400 |
 | Arquivos | só os do painel, de tipos conhecidos; nada fora da pasta, nem por `..` codificado |

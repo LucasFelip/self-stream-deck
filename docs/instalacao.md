@@ -51,7 +51,7 @@ Faz o mesmo que o MSI. `uninstall.ps1 [-RemoveData]` desfaz.
 Na primeira vez o agente cria o `config.json` com um **token** novo. Para ver o endereço de pareamento:
 
 - ícone da bandeja → **Mostrar código de pareamento**; ou
-- `server.log` (as linhas "listening on…" e os links do Wi-Fi e do iPhone); ou
+- `ssd.exe pair` num terminal (todos os links, inclusive os do Wi-Fi e do iPhone; o `server.log` mostra os endereços, mas não o token); ou
 - no celular já pareado: menu ⚙ → *Código de pareamento* (iPhone).
 
 Depois, [conecte o celular](rede-e-seguranca.md).

@@ -55,7 +55,7 @@ fn open(target: &str) {
 
 fn show_code(info: &Info, owner: HWND) {
     let text = wide(&format!(
-        "Código de pareamento (o mesmo que o celular já usa):\n\n{}\n\nEndereço neste PC:\nhttp://127.0.0.1:{}/?token={}\n\nNo celular: \"Endereço do PC…\" no menu do app, ou o link https que está no registro.",
+        "Código de pareamento (o mesmo que o celular já usa):\n\n{}\n\nEndereço neste PC:\nhttp://127.0.0.1:{}/?token={}\n\nNo celular: \"Endereço do PC…\" no menu do app, ou, pelo Wi-Fi, o link https que o comando \"ssd.exe pair\" mostra.",
         info.token, info.port, info.token
     ));
     unsafe {

@@ -18,6 +18,7 @@ pub mod media;
 pub mod notices;
 pub mod ports;
 pub mod power;
+pub mod random;
 pub mod sha1;
 pub mod sha256;
 pub mod taskbar;

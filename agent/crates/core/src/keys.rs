@@ -83,6 +83,22 @@ pub fn parse(spec: &str) -> Result<Vec<u8>, String> {
     tokens(spec)?.iter().map(|name| vk_of(name)).collect()
 }
 
+/// Would this shortcut type text by itself? A letter, a digit, Enter or Space with no Ctrl, Alt or Win held is a key of a keyboard: a few of
+/// them in a row write a command. Shift does not count (Shift+A is still the letter). The editor refuses these unless the owner allowed them.
+pub fn types_text(spec: &str) -> bool {
+    let Ok(names) = tokens(spec) else {
+        return false;
+    };
+    let held = names
+        .iter()
+        .any(|name| matches!(name.as_str(), "ctrl" | "control" | "alt" | "win"));
+    let typing = names.iter().any(|name| {
+        matches!(name.as_str(), "enter" | "space")
+            || matches!(name.as_bytes(), [b'a'..=b'z'] | [b'0'..=b'9'])
+    });
+    typing && !held
+}
+
 /// "ctrl+shift+esc" gives "Ctrl+Shift+Esc".
 pub fn display(spec: &str) -> Result<String, String> {
     let label = |name: &str| -> String {
@@ -141,6 +157,27 @@ mod tests {
             "ctrl++c",
         ] {
             assert!(parse(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_key_that_types_needs_ctrl_alt_or_win() {
+        for typing in ["a", "7", "enter", "space", "shift+a", "Shift + Enter"] {
+            assert!(types_text(typing), "{typing}");
+        }
+        for fine in [
+            "ctrl+c",
+            "win+r",
+            "alt+enter",
+            "ctrl+shift+m",
+            "f5",
+            "esc",
+            "left",
+            "shift+tab",
+            "playpause",
+            "printscreen",
+        ] {
+            assert!(!types_text(fine), "{fine}");
         }
     }
 

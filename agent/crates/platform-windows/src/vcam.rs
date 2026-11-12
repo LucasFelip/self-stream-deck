@@ -336,10 +336,33 @@ impl VcamPort for WindowsVcam {
                 ));
             }
             std::fs::write(self.dll(), &bytes).map_err(|e| failed(e.to_string()))?;
+            // regsvr32 loads the file with this process's rights (administrator), and the folder is one any program of the user can
+            // write. Open it so that nobody can write, replace or rename it (others may only read), check that what is on disk is still
+            // what was verified, and keep it open until the registration is over.
+            let held = {
+                use std::io::Read;
+                use std::os::windows::fs::OpenOptionsExt;
+                const SHARE_READ_ONLY: u32 = 1;
+                let mut file = std::fs::OpenOptions::new()
+                    .read(true)
+                    .share_mode(SHARE_READ_ONLY)
+                    .open(self.dll())
+                    .map_err(|e| failed(e.to_string()))?;
+                let mut on_disk = Vec::with_capacity(bytes.len());
+                file.read_to_end(&mut on_disk)
+                    .map_err(|e| failed(e.to_string()))?;
+                if on_disk != bytes {
+                    return Err(failed(
+                        "the file changed while it was being installed: not installed",
+                    ));
+                }
+                file
+            };
             let output = regsvr32(&[
                 &format!("/i:UnityCaptureName={NAME}"),
                 &self.dll().to_string_lossy(),
             ])?;
+            drop(held);
             *self.installed.lock().unwrap() = None;
             if !output.0 || !self.is_installed(true) {
                 return Err(failed(format!("registration failed (code {}): the server needs administrator rights to register a camera. {}", output.1, output.2).trim().to_owned()));
