@@ -9,6 +9,9 @@ license.workspace = true
 name = "ssd"
 path = "src/main.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 ssd-core = { path = "../core" }
 ssd-api = { path = "../api" }

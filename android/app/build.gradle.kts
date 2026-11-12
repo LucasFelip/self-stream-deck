@@ -11,8 +11,9 @@ android {
         applicationId = "dev.selfstreamdeck"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        // the version of the whole project (agent/Cargo.toml); the code is major*10000 + minor*100 + patch. tools/version-check keeps them equal
+        versionCode = 107
+        versionName = "0.1.7"
     }
 
     buildTypes {

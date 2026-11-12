@@ -7,14 +7,17 @@ use std::path::{Path, PathBuf};
 
 use ssd_core::ports::{PortError, PortResult, TaskbarPort};
 use ssd_core::sha1::sha1_hex;
-use ssd_core::taskbar::{id_of, TaskbarItem};
+use ssd_core::taskbar::{id_of, manifest_executable, packaged_app, TaskbarItem};
 use windows::core::{Interface, PCWSTR, PWSTR};
-use windows::Win32::Foundation::HINSTANCE;
+use windows::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, ERROR_SUCCESS, HINSTANCE};
 use windows::Win32::Graphics::Gdi::{
     CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, GetObjectW, BITMAP, BITMAPINFO,
     BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HGDIOBJ,
 };
 use windows::Win32::Storage::FileSystem::WIN32_FIND_DATAW;
+use windows::Win32::Storage::Packaging::Appx::{
+    GetPackagePathByFullName, GetPackagesByPackageFamily,
+};
 use windows::Win32::System::Com::{CoCreateInstance, IPersistFile, CLSCTX_ALL, STGM_READ};
 use windows::Win32::System::Environment::ExpandEnvironmentStringsW;
 use windows::Win32::UI::Shell::{ExtractAssociatedIconW, IShellLinkW, ShellLink};
@@ -70,6 +73,64 @@ fn read_shortcut(path: &Path) -> Option<Shortcut> {
     }
 }
 
+/// The folders where the packages of a family are installed for this user ("Claude_pzs8sxrjxfjjc" gives the folder of the version in use).
+fn package_folders(family: &str) -> Vec<PathBuf> {
+    let family = wide(family);
+    let (mut count, mut length) = (0u32, 0u32);
+    // SAFETY: `family` is NUL-terminated and outlives the calls. The first call only asks for sizes (no buffers); the second gets a
+    // `names` array of `count` pointers and a `text` buffer of `length` UTF-16 units, exactly the sizes the first call reported, and the
+    // pointers written to `names` point into `text`, which is alive while they are read. `GetPackagePathByFullName` is given a buffer
+    // and its real length.
+    unsafe {
+        let sizes = GetPackagesByPackageFamily(
+            PCWSTR(family.as_ptr()),
+            &mut count,
+            None,
+            &mut length,
+            PWSTR::null(),
+        );
+        if sizes != ERROR_INSUFFICIENT_BUFFER || count == 0 || length == 0 {
+            return Vec::new();
+        }
+        let mut names = vec![PWSTR::null(); count as usize];
+        let mut text = vec![0u16; length as usize];
+        let filled = GetPackagesByPackageFamily(
+            PCWSTR(family.as_ptr()),
+            &mut count,
+            Some(names.as_mut_ptr()),
+            &mut length,
+            PWSTR(text.as_mut_ptr()),
+        );
+        if filled != ERROR_SUCCESS {
+            return Vec::new();
+        }
+        names
+            .iter()
+            .take(count as usize)
+            .filter(|name| !name.is_null())
+            .filter_map(|name| {
+                let mut path = [0u16; 1024];
+                let mut size = path.len() as u32;
+                let found = GetPackagePathByFullName(
+                    PCWSTR(name.as_ptr()),
+                    &mut size,
+                    PWSTR(path.as_mut_ptr()),
+                );
+                (found == ERROR_SUCCESS).then(|| PathBuf::from(text_of(&path)))
+            })
+            .collect()
+    }
+}
+
+/// The program a packaged app's shortcut really starts (`...\WindowsApps\Claude_...\app\Claude.exe`), from the package's own manifest.
+fn packaged_program(family: &str, app: &str) -> Option<PathBuf> {
+    package_folders(family).into_iter().find_map(|folder| {
+        let manifest = std::fs::read_to_string(folder.join("AppxManifest.xml")).ok()?;
+        let program = folder.join(manifest_executable(&manifest, app)?);
+        program.is_file().then_some(program)
+    })
+}
+
 fn expand(text: &str) -> String {
     let source = wide(text);
     unsafe {
@@ -85,81 +146,83 @@ fn expand(text: &str) -> String {
 
 /// The picture of an icon handle as RGBA bytes.
 unsafe fn pixels(icon: HICON) -> Option<(u32, u32, Vec<u8>)> {
-    let mut info = ICONINFO::default();
-    GetIconInfo(icon, &mut info).ok()?;
-    let release = |info: &ICONINFO| {
-        if !info.hbmColor.is_invalid() {
-            let _ = DeleteObject(HGDIOBJ(info.hbmColor.0));
+    unsafe {
+        let mut info = ICONINFO::default();
+        GetIconInfo(icon, &mut info).ok()?;
+        let release = |info: &ICONINFO| {
+            if !info.hbmColor.is_invalid() {
+                let _ = DeleteObject(HGDIOBJ(info.hbmColor.0));
+            }
+            if !info.hbmMask.is_invalid() {
+                let _ = DeleteObject(HGDIOBJ(info.hbmMask.0));
+            }
+        };
+        let mut bitmap = BITMAP::default();
+        if info.hbmColor.is_invalid()
+            || GetObjectW(
+                HGDIOBJ(info.hbmColor.0),
+                std::mem::size_of::<BITMAP>() as i32,
+                Some(&mut bitmap as *mut BITMAP as *mut c_void),
+            ) == 0
+        {
+            release(&info);
+            return None;
         }
-        if !info.hbmMask.is_invalid() {
-            let _ = DeleteObject(HGDIOBJ(info.hbmMask.0));
-        }
-    };
-    let mut bitmap = BITMAP::default();
-    if info.hbmColor.is_invalid()
-        || GetObjectW(
-            HGDIOBJ(info.hbmColor.0),
-            std::mem::size_of::<BITMAP>() as i32,
-            Some(&mut bitmap as *mut BITMAP as *mut c_void),
-        ) == 0
-    {
-        release(&info);
-        return None;
-    }
-    let (width, height) = (bitmap.bmWidth, bitmap.bmHeight);
-    let dc = CreateCompatibleDC(None);
-    let mut header = BITMAPINFO {
-        bmiHeader: BITMAPINFOHEADER {
-            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
-            biWidth: width,
-            biHeight: -height,
-            biPlanes: 1,
-            biBitCount: 32,
-            biCompression: BI_RGB.0,
+        let (width, height) = (bitmap.bmWidth, bitmap.bmHeight);
+        let dc = CreateCompatibleDC(None);
+        let mut header = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: width,
+                biHeight: -height,
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: BI_RGB.0,
+                ..Default::default()
+            },
             ..Default::default()
-        },
-        ..Default::default()
-    };
-    let mut color = vec![0u8; (width * height * 4) as usize];
-    let got = GetDIBits(
-        dc,
-        info.hbmColor,
-        0,
-        height as u32,
-        Some(color.as_mut_ptr() as *mut c_void),
-        &mut header,
-        DIB_RGB_COLORS,
-    );
-    // an icon without an alpha channel carries its shape in the mask (a bit per pixel: 1 is transparent)
-    let has_alpha = color.chunks(4).any(|p| p[3] != 0);
-    let mut mask = vec![0u8; (width * height * 4) as usize];
-    let mask_ok = !has_alpha
-        && !info.hbmMask.is_invalid()
-        && GetDIBits(
+        };
+        let mut color = vec![0u8; (width * height * 4) as usize];
+        let got = GetDIBits(
             dc,
-            info.hbmMask,
+            info.hbmColor,
             0,
             height as u32,
-            Some(mask.as_mut_ptr() as *mut c_void),
+            Some(color.as_mut_ptr() as *mut c_void),
             &mut header,
             DIB_RGB_COLORS,
-        ) != 0;
-    let _ = DeleteDC(dc);
-    release(&info);
-    if got == 0 {
-        return None;
-    }
-    for (index, pixel) in color.chunks_mut(4).enumerate() {
-        pixel.swap(0, 2); // BGRA to RGBA
-        if !has_alpha {
-            pixel[3] = if mask_ok && mask[index * 4] != 0 {
-                0
-            } else {
-                255
-            };
+        );
+        // an icon without an alpha channel carries its shape in the mask (a bit per pixel: 1 is transparent)
+        let has_alpha = color.chunks(4).any(|p| p[3] != 0);
+        let mut mask = vec![0u8; (width * height * 4) as usize];
+        let mask_ok = !has_alpha
+            && !info.hbmMask.is_invalid()
+            && GetDIBits(
+                dc,
+                info.hbmMask,
+                0,
+                height as u32,
+                Some(mask.as_mut_ptr() as *mut c_void),
+                &mut header,
+                DIB_RGB_COLORS,
+            ) != 0;
+        let _ = DeleteDC(dc);
+        release(&info);
+        if got == 0 {
+            return None;
         }
+        for (index, pixel) in color.chunks_mut(4).enumerate() {
+            pixel.swap(0, 2); // BGRA to RGBA
+            if !has_alpha {
+                pixel[3] = if mask_ok && mask[index * 4] != 0 {
+                    0
+                } else {
+                    255
+                };
+            }
+        }
+        Some((width as u32, height as u32, color))
     }
-    Some((width as u32, height as u32, color))
 }
 
 fn encode_png(width: u32, height: u32, rgba: &[u8]) -> Option<Vec<u8>> {
@@ -253,6 +316,18 @@ impl TaskbarPort for WindowsTaskbar {
                 icon_location: String::new(),
             });
             let id = id_of(&file);
+            // a packaged app is pinned as "explorer.exe shell:AppsFolder\…": its program is what gives the icon and tells whether it is
+            // open (the shortcut itself still starts it, through Explorer)
+            let shortcut = match packaged_app(&shortcut.target, &shortcut.args)
+                .and_then(|(family, app)| packaged_program(&family, &app))
+            {
+                Some(program) => Shortcut {
+                    target: program.to_string_lossy().into_owned(),
+                    args: String::new(),
+                    ..shortcut
+                },
+                None => shortcut,
+            };
 
             // the icon: the one the shortcut names, else the target's, else Explorer's
             let named = expand(
@@ -313,5 +388,11 @@ mod tests {
             }
         }
         let _ = std::fs::remove_dir_all(&icons);
+    }
+
+    #[test]
+    fn a_family_nobody_installed_has_no_folder_and_no_program() {
+        assert!(package_folders("SelfStreamDeck.NoSuchPackage_0000000000000").is_empty());
+        assert!(packaged_program("SelfStreamDeck.NoSuchPackage_0000000000000", "App").is_none());
     }
 }

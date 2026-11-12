@@ -219,6 +219,14 @@ body {
 .pager::-webkit-scrollbar { display: none; }
 body[data-state="offline"] .pager { opacity: 0.35; pointer-events: none; }
 
+/* a part that failed to draw (ui/ErrorBoundary): a notice in its place, with a way out */
+.crash { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 100%; min-height: 160px; padding: 24px; text-align: center; color: var(--text); }
+.crash[data-scope="app"] { position: fixed; inset: 0; background: var(--bg); }
+.crash b { font-size: 1rem; }
+.crash p { max-width: 34ch; margin: 0; font-size: 0.8rem; line-height: 1.45; color: var(--muted); }
+.crash-actions { display: flex; gap: 10px; margin-top: 6px; }
+.crash-actions button { min-width: 132px; height: 48px; padding: 0 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); color: var(--text); font-family: inherit; font-weight: 600; font-size: 0.84rem; touch-action: manipulation; }
+
 /* offline notice: a real row above the pager, so the pager shrinks instead of being covered */
 .offline { display: none; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; flex: none; min-height: 40px; padding: 4px calc(16px + var(--safe-right)) 4px calc(16px + var(--safe-left)); border-bottom: 1px solid var(--border); background: rgba(229, 100, 107, 0.12); color: var(--err); font-size: 0.8rem; font-weight: 600; }
 body[data-state="offline"] .offline { display: flex; }

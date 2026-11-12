@@ -8,6 +8,15 @@ version = "0.1.7"
 publish = false
 license = "MIT"
 
+# The lints every crate turns on (`[lints] workspace = true`); the check runs clippy with warnings as errors.
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+
 [profile.release]
 opt-level = "s"
 lto = "thin"

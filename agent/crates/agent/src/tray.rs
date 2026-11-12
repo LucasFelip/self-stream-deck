@@ -74,53 +74,55 @@ unsafe extern "system" fn procedure(
     w_param: WPARAM,
     l_param: LPARAM,
 ) -> LRESULT {
-    if message == CALLBACK {
-        let event = (l_param.0 & 0xffff) as u32;
-        let Some(info) = INFO.get() else {
-            return LRESULT(0);
-        };
-        if event == WM_LBUTTONDBLCLK {
-            open(&format!(
-                "http://127.0.0.1:{}/?token={}",
-                info.port, info.token
-            ));
-        } else if event == WM_RBUTTONUP {
-            let menu = CreatePopupMenu().unwrap_or_default();
-            let _ = AppendMenuW(menu, MF_STRING, OPEN, w!("Abrir painel"));
-            let _ = AppendMenuW(menu, MF_STRING, CODE, w!("Mostrar código de pareamento"));
-            let _ = AppendMenuW(menu, MF_STRING, LOG, w!("Abrir registro (log)"));
-            let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
-            let _ = AppendMenuW(menu, MF_STRING, QUIT, w!("Sair"));
-            let mut at = POINT::default();
-            let _ = GetCursorPos(&mut at);
-            // the menu closes when the user clicks elsewhere only if its window has the foreground first
-            let _ = SetForegroundWindow(window);
-            let choice = TrackPopupMenu(
-                menu,
-                TPM_RETURNCMD | TPM_RIGHTBUTTON,
-                at.x,
-                at.y,
-                0,
-                window,
-                None,
-            )
-            .0 as usize;
-            let _ = PostMessageW(window, WM_NULL, WPARAM(0), LPARAM(0));
-            let _ = DestroyMenu(menu);
-            match choice {
-                OPEN => open(&format!(
+    unsafe {
+        if message == CALLBACK {
+            let event = (l_param.0 & 0xffff) as u32;
+            let Some(info) = INFO.get() else {
+                return LRESULT(0);
+            };
+            if event == WM_LBUTTONDBLCLK {
+                open(&format!(
                     "http://127.0.0.1:{}/?token={}",
                     info.port, info.token
-                )),
-                CODE => show_code(info, window),
-                LOG => open(&info.log.to_string_lossy()),
-                QUIT => std::process::exit(0), // the job object takes whatever the agent started with it
-                _ => {}
+                ));
+            } else if event == WM_RBUTTONUP {
+                let menu = CreatePopupMenu().unwrap_or_default();
+                let _ = AppendMenuW(menu, MF_STRING, OPEN, w!("Abrir painel"));
+                let _ = AppendMenuW(menu, MF_STRING, CODE, w!("Mostrar código de pareamento"));
+                let _ = AppendMenuW(menu, MF_STRING, LOG, w!("Abrir registro (log)"));
+                let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
+                let _ = AppendMenuW(menu, MF_STRING, QUIT, w!("Sair"));
+                let mut at = POINT::default();
+                let _ = GetCursorPos(&mut at);
+                // the menu closes when the user clicks elsewhere only if its window has the foreground first
+                let _ = SetForegroundWindow(window);
+                let choice = TrackPopupMenu(
+                    menu,
+                    TPM_RETURNCMD | TPM_RIGHTBUTTON,
+                    at.x,
+                    at.y,
+                    0,
+                    window,
+                    None,
+                )
+                .0 as usize;
+                let _ = PostMessageW(window, WM_NULL, WPARAM(0), LPARAM(0));
+                let _ = DestroyMenu(menu);
+                match choice {
+                    OPEN => open(&format!(
+                        "http://127.0.0.1:{}/?token={}",
+                        info.port, info.token
+                    )),
+                    CODE => show_code(info, window),
+                    LOG => open(&info.log.to_string_lossy()),
+                    QUIT => std::process::exit(0), // the job object takes whatever the agent started with it
+                    _ => {}
+                }
             }
+            return LRESULT(0);
         }
-        return LRESULT(0);
+        DefWindowProcW(window, message, w_param, l_param)
     }
-    DefWindowProcW(window, message, w_param, l_param)
 }
 
 /// Starts the tray icon on a thread of its own.

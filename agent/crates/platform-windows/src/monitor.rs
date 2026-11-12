@@ -87,30 +87,32 @@ fn now_ms() -> u64 {
 }
 
 unsafe fn format_array(counter: isize) -> Option<Vec<(String, f64)>> {
-    let (mut size, mut count) = (0u32, 0u32);
-    if PdhGetFormattedCounterArrayW(counter, PDH_FMT_DOUBLE, &mut size, &mut count, None)
-        != PDH_MORE_DATA
-        || size == 0
-    {
-        return None;
-    }
-    let mut buffer = vec![0u64; size as usize / 8 + 1];
-    let items = buffer.as_mut_ptr() as *mut PDH_FMT_COUNTERVALUE_ITEM_W;
-    if PdhGetFormattedCounterArrayW(counter, PDH_FMT_DOUBLE, &mut size, &mut count, Some(items))
-        != 0
-    {
-        return None;
-    }
-    let mut out = Vec::with_capacity(count as usize);
-    for item in std::slice::from_raw_parts(items, count as usize) {
-        if item.FmtValue.CStatus != 0 && item.FmtValue.CStatus != 1 {
-            continue;
+    unsafe {
+        let (mut size, mut count) = (0u32, 0u32);
+        if PdhGetFormattedCounterArrayW(counter, PDH_FMT_DOUBLE, &mut size, &mut count, None)
+            != PDH_MORE_DATA
+            || size == 0
+        {
+            return None;
         }
-        if let Ok(name) = item.szName.to_string() {
-            out.push((name, item.FmtValue.Anonymous.doubleValue));
+        let mut buffer = vec![0u64; size as usize / 8 + 1];
+        let items = buffer.as_mut_ptr() as *mut PDH_FMT_COUNTERVALUE_ITEM_W;
+        if PdhGetFormattedCounterArrayW(counter, PDH_FMT_DOUBLE, &mut size, &mut count, Some(items))
+            != 0
+        {
+            return None;
         }
+        let mut out = Vec::with_capacity(count as usize);
+        for item in std::slice::from_raw_parts(items, count as usize) {
+            if item.FmtValue.CStatus != 0 && item.FmtValue.CStatus != 1 {
+                continue;
+            }
+            if let Ok(name) = item.szName.to_string() {
+                out.push((name, item.FmtValue.Anonymous.doubleValue));
+            }
+        }
+        Some(out)
     }
-    Some(out)
 }
 
 fn collector(shared: Arc<Shared>) {

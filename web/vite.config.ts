@@ -2,7 +2,7 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
-// The agent serves the build at / (inside the agent's executable).
+// The agent serves the build at / (inside the agent's executable; the source maps stay in dist/ for debugging and are left out of it).
 // `npm run dev` proxies the API to the agent on this PC; the pairing cookie of 127.0.0.1:7878 is shared with localhost:5173.
 export default defineConfig({
   base: '/',

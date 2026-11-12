@@ -100,24 +100,26 @@ unsafe extern "system" fn collect_monitor(
     _: *mut RECT,
     data: LPARAM,
 ) -> BOOL {
-    let found = &mut *(data.0 as *mut Vec<Screen>);
-    let mut info = MONITORINFOEXW::default();
-    info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
-    if GetMonitorInfoW(
-        monitor,
-        &mut info as *mut MONITORINFOEXW as *mut MONITORINFO,
-    )
-    .as_bool()
-    {
-        found.push(Screen {
-            handle: monitor,
-            device: text_of(&info.szDevice),
-            full: info.monitorInfo.rcMonitor,
-            work: info.monitorInfo.rcWork,
-            primary: info.monitorInfo.dwFlags & 1 != 0,
-        });
+    unsafe {
+        let found = &mut *(data.0 as *mut Vec<Screen>);
+        let mut info = MONITORINFOEXW::default();
+        info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+        if GetMonitorInfoW(
+            monitor,
+            &mut info as *mut MONITORINFOEXW as *mut MONITORINFO,
+        )
+        .as_bool()
+        {
+            found.push(Screen {
+                handle: monitor,
+                device: text_of(&info.szDevice),
+                full: info.monitorInfo.rcMonitor,
+                work: info.monitorInfo.rcWork,
+                primary: info.monitorInfo.dwFlags & 1 != 0,
+            });
+        }
+        TRUE
     }
-    TRUE
 }
 
 /// Always sorted by device name (`\\.\DISPLAY1`, `\\.\DISPLAY2`...), so an index means the same thing everywhere.
@@ -154,28 +156,34 @@ fn device_of(monitor: HMONITOR) -> String {
 
 /// The physical monitors behind a screen (DDC/CI talks to those), released by the caller.
 unsafe fn physical(monitor: HMONITOR) -> Vec<PHYSICAL_MONITOR> {
-    let mut count = 0u32;
-    if GetNumberOfPhysicalMonitorsFromHMONITOR(monitor, &mut count).is_err() || count == 0 {
-        return Vec::new();
+    unsafe {
+        let mut count = 0u32;
+        if GetNumberOfPhysicalMonitorsFromHMONITOR(monitor, &mut count).is_err() || count == 0 {
+            return Vec::new();
+        }
+        let mut list = vec![PHYSICAL_MONITOR::default(); count as usize];
+        if GetPhysicalMonitorsFromHMONITOR(monitor, &mut list).is_err() {
+            return Vec::new();
+        }
+        list
     }
-    let mut list = vec![PHYSICAL_MONITOR::default(); count as usize];
-    if GetPhysicalMonitorsFromHMONITOR(monitor, &mut list).is_err() {
-        return Vec::new();
-    }
-    list
 }
 
 unsafe fn release(list: &[PHYSICAL_MONITOR]) {
-    for monitor in list {
-        let _ = DestroyPhysicalMonitor(monitor.hPhysicalMonitor);
+    unsafe {
+        for monitor in list {
+            let _ = DestroyPhysicalMonitor(monitor.hPhysicalMonitor);
+        }
     }
 }
 
 // ---- windows -------------------------------------------------------------------------------------------------------------------------
 
 unsafe extern "system" fn collect_window(window: HWND, data: LPARAM) -> BOOL {
-    (*(data.0 as *mut Vec<HWND>)).push(window);
-    TRUE
+    unsafe {
+        (*(data.0 as *mut Vec<HWND>)).push(window);
+        TRUE
+    }
 }
 
 /// The rectangle the user sees. `GetWindowRect` also includes the invisible resize borders Windows 10/11 adds.

@@ -1,6 +1,6 @@
-# 0006. Verificação local e hook de pre-push (e, depois, GitHub Actions)
+# 0006. Verificação local e hook de pre-push, sem GitHub Actions por ora
 
-Estado: **aceito**; a parte "sem Actions" foi **superada**: o workflow `.github/workflows/build.yml` foi ligado (roda o `check.js --ci` e compila o MSI e o APK). O hook de pre-push continua valendo.
+Estado: **substituído em parte** pelo [ADR 0009](0009-ci-no-github-actions.md): o GitHub Actions foi ligado. O comando único e o hook de pre-push continuam valendo.
 
 ## Contexto
 

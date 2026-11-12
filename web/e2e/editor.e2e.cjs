@@ -304,6 +304,38 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
         await off.waitFor(`document.querySelector('.ed-form .ed-hint')?.textContent.includes('"editor": false')`, 'the explanation');
       } finally { deck.model.editorOff = false; closeOff(); }
     });
+
+    await test('editor: closing with unsaved changes asks first; "Continuar editando" keeps the work and "Descartar" closes without saving', async () => {
+      const { page, close } = await open(411, 914);
+      const sheetOpen = `Boolean(document.querySelector('#modal-root .sheet #ed-discard'))`;
+      try {
+        await tapTab(page, 'shortcuts');
+        await menuEdit(page);
+        await tapUntil(page, '.tile[data-key="s:paste"]', `!document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor');
+        await page.waitFor(`document.querySelector('.ed-form input.ed-input')?.value === 'Colar'`, 'the form');
+        deck.model.calls.length = 0;
+        await typeInto(page, '.ed-form input.ed-input', 'Colar tudo');
+        await page.waitFor(`document.querySelector('.ed-save').dataset.dirty === 'true'`, 'a change to save');
+        await page.eval('Deck.back()');
+        await page.waitFor(sheetOpen, 'the question');
+        assert.strictEqual(await editorOpen(page), true, 'the editor is still there behind the question');
+        // the sheet is drawn above the editor, not under it (once it has slid into place)
+        await page.waitFor(`(() => { const r = document.getElementById('ed-discard').getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.id === 'ed-discard'; })()`, 'the question above the editor');
+        await page.eval(`document.getElementById('ed-keep').click()`);
+        await page.waitFor(`!(${sheetOpen})`, 'the question gone');
+        assert.strictEqual(await page.eval(`document.querySelector('.ed-form input.ed-input').value`), 'Colar tudo', 'the change is kept');
+        await page.eval('Deck.back()');
+        await page.waitFor(sheetOpen, 'the question again');
+        await page.eval(`document.getElementById('ed-discard').click()`);
+        await page.waitFor(`document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor closed');
+        assert.strictEqual(posts(deck, '/api/editor/shortcuts').length, 0, 'nothing was saved');
+        // opened again it shows what the PC has, and with nothing changed it closes without asking
+        await tapUntil(page, '.tile[data-key="s:paste"]', `!document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor again');
+        await page.waitFor(`document.querySelector('.ed-form input.ed-input')?.value === 'Colar'`, 'the saved name');
+        await closeEditor(page);
+        assert.strictEqual(await page.eval(sheetOpen), false);
+      } finally { close(); }
+    });
   } finally {
     extra.forEach((browser) => browser.close());
     deck.close();
