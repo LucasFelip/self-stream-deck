@@ -1,5 +1,3 @@
-# the virtual camera is still registered in Windows at this path (reinstall it from the app, then delete the folder)
-legacy/
 node_modules/
 
 # android
