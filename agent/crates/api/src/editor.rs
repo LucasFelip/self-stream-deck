@@ -13,7 +13,8 @@ use ssd_core::macros::{macro_list, normalize_macros, normalize_shortcuts};
 use ssd_core::ports::{Mute, Zone};
 use ssd_core::taskbar::{to_apps, App};
 
-use crate::routes::{error, shortcuts};
+use crate::routes::error;
+use crate::shortcuts::shortcuts;
 use crate::winroutes::launch_app;
 use crate::{json, AppState};
 
@@ -392,4 +393,38 @@ pub async fn run_macro(state: &Arc<AppState>, id: &str) -> Response {
         StatusCode::OK,
         json!({ "ok": failed == 0, "label": found["label"], "steps": results, "client": client }),
     )
+}
+
+pub(crate) fn routes() -> axum::Router<Arc<AppState>> {
+    use crate::routes::not_found;
+    use axum::routing::{get, post};
+    axum::Router::new()
+        .route("/api/editor", get(editor).fallback(not_found))
+        .route("/api/editor/shortcuts", post(editor).fallback(not_found))
+        .route("/api/editor/macros", post(editor).fallback(not_found))
+        .route("/api/editor/apps", post(editor).fallback(not_found))
+        .route("/api/macros", get(macros).fallback(not_found))
+        .route("/api/macro/*id", post(run).fallback(not_found))
+}
+
+async fn editor(call: crate::routes::Call) -> Response {
+    editor_route(&call.state, call.post, &call.path, &call.body).await
+}
+
+async fn macros(call: crate::routes::Call) -> Response {
+    macros_list(&call.state)
+}
+
+/// A macro can open apps, press keys, change the audio and place windows: without all of those parts there is nothing to run.
+async fn run(call: crate::routes::Call) -> Response {
+    let platform = &call.state.platform;
+    if platform.audio.is_none()
+        || platform.windows.is_none()
+        || platform.input.is_none()
+        || platform.taskbar.is_none()
+    {
+        return crate::routes::not_found().await;
+    }
+    let id = call.path.strip_prefix("/api/macro/").unwrap_or_default();
+    run_macro(&call.state, id).await
 }

@@ -222,3 +222,25 @@ pub async fn power_route(state: &Arc<AppState>, post: bool, body: &[u8]) -> Resp
         Err(_) => blocking_failed(),
     }
 }
+
+pub(crate) fn routes() -> axum::Router<Arc<AppState>> {
+    use crate::routes::not_found;
+    use axum::routing::get;
+    axum::Router::new()
+        .route("/api/power", get(power).post(power).fallback(not_found))
+        .route("/api/state", get(header_state).fallback(not_found))
+}
+
+async fn power(call: crate::routes::Call) -> Response {
+    if call.state.platform.power.is_none() || call.state.platform.windows.is_none() {
+        return crate::routes::not_found().await;
+    }
+    power_route(&call.state, call.post, &call.body).await
+}
+
+async fn header_state(call: crate::routes::Call) -> Response {
+    if !state_ready(&call.state) {
+        return crate::routes::not_found().await;
+    }
+    state_route(&call.state).await
+}

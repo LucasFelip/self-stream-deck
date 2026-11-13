@@ -233,3 +233,31 @@ pub async fn launch(state: &Arc<AppState>, id: &str) -> Response {
         Err(problem) => port_error(problem),
     }
 }
+
+pub(crate) fn routes() -> axum::Router<Arc<AppState>> {
+    use crate::routes::not_found;
+    use axum::routing::{get, post};
+    axum::Router::new()
+        .route("/api/windows", get(windows).fallback(not_found))
+        .route("/api/screens", get(windows).fallback(not_found))
+        .route("/api/windows/action", post(windows).fallback(not_found))
+        .route("/api/windows/move", post(windows).fallback(not_found))
+        .route("/api/windows/place", post(windows).fallback(not_found))
+        .route("/api/windows/snap", post(windows).fallback(not_found))
+        .route("/api/screens/brightness", post(windows).fallback(not_found))
+        .route("/api/screens/off", post(windows).fallback(not_found))
+        .route("/api/screens/project", post(windows).fallback(not_found))
+        .route("/api/launch/*id", post(launch_route).fallback(not_found))
+}
+
+async fn windows(call: crate::routes::Call) -> Response {
+    windows_route(&call.state, call.post, &call.path, &call.query, &call.body).await
+}
+
+async fn launch_route(call: crate::routes::Call) -> Response {
+    if call.state.platform.windows.is_none() || call.state.platform.taskbar.is_none() {
+        return crate::routes::not_found().await;
+    }
+    let id = call.path.strip_prefix("/api/launch/").unwrap_or_default();
+    launch(&call.state, id).await
+}

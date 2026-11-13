@@ -302,3 +302,25 @@ fn stream(state: &Arc<AppState>) -> Response {
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     with_security(response)
 }
+
+pub(crate) fn routes() -> axum::Router<Arc<AppState>> {
+    use crate::routes::not_found;
+    use axum::routing::{get, post};
+    axum::Router::new()
+        .route("/api/camera/stream", get(handle).fallback(not_found))
+        .route("/api/camera/status", get(handle).fallback(not_found))
+        .route("/api/camera/frame", post(handle).fallback(not_found))
+        .route(
+            "/api/camera/direct/install",
+            post(handle).fallback(not_found),
+        )
+        .route(
+            "/api/camera/direct/uninstall",
+            post(handle).fallback(not_found),
+        )
+        .route("/api/camera/copy-link", post(handle).fallback(not_found))
+}
+
+async fn handle(call: crate::routes::Call) -> Response {
+    camera_route(&call.state, call.post, &call.path, call.body).await
+}

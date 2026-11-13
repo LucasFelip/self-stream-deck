@@ -49,3 +49,20 @@ pub async fn route(state: &Arc<AppState>, path: &str) -> Response {
         Err(problem) => port_error(problem),
     }
 }
+
+pub(crate) fn routes() -> axum::Router<Arc<AppState>> {
+    use crate::routes::not_found;
+    use axum::routing::get;
+    axum::Router::new()
+        .route("/api/monitor/sample", get(handle).fallback(not_found))
+        .route("/api/monitor/fps", get(handle).fallback(not_found))
+        .route("/api/monitor/processes", get(handle).fallback(not_found))
+        .route("/api/monitor/info", get(handle).fallback(not_found))
+}
+
+async fn handle(call: crate::routes::Call) -> Response {
+    if call.state.platform.monitor.is_none() {
+        return crate::routes::not_found().await;
+    }
+    route(&call.state, &call.path).await
+}

@@ -115,3 +115,34 @@ pub async fn refresh_route(state: &Arc<AppState>) -> Response {
         Err(problem) => error_json(StatusCode::INTERNAL_SERVER_ERROR, &problem),
     }
 }
+
+pub(crate) fn routes() -> axum::Router<Arc<AppState>> {
+    use crate::routes::not_found;
+    use axum::routing::{get, post};
+    axum::Router::new()
+        .route("/api/apps", get(apps_list).fallback(not_found))
+        .route("/api/refresh", post(apps_refresh).fallback(not_found))
+        .route("/api/icon/*id", get(app_icon).fallback(not_found))
+}
+
+async fn apps_list(call: crate::routes::Call) -> Response {
+    if call.state.platform.taskbar.is_none() {
+        return crate::routes::not_found().await;
+    }
+    list(&call.state)
+}
+
+async fn apps_refresh(call: crate::routes::Call) -> Response {
+    if call.state.platform.taskbar.is_none() {
+        return crate::routes::not_found().await;
+    }
+    refresh_route(&call.state).await
+}
+
+async fn app_icon(call: crate::routes::Call) -> Response {
+    if call.state.platform.taskbar.is_none() {
+        return crate::routes::not_found().await;
+    }
+    let id = call.path.strip_prefix("/api/icon/").unwrap_or_default();
+    icon(&call.state, id).await
+}
