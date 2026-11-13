@@ -9,6 +9,7 @@ import { DECK_QUERIES } from '../deck/data';
 import { useDeckActions } from '../deck/useDeckActions';
 import { editStore, useEditorOpen } from './editStore';
 import { DeleteButton, Field, KeyPicker, StepRow, TextInput } from './fields';
+import { errorText } from '../../lib/errors';
 import {
   ARM_MS, STEP_TYPES, TABS, describeKeys, makeStep, moveItem, stepWord, tabFor,
   type EditorApp, type EditorData, type MacroDraft, type MacroStep, type ShortcutDraft, type Tab,
@@ -16,7 +17,6 @@ import {
 
 interface Lists { shortcuts: ShortcutDraft[]; macros: MacroDraft[]; apps: EditorApp[] }
 
-const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 /**

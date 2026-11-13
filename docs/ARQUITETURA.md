@@ -15,8 +15,8 @@ Como o self-stream-deck funciona por dentro. Para usar o painel, veja o [README]
 |---|---|
 | `android/` | App Android fino (Kotlin, sem bibliotecas; versões no catálogo `android/gradle/libs.versions.toml`): guarda o endereço, mantém a tela ligada, vibra, expõe `Android.openSettings/vibrate/reconnect` à página. |
 | `agent/crates/core/` | A lógica sem Windows: `guard` (Host, token, bloqueio, Origin), `config`, `ports` (um trait por parte do PC e um `Fake*` de cada), `keys`, `macros`, `media`, `taskbar`, `windows`, `power`, `notices`, `sha1`/`sha256`. |
-| `agent/crates/api/` | O HTTP (axum): `lib.rs` (o fluxo do pedido), `routes.rs` e os módulos por assunto (`winroutes`, `powerroutes`, `monitorroutes`, `editor`, `camera`, `apps`), `events.rs` (SSE), `statics.rs` + `embedded.rs` (a interface dentro do `.exe`). |
-| `agent/crates/platform-windows/` | Os adaptadores: Core Audio, SMTC, teclas, barra de tarefas, janelas (DWM), energia, monitor (PDH, `nvidia-smi`, RTSS, WMI), notificações, câmera virtual, rede. É o único lugar com `unsafe`. |
+| `agent/crates/api/` | O HTTP (axum): `lib.rs` (o estado e o roteador), `access.rs` (a guarda na frente de tudo), `routes.rs` (a tabela de rotas e o que os módulos compartilham), os módulos por assunto, cada um com as suas rotas (`audio`, `media`, `shortcuts`, `apps`, `winroutes`, `powerroutes`, `monitorroutes`, `editor`, `camera`), `events.rs` (SSE), `statics.rs` + `embedded.rs` (a interface dentro do `.exe`). |
+| `agent/crates/platform-windows/` | Os adaptadores: Core Audio, SMTC, teclas, barra de tarefas, janelas (DWM), energia, monitor (PDH, `nvidia-smi`, RTSS, WMI), notificações, câmera virtual, rede. É onde fica o `unsafe` da API do Windows (fora dele, só a bandeja e o job object do processo, em `agent/crates/agent`). |
 | `agent/crates/agent/` | O programa `ssd`: argumentos, bandeja (`tray.rs`), `diagnose.rs`, `data.rs` (pasta de dados e migração), `lan.rs` (HTTPS pelo Schannel, iPhone, firewall) e os scripts de certificado (embutidos). |
 | `agent/scripts/` | `package.ps1`, `install.ps1`, `uninstall.ps1`, `sign.ps1` e `launch-hidden.vbs` (a tarefa agendada o usa para subir sem janela). |
 | `web/` | A interface (React + TypeScript); o `ssd` a leva dentro do `.exe`. Mudar a interface não exige recompilar o APK. |
@@ -25,8 +25,9 @@ Como o self-stream-deck funciona por dentro. Para usar o painel, veja o [README]
 
 ## Agente
 
-**Pedido → resposta.** `api/lib.rs` valida o `Host`, o bloqueio por falhas, o token e a origem (`core/guard.rs`); arquivos estáticos saem de `statics.rs` (só tipos conhecidos, ETag/304,
-da pasta `--web-dir` ou do que está dentro do `.exe`); o resto vai para `routes::answer`, que despacha por método e caminho. O que nenhuma rota responde é um 404 em JSON; erros viram o JSON do contrato, nunca um rastro de pilha.
+**Pedido → resposta.** Todo pedido atravessa o middleware `access::guard`, que valida o `Host`, o bloqueio por falhas, o token e a origem (as regras estão em `core/guard.rs`) e registra as ações sensíveis (energia, macros, editor, câmera, abrir app, atalho) numa linha `audit` do log. Depois o roteador do axum procura a rota em `routes::table`, a soma das tabelas de cada módulo (`audio::routes()`, `winroutes::routes()`...); o handler recebe um `Call` (estado, caminho, query e o corpo já lido até o limite da rota). O que nenhuma rota responde cai em `access::static_or_not_found`: um arquivo da interface (`statics.rs`: só tipos conhecidos, ETag/304, da pasta `--web-dir` ou de dentro do `.exe`) ou um 404 em JSON. Um módulo sem a sua porta do PC também responde 404; erros viram o JSON do contrato, nunca um rastro de pilha.
+
+**Erros e travas.** O que pode falhar por um motivo que o código distingue tem um tipo (`ConfigError`, `PortError`, `UpdateError`), não uma `String`. Os `Mutex` são tomados com `ssd_core::sync::Locked::locked()`, que segue em frente mesmo se uma thread entrou em pânico com a trava presa: uma requisição que falha não derruba as seguintes.
 
 **Portas e adaptadores.** A lógica só conhece os traits de `core/ports.rs` (`AudioPort`, `MediaPort`, `InputPort`, `TaskbarPort`, `WindowsPort`, `PowerPort`, `MonitorPort`, `NotificationsPort`, `VcamPort`).
 Em produção entram os adaptadores de `platform-windows`; com `--fake-platform` (e nos testes) entram os `Fake*`, e assim cada rota é testada sem Windows.

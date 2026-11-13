@@ -25,6 +25,8 @@ Como publicar uma versão: [docs/desenvolvimento.md](docs/desenvolvimento.md#pub
 - Apps da Microsoft Store e empacotados (MSIX), como o Claude, aparecem com o ícone certo e o painel sabe quando estão abertos.
 - O painel avisa quando uma tela para de funcionar, em vez de ficar preto, e oferece recarregar.
 - O editor de botões pergunta antes de descartar alterações não salvas.
+- O `server.log` ganhou uma trilha de auditoria: energia, macros, editor, câmera, abrir app e atalhos deixam uma linha com quem pediu e o resultado.
+- As mensagens de erro do painel saem em português ("o PC não respondeu" em vez de "Failed to fetch") e ficam mais tempo na tela.
 - Releases versionadas: uma tag `vX.Y.Z` publica o MSI e o APK com as notas deste arquivo.
 - App Android: Gradle Wrapper, build de release (assinado quando a chave está no ambiente), lint e testes da lógica de pareamento.
 

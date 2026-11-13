@@ -364,7 +364,7 @@ button.chip:active { background: var(--border); }
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 50; /* above the overlays (the editor asks before discarding changes), below the toast */
+  z-index: var(--z-sheet); /* above the overlays (the editor asks before discarding changes), below the toast */
   display: grid;
   place-items: center;
   padding: calc(12px + var(--safe-top)) calc(12px + var(--safe-right)) calc(12px + var(--safe-bottom)) calc(12px + var(--safe-left));
@@ -437,7 +437,7 @@ button.chip:active { background: var(--border); }
   background: linear-gradient(160deg, #0d1016, #080a0e);
 }
 .mon-num { position: absolute; right: 5px; bottom: 3px; font-size: 0.6rem; font-weight: 700; color: var(--muted); opacity: 0.7; }
-.hint { position: absolute; display: none; z-index: 9000; pointer-events: none; border: 1px solid var(--accent); border-radius: 4px; background: rgba(124, 156, 255, 0.22); }
+.hint { position: absolute; display: none; z-index: var(--z-map-hint); pointer-events: none; border: 1px solid var(--accent); border-radius: 4px; background: rgba(124, 156, 255, 0.22); }
 
 .win-layer { position: absolute; top: 0; left: 0; overflow: hidden; pointer-events: none; }
 .mwin {
@@ -453,7 +453,7 @@ button.chip:active { background: var(--border); }
 }
 .mwin.max { background: rgba(40, 46, 61, 0.96); border-color: #4d566b; }
 .mwin.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.mwin.dragging { z-index: 9999 !important; opacity: 0.85; cursor: grabbing; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); }
+.mwin.dragging { z-index: var(--z-top) !important; opacity: 0.85; cursor: grabbing; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); }
 .mwin-bar { display: flex; align-items: center; gap: 4px; padding: 2px 4px; overflow: hidden; font-size: 0.56rem; line-height: 1.2; white-space: nowrap; pointer-events: none; }
 .mwin-bar img { width: 12px; height: 12px; flex: none; object-fit: contain; }
 .mwin-bar b { display: grid; place-items: center; flex: none; width: 12px; height: 12px; border-radius: 3px; background: var(--surface); color: var(--muted); font-size: 0.5rem; }

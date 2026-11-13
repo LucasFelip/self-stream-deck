@@ -3,8 +3,8 @@ import { call, client } from '../../api/client';
 import { useToast } from '../../ui/Toast';
 import { camera } from '../camera/controller';
 import type { DeckItem } from './items';
+import { errorText } from '../../lib/errors';
 
-const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 /** What a tap on a key does: start or focus an app, press a shortcut, run a macro. Always by id; the PC decides what the id means. */
 export function useDeckActions(): { tap: (item: DeckItem) => Promise<void> } {

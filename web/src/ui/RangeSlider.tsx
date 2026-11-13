@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createLatestWins } from '../lib/latestWins';
 import { useToast } from './Toast';
+import { errorText } from '../lib/errors';
 
 interface RangeSliderProps {
   /** what the PC says (0..100); the slider follows it except while the finger is on it */
@@ -29,7 +30,7 @@ export function RangeSlider({ value, disabled = false, onChange, onDrag, classNa
   latestChange.current = onChange;
 
   const send = useMemo(
-    () => createLatestWins<number>((next) => latestChange.current(next), (error) => toast(`Erro: ${error instanceof Error ? error.message : String(error)}`, true)),
+    () => createLatestWins<number>((next) => latestChange.current(next), (error) => toast(`Erro: ${errorText(error)}`, true)),
     [toast],
   );
 

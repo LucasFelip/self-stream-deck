@@ -5,8 +5,8 @@ import { Icon } from '../../ui/Icon';
 import { Overlay } from '../../ui/Overlay';
 import { useToast } from '../../ui/Toast';
 import { FPS_OPTIONS, QUALITIES, camera, useCamera, type Quality } from './controller';
+import { errorText } from '../../lib/errors';
 
-const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 /**
  * The sheet of the phone camera: the preview, the button that starts and stops the transmission, which camera and how sharp, the two ways

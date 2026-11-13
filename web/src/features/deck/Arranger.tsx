@@ -8,6 +8,7 @@ import { arrangeStore } from './arrangeStore';
 import { DECK_QUERIES } from './data';
 import { recordFlip } from './flip';
 import { END, reorder } from './layout';
+import { errorText } from '../../lib/errors';
 
 // Hold a key for a moment (it lifts), then drag it over the others: letting go on another key swaps the two, on an empty slot the key goes
 // to the end. Holding without moving does nothing, and the touch that ends a lift never counts as a tap on the key. Touch is handled with
@@ -91,7 +92,7 @@ export function Arranger() {
     function persist(section: string, order: string[]) {
       queryClient.setQueryData(['layout'], (old: { apps: string[]; shortcuts: string[] } | undefined) => ({ apps: [], shortcuts: [], ...old, [section]: order }));
       call(client.POST('/api/layout', { body: { page: section as 'apps' | 'shortcuts', order } })).catch((error: unknown) => {
-        toast(`Não salvou a posição: ${error instanceof Error ? error.message : String(error)}`, true);
+        toast(`Não salvou a posição: ${errorText(error)}`, true);
         for (const key of DECK_QUERIES) void queryClient.invalidateQueries({ queryKey: [key] });
       });
     }

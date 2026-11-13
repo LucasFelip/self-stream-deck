@@ -5,6 +5,7 @@ import { android } from '../lib/android';
 import { registerBack } from '../lib/back';
 import { useToast } from '../ui/Toast';
 import { useDragToClose } from './useDragToClose';
+import { errorText } from '../lib/errors';
 
 export interface MenuItem {
   label: string;
@@ -50,7 +51,7 @@ export function Menu({ open, onClose, items = [] }: MenuProps) {
       await queryClient.invalidateQueries();
       toast('Atualizado');
     } catch (err) {
-      toast(`Erro: ${err instanceof Error ? err.message : String(err)}`, true);
+      toast(`Erro: ${errorText(err)}`, true);
     }
   };
 
