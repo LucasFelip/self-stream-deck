@@ -1,5 +1,6 @@
 //! The keyboard shortcuts of `config.json` and the global media keys (`InputPort`): the phone names one by its id, never the keys.
 #![allow(clippy::result_large_err)] // the Err of a route step is the whole HTTP answer to send
+use ssd_core::sync::Locked;
 use std::sync::Arc;
 
 use axum::http::{Method, StatusCode};
@@ -43,7 +44,7 @@ fn js_string(value: &Value) -> Option<String> {
 
 /// The shortcuts of `config.json` (or of the editor, which validates them); one that does not parse is left out, like the Node agent does.
 pub(crate) fn shortcuts(state: &AppState) -> Vec<Shortcut> {
-    let config = state.config.lock().unwrap();
+    let config = state.config.locked();
     let Some(Value::Array(entries)) = config.get("shortcuts") else {
         return Vec::new();
     };

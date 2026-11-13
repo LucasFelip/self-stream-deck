@@ -1,4 +1,5 @@
 //! What is playing (the system media sessions): the list, the controls of one player and the cover art (`MediaPort`).
+use ssd_core::sync::Locked;
 use std::sync::Arc;
 
 use axum::http::StatusCode;
@@ -90,7 +91,7 @@ async fn media_art(
     if session.is_empty() || !is_art_key(&key) {
         return error(StatusCode::BAD_REQUEST, "invalid art request");
     }
-    let cached = state.art.lock().unwrap().get(&key).cloned();
+    let cached = state.art.locked().get(&key).cloned();
     let entry = match cached {
         Some(entry) => entry,
         None => {
@@ -106,7 +107,7 @@ async fn media_art(
                     a.data,
                 )
             });
-            state.art.lock().unwrap().remember(&key, entry.clone());
+            state.art.locked().remember(&key, entry.clone());
             entry
         }
     };

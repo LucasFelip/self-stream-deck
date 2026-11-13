@@ -2,6 +2,7 @@
 //! `POST /api/macro/:id`. Parity with `legacy/server/src/routes/editor.js` and `routes/macros.js`; what may be saved is validated in
 //! `ssd_core::macros`, and a macro can only do what its whitelisted steps say.
 #![allow(clippy::result_large_err)] // the Err of a route step is the whole HTTP answer to send
+use ssd_core::sync::Locked;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -19,12 +20,12 @@ use crate::winroutes::launch_app;
 use crate::{json, AppState};
 
 fn all_apps(state: &AppState) -> Vec<App> {
-    to_apps(&state.apps.lock().unwrap().items, &[])
+    to_apps(&state.apps.locked().items, &[])
 }
 
 /// The editor can be turned off with `"editor": false`.
 fn editor_on(state: &AppState) -> Result<(), Response> {
-    if state.config.lock().unwrap().get("editor") == Some(&Value::Bool(false)) {
+    if state.config.locked().get("editor") == Some(&Value::Bool(false)) {
         Err(error(
             StatusCode::FORBIDDEN,
             "the editor is turned off in config.json",
@@ -53,7 +54,7 @@ fn shortcut_list(state: &AppState) -> Vec<Value> {
 }
 
 fn macros_now(state: &AppState) -> Vec<Value> {
-    macro_list(state.config.lock().unwrap().get("macros"))
+    macro_list(state.config.locked().get("macros"))
         .into_iter()
         .map(Value::Object)
         .collect()
@@ -81,7 +82,7 @@ async fn route(
 ) -> Result<Response, Response> {
     editor_on(state)?;
     if !post {
-        let hidden: HashSet<String> = match state.config.lock().unwrap().get("hidden") {
+        let hidden: HashSet<String> = match state.config.locked().get("hidden") {
             Some(Value::Array(ids)) => ids
                 .iter()
                 .filter_map(|v| v.as_str().map(str::to_owned))
@@ -123,7 +124,7 @@ async fn route(
     let request = body_object(body)?;
     Ok(match path {
         "/api/editor/shortcuts" => {
-            let typing = state.config.lock().unwrap().flag("typingKeys");
+            let typing = state.config.locked().flag("typingKeys");
             let items = normalize_shortcuts(request.get("items"), typing)
                 .map_err(|e| error(StatusCode::BAD_REQUEST, &e.0))?;
             save(state, "shortcuts", items)?;
@@ -131,7 +132,7 @@ async fn route(
         }
         "/api/editor/macros" => {
             let known: HashSet<String> = all_apps(state).into_iter().map(|a| a.id).collect();
-            let typing = state.config.lock().unwrap().flag("typingKeys");
+            let typing = state.config.locked().flag("typingKeys");
             let items = normalize_macros(request.get("items"), &known, typing)
                 .map_err(|e| error(StatusCode::BAD_REQUEST, &e.0))?;
             save(state, "macros", items)?;
@@ -361,7 +362,7 @@ pub async fn run_macro(state: &Arc<AppState>, id: &str) -> Response {
     let Some(found) = macros_now(state).into_iter().find(|m| m["id"] == id) else {
         return error(StatusCode::NOT_FOUND, "unknown macro");
     };
-    if !state.running_macros.lock().unwrap().insert(id.to_owned()) {
+    if !state.running_macros.locked().insert(id.to_owned()) {
         return error(StatusCode::CONFLICT, "this macro is already running");
     }
     let (mut results, mut client) = (Vec::new(), Vec::new());
@@ -387,7 +388,7 @@ pub async fn run_macro(state: &Arc<AppState>, id: &str) -> Response {
             Err(message) => json!({ "type": kind, "ok": false, "error": message }),
         });
     }
-    state.running_macros.lock().unwrap().remove(id);
+    state.running_macros.locked().remove(id);
     let failed = results.iter().filter(|r| r["ok"] == false).count();
     json(
         StatusCode::OK,

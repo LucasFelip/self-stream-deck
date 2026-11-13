@@ -16,6 +16,7 @@ mod statics;
 mod stats;
 mod winroutes;
 
+use ssd_core::sync::Locked;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -121,11 +122,11 @@ impl AppState {
     }
 
     pub(crate) fn cache_file(&self) -> PathBuf {
-        self.config.lock().unwrap().dir().join("apps-cache.json")
+        self.config.locked().dir().join("apps-cache.json")
     }
 
     pub(crate) fn icon_dir(&self) -> PathBuf {
-        self.config.lock().unwrap().dir().join("icons")
+        self.config.locked().dir().join("icons")
     }
 
     /// Reads the taskbar when it changed since the last run (the first start has no list yet). Meant to run in the background at start.

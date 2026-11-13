@@ -21,5 +21,6 @@ pub mod power;
 pub mod random;
 pub mod sha1;
 pub mod sha256;
+pub mod sync;
 pub mod taskbar;
 pub mod windows;

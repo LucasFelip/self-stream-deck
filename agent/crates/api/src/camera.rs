@@ -2,6 +2,7 @@
 //! newest one to whoever watches the MJPEG stream (`GET /api/camera/stream`): OBS shows that stream in a Browser Source and publishes it as its
 //! Virtual Camera. When the direct virtual camera is installed the frames also go to it. Nothing is stored: only the latest frame, in memory.
 //! Parity with `legacy/server/src/camera.js` and `routes/camera.js`.
+use ssd_core::sync::Locked;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -64,7 +65,7 @@ impl Camera {
     /// Does anybody use the picture right now? An OBS source watching the stream, or an app that has the direct virtual camera open.
     /// The phone sends full speed only then; otherwise it drops to one frame a second.
     pub fn wanted(&self, vcam_in_use: bool) -> bool {
-        !self.viewers.lock().unwrap().is_empty() || vcam_in_use
+        !self.viewers.locked().is_empty() || vcam_in_use
     }
 
     fn push(&self, frame: Bytes) -> Result<(), &'static str> {
@@ -73,7 +74,7 @@ impl Camera {
         }
         let now = Instant::now();
         {
-            let mut guard = self.frames.lock().unwrap();
+            let mut guard = self.frames.locked();
             let frames = guard.get_or_insert_with(|| Frames {
                 latest: None,
                 recent: Vec::new(),
@@ -91,7 +92,7 @@ impl Camera {
         }
         let bytes = part(&frame);
         // a slow viewer drops frames instead of making the agent buffer them
-        for sender in self.viewers.lock().unwrap().values() {
+        for sender in self.viewers.locked().values() {
             let _ = sender.try_send(bytes.clone());
         }
         Ok(())
@@ -100,7 +101,7 @@ impl Camera {
     pub fn status(&self, vcam_in_use: bool) -> Map<String, Value> {
         // is_live() takes the same lock: ask it first
         let live = self.is_live();
-        let guard = self.frames.lock().unwrap();
+        let guard = self.frames.locked();
         let (fps, kbps, age) = match guard.as_ref() {
             Some(frames) => {
                 let span = match (frames.recent.first(), frames.recent.last()) {
@@ -134,7 +135,7 @@ impl Camera {
         map.insert("live".into(), json!(live));
         map.insert("fps".into(), json!(fps));
         map.insert("kbps".into(), json!(kbps));
-        map.insert("viewers".into(), json!(self.viewers.lock().unwrap().len()));
+        map.insert("viewers".into(), json!(self.viewers.locked().len()));
         map.insert("wanted".into(), json!(self.wanted(vcam_in_use)));
         map.insert("ageMs".into(), json!(age));
         map
@@ -142,7 +143,7 @@ impl Camera {
 
     /// While somebody watches and the phone is silent, repeat the "no signal" picture every second.
     fn keep_alive(self: &Arc<Self>) {
-        let mut running = self.keepalive_running.lock().unwrap();
+        let mut running = self.keepalive_running.locked();
         if *running {
             return;
         }
@@ -151,10 +152,10 @@ impl Camera {
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(Duration::from_secs(1)).await;
-                let mut viewers = camera.viewers.lock().unwrap();
+                let mut viewers = camera.viewers.locked();
                 viewers.retain(|_, sender| !sender.is_closed());
                 if viewers.is_empty() {
-                    *camera.keepalive_running.lock().unwrap() = false;
+                    *camera.keepalive_running.locked() = false;
                     return;
                 }
                 if !camera.is_live() {
@@ -169,7 +170,7 @@ impl Camera {
 }
 
 fn link(state: &AppState) -> String {
-    let config = state.config.lock().unwrap();
+    let config = state.config.locked();
     format!(
         "http://127.0.0.1:{}/camera.html?token={}",
         config.port(),
@@ -277,7 +278,7 @@ fn stream(state: &Arc<AppState>) -> Response {
     };
     let _ = sender.try_send(first);
     let id = camera.next.fetch_add(1, Ordering::Relaxed);
-    camera.viewers.lock().unwrap().insert(id, sender);
+    camera.viewers.locked().insert(id, sender);
     camera.keep_alive();
     // the viewer is forgotten when its receiver goes away with the response
     let cleanup = camera.clone();
@@ -285,7 +286,7 @@ fn stream(state: &Arc<AppState>) -> Response {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(1)).await;
-            let mut viewers = cleanup.viewers.lock().unwrap();
+            let mut viewers = cleanup.viewers.locked();
             if viewers.get(&id).is_none_or(|s| s.is_closed()) {
                 viewers.remove(&id);
                 return;

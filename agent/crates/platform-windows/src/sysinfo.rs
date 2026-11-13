@@ -1,5 +1,6 @@
 //! "About this PC" and the network adapters: the static description of the machine (Windows, processor, memory modules, graphics, board,
 //! disks, drives, network, screens), read from WMI, the registry and the IP helper. Same answers as `SystemInfo()` of the Node helper.
+use ssd_core::sync::Locked;
 use std::sync::Mutex;
 use std::time::Instant;
 
@@ -79,7 +80,7 @@ static ADAPTERS: Mutex<Option<(Instant, Vec<Adapter>)>> = Mutex::new(None);
 
 /// The physical network adapters that are up (asked again at most every 30 s: WMI is slow).
 pub fn adapters() -> Vec<Adapter> {
-    let mut cache = ADAPTERS.lock().unwrap();
+    let mut cache = ADAPTERS.locked();
     if let Some((at, list)) = cache.as_ref() {
         if at.elapsed().as_secs() < 30 {
             return list.clone();

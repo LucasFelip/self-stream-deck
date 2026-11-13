@@ -1,5 +1,6 @@
 //! `GET /api/monitor/{sample,fps,processes,info}`. Parity with `legacy/server/src/routes/pc.js`: the sample is also pushed as the `monitor` event,
 //! the frame rate as `game` and the program list as `processes`; the static description is read once and kept.
+use ssd_core::sync::Locked;
 use std::sync::Arc;
 
 use axum::http::StatusCode;
@@ -18,7 +19,7 @@ pub async fn read(
         ssd_core::ports::PortError::Failed("the monitor is not available on this agent".into())
     })?;
     if what == "info" {
-        if let Some(cached) = state.info_cache.lock().unwrap().clone() {
+        if let Some(cached) = state.info_cache.locked().clone() {
             return Ok(cached);
         }
     }
@@ -31,7 +32,7 @@ pub async fn read(
     .await
     .map_err(|_| ssd_core::ports::PortError::Failed("internal error".into()))??;
     if what == "info" {
-        *state.info_cache.lock().unwrap() = Some(value.clone());
+        *state.info_cache.locked() = Some(value.clone());
     }
     Ok(value)
 }

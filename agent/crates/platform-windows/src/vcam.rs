@@ -2,6 +2,7 @@
 //! github.com/schellingb/UnityCapture), installed on demand: the DLL is downloaded from a pinned commit, checked against a pinned SHA-256 and
 //! registered with regsvr32 (that needs administrator rights, which the autostart task has). Frames reach it through the filter's shared memory,
 //! like `legacy/server/native/VCam.cs`, but in a thread of this process instead of a helper process.
+use ssd_core::sync::Locked;
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -217,7 +218,7 @@ impl WindowsVcam {
     /// filter registered from an earlier install's folder (the data folder moved to %APPDATA%) works as well as one from ours, and the frames
     /// must not be dropped because of the folder. Reinstalling from the app registers it from our folder.
     fn is_installed(&self, force: bool) -> bool {
-        let mut cache = self.installed.lock().unwrap();
+        let mut cache = self.installed.locked();
         if let (false, Some((at, value))) = (force, cache.as_ref()) {
             if at.elapsed() < Duration::from_secs(5) {
                 return *value;
@@ -231,7 +232,7 @@ impl WindowsVcam {
     }
 
     fn start_feeder(&self) -> SyncSender<Vec<u8>> {
-        let mut slot = self.feeder.lock().unwrap();
+        let mut slot = self.feeder.locked();
         if let Some(feeder) = slot.as_ref() {
             return feeder.sender.clone();
         }
@@ -290,7 +291,7 @@ impl VcamPort for WindowsVcam {
         let sender = self.start_feeder();
         if sender.try_send(jpeg.to_vec()).is_err() {
             // the feeder is busy or has stopped: drop the frame; a stopped one is started again by the next frame
-            let mut slot = self.feeder.lock().unwrap();
+            let mut slot = self.feeder.locked();
             if slot.as_ref().is_some_and(|f| {
                 f.sender.try_send(Vec::new()).is_err() && !f.ready.load(Ordering::SeqCst)
             }) {
@@ -365,7 +366,7 @@ impl VcamPort for WindowsVcam {
                 &self.dll().to_string_lossy(),
             ])?;
             drop(held);
-            *self.installed.lock().unwrap() = None;
+            *self.installed.locked() = None;
             if !output.0 || !self.is_installed(true) {
                 return Err(failed(format!("registration failed (code {}): the server needs administrator rights to register a camera. {}", output.1, output.2).trim().to_owned()));
             }
@@ -393,7 +394,7 @@ impl VcamPort for WindowsVcam {
     }
 
     fn uninstall(&self) -> PortResult<()> {
-        *self.feeder.lock().unwrap() = None;
+        *self.feeder.locked() = None;
         // unregister from where it is registered (it may be an earlier install's folder), and from ours
         if let Some(path) = self
             .registered_dll()
@@ -404,7 +405,7 @@ impl VcamPort for WindowsVcam {
         if self.dll().exists() {
             regsvr32(&["/u", &self.dll().to_string_lossy()])?;
         }
-        *self.installed.lock().unwrap() = None;
+        *self.installed.locked() = None;
         if self.is_installed(true) {
             return Err(failed(
                 "could not unregister the camera (administrator rights needed)",
@@ -466,7 +467,7 @@ mod tests {
         assert_eq!(status["inUse"], false);
         if !registered {
             vcam.feed(&[0xff, 0xd8, 0xff]); // not installed: costs nothing and starts nothing
-            assert!(vcam.feeder.lock().unwrap().is_none());
+            assert!(vcam.feeder.locked().is_none());
         }
     }
 

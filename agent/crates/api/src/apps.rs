@@ -1,5 +1,6 @@
 //! The taskbar apps: the list, the icons and reading the taskbar again. The list lives in the state (read from the cache at start, so the
 //! phone has keys at once), is refreshed in the background when the pinned folder changed, and is rebuilt on "Atualizar".
+use ssd_core::sync::Locked;
 use std::sync::Arc;
 
 use axum::body::Body;
@@ -21,7 +22,7 @@ pub struct AppsState {
 }
 
 fn hidden(state: &AppState) -> Vec<String> {
-    let config = state.config.lock().unwrap();
+    let config = state.config.locked();
     match config.get("hidden") {
         Some(Value::Array(ids)) => ids
             .iter()
@@ -33,13 +34,13 @@ fn hidden(state: &AppState) -> Vec<String> {
 
 /// The apps of the Apps page (hidden ones left out).
 pub fn visible(state: &AppState) -> Vec<App> {
-    to_apps(&state.apps.lock().unwrap().items, &hidden(state))
+    to_apps(&state.apps.locked().items, &hidden(state))
 }
 
 /// The list from the last run, at once (empty on the very first start).
 pub fn load_cached(state: &AppState) {
     if let Some(cache) = read_cache(&state.cache_file()) {
-        let mut apps = state.apps.lock().unwrap();
+        let mut apps = state.apps.locked();
         apps.items = cache.items;
         apps.signature = cache.signature;
     }
@@ -54,7 +55,7 @@ pub async fn refresh(state: &Arc<AppState>, force: bool) -> Result<bool, String>
         .folder()
         .map_or_else(|| "none".to_owned(), |dir| folder_signature(&dir));
     if !force {
-        let current = state.apps.lock().unwrap();
+        let current = state.apps.locked();
         if !current.items.is_empty() && current.signature == signature {
             return Ok(false);
         }
@@ -65,7 +66,7 @@ pub async fn refresh(state: &Arc<AppState>, force: bool) -> Result<bool, String>
         .map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())?;
     let changed = {
-        let mut apps = state.apps.lock().unwrap();
+        let mut apps = state.apps.locked();
         let changed = apps.items != items;
         apps.items = items.clone();
         apps.signature = signature.clone();
@@ -89,7 +90,7 @@ pub fn list(state: &AppState) -> Response {
 
 /// The icon of any taskbar app (hidden ones too: the editor lists them all). The URL carries `?v=<icon version>`, so a cached copy is never stale.
 pub async fn icon(state: &AppState, id: &str) -> Response {
-    let known = to_apps(&state.apps.lock().unwrap().items, &[])
+    let known = to_apps(&state.apps.locked().items, &[])
         .into_iter()
         .find(|app| app.id == id && app.has_icon);
     let Some(app) = known else {

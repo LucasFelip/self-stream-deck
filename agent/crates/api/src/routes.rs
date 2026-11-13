@@ -2,6 +2,7 @@
 //! modules share (how a request reaches a handler, the error answers, the numbers of a JSON body). What is not in the table is a JSON 404;
 //! so is a route whose part of the PC this agent does not have (a module without its port).
 #![allow(clippy::result_large_err)] // the Err of a route step is the whole HTTP answer to send
+use ssd_core::sync::Locked;
 use std::sync::Arc;
 
 use axum::body::Bytes;
@@ -41,7 +42,7 @@ fn is_tile_key(key: &str) -> bool {
 }
 
 fn tile_order(state: &AppState) -> Value {
-    let config = state.config.lock().unwrap();
+    let config = state.config.locked();
     let stored = config
         .get("tileOrder")
         .and_then(Value::as_object)
@@ -146,7 +147,7 @@ async fn events(call: Call) -> Response {
 }
 
 fn save_layout(state: &Arc<AppState>, body: &[u8]) -> Response {
-    if state.config.lock().unwrap().get("editor") == Some(&Value::Bool(false)) {
+    if state.config.locked().get("editor") == Some(&Value::Bool(false)) {
         return error(
             StatusCode::FORBIDDEN,
             "the editor is turned off in config.json",
@@ -184,7 +185,7 @@ fn save_layout(state: &Arc<AppState>, body: &[u8]) -> Response {
     next.insert(page.to_owned(), Value::Array(unique));
     let mut patch = Map::new();
     patch.insert("tileOrder".into(), Value::Object(next));
-    if let Err(problem) = state.config.lock().unwrap().update(&patch) {
+    if let Err(problem) = state.config.locked().update(&patch) {
         return error(StatusCode::BAD_REQUEST, &problem.to_string());
     }
     json(StatusCode::OK, tile_order(state))
