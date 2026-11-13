@@ -55,6 +55,8 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+        # the action runs in a container whose rustup would try to install the toolchain of rust-toolchain.toml: it only needs `cargo metadata`
+        env: { RUSTUP_TOOLCHAIN: stable }
         with: { manifest-path: agent/Cargo.toml, command: check }
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version-file: .nvmrc }
