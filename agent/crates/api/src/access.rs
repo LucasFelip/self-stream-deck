@@ -69,6 +69,21 @@ fn peer(request: &Request) -> IpAddr {
         .unwrap_or(IpAddr::from([127, 0, 0, 1]))
 }
 
+/// The actions that leave a line in the log every time (the sliders and the camera frames would drown it).
+fn is_audited(path: &str) -> bool {
+    path == "/api/power"
+        || path == "/api/screens/off"
+        || [
+            "/api/macro/",
+            "/api/editor/",
+            "/api/camera/direct/",
+            "/api/launch/",
+            "/api/shortcut/",
+        ]
+        .iter()
+        .any(|prefix| path.starts_with(prefix))
+}
+
 /// The middleware in front of every route.
 pub(crate) async fn guard(
     State(state): State<Arc<AppState>>,
@@ -137,6 +152,10 @@ pub(crate) async fn guard(
 
     let started = std::time::Instant::now();
     let response = next.run(request).await;
+    // the trail of what can hurt: who asked the PC to shut down, ran a macro, changed the buttons, installed the camera, opened an app
+    if method == Method::POST && is_audited(&path) {
+        tracing::info!(target: "audit", %ip, path, status = response.status().as_u16(), "action");
+    }
     tracing::debug!(
         %ip,
         %method,

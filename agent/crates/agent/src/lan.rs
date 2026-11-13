@@ -89,7 +89,7 @@ pub fn main_material(data: &Path) -> Result<Material, String> {
             ],
             &password,
         )?;
-        println!("[tls] new certificate");
+        tracing::info!("a new certificate for the Wi-Fi server was made");
     }
     let der = std::fs::read(&cer).map_err(|e| e.to_string())?;
     Ok(Material {
@@ -129,14 +129,9 @@ pub fn ios_material(data: &Path, names: &[String], ips: &[String]) -> Result<Mat
             ],
             &password,
         )?;
-        println!(
-            "[tls-ios] new certificate authority and server certificate for {}",
-            names
-                .iter()
-                .chain(ips)
-                .cloned()
-                .collect::<Vec<_>>()
-                .join(", ")
+        tracing::info!(
+            names = %names.iter().chain(ips).cloned().collect::<Vec<_>>().join(", "),
+            "a new certificate authority and server certificate for the iPhone were made"
         );
     }
     let ca = std::fs::read(dir.join("ca.cer")).map_err(|e| e.to_string())?;
@@ -291,8 +286,10 @@ fn ca_answer(request: &Request<Incoming>, material: &Material) -> Response<Body>
 
 /// The Windows Firewall rule for these ports (not touched when `SSD_NO_FIREWALL` is set: the tests run on other ports).
 fn firewall(ports: &[u16], rule: &str) {
-    if std::env::var_os("SSD_NO_FIREWALL").is_none() {
-        ssd_platform_windows::lan::ensure_firewall(ports, rule);
+    if std::env::var_os("SSD_NO_FIREWALL").is_none()
+        && ssd_platform_windows::lan::ensure_firewall(ports, rule) == "failed"
+    {
+        tracing::warn!(rule, ?ports, "the firewall rule could not be set (administrator rights needed): phones on the Wi-Fi may not reach this PC");
     }
 }
 
@@ -364,41 +361,47 @@ pub fn print_pairing(config: &Config, port: u16, data: &Path) {
 }
 
 /// Starts what `config` asks for beyond the loopback port and says where it listens. The pairing links (they carry the token) are not
-/// printed here: this output is the log. `ssd pair` and the icon by the clock show them.
+/// written here: this output is the log. `ssd pair` and the icon by the clock show them.
 pub async fn start(config: &Config, data: &Path, app: Router) {
     if !config.flag("lan") {
-        println!("\nWi-Fi access is off (\"lan\": true in config.json turns it on).");
+        tracing::info!("Wi-Fi access is off (\"lan\": true in config.json turns it on)");
     } else {
         let port = port_of(config, "httpsPort", 7879);
         let data = data.to_owned();
-        match tokio::task::spawn_blocking(move || main_material(&data)).await {
-            Ok(Ok(material)) => match serve_tls(
-                SocketAddr::from(([0, 0, 0, 0], port)),
-                &material,
-                app.clone(),
-            )
-            .await
-            {
-                Ok(()) => {
-                    tokio::task::spawn_blocking(move || {
-                        firewall(&[port], ssd_platform_windows::lan::RULE)
-                    });
-                    println!(
-                        "\nOver the home network (Wi-Fi, HTTPS on port {port}, certificate {}); the pairing link: ssd pair",
-                        material.fingerprint
-                    );
-                    let addresses = ssd_platform_windows::lan::home_addresses();
-                    for ip in &addresses {
-                        println!("  https://{ip}:{port}/");
-                    }
-                    if addresses.is_empty() {
-                        println!("  (no home-network address found: is this PC connected?)");
-                    }
+        let material = match tokio::task::spawn_blocking(move || main_material(&data)).await {
+            Ok(material) => material,
+            Err(error) => Err(error.to_string()),
+        };
+        let started = match &material {
+            Ok(material) => {
+                serve_tls(
+                    SocketAddr::from(([0, 0, 0, 0], port)),
+                    material,
+                    app.clone(),
+                )
+                .await
+            }
+            Err(problem) => Err(problem.clone()),
+        };
+        match (started, material) {
+            (Ok(()), Ok(material)) => {
+                tokio::task::spawn_blocking(move || {
+                    firewall(&[port], ssd_platform_windows::lan::RULE)
+                });
+                let addresses = ssd_platform_windows::lan::home_addresses();
+                if addresses.is_empty() {
+                    tracing::warn!(port, "Wi-Fi server up, but no home-network address was found: is this PC connected?");
                 }
-                Err(message) => eprintln!("[lan] could not start the Wi-Fi server: {message}"),
-            },
-            Ok(Err(message)) => eprintln!("[lan] could not start the Wi-Fi server: {message}"),
-            Err(error) => eprintln!("[lan] could not start the Wi-Fi server: {error}"),
+                tracing::info!(
+                    port,
+                    certificate = %material.fingerprint,
+                    addresses = %addresses.join(", "),
+                    "Wi-Fi server (HTTPS) listening; the pairing link: ssd pair"
+                );
+            }
+            (Err(problem), _) | (_, Err(problem)) => {
+                tracing::error!(port, %problem, "could not start the Wi-Fi server")
+            }
         }
     }
     if config.flag("ios") {
@@ -416,33 +419,37 @@ pub async fn start(config: &Config, data: &Path, app: Router) {
         ];
         let ips = ssd_platform_windows::lan::home_addresses();
         let (d, n, i) = (data.to_owned(), names.clone(), ips.clone());
-        match tokio::task::spawn_blocking(move || ios_material(&d, &n, &i)).await {
-            Ok(Ok(material)) => {
-                let material = Arc::new(material);
-                let started = serve_tls(SocketAddr::from(([0, 0, 0, 0], port)), &material, app)
-                    .await
-                    .and(
-                        serve_ca(SocketAddr::from(([0, 0, 0, 0], ca_port)), material.clone()).await,
-                    );
-                match started {
-                    Ok(()) => {
-                        tokio::task::spawn_blocking(move || {
-                            firewall(&[port, ca_port], ssd_platform_windows::lan::RULE_IOS)
-                        });
-                        println!("\nFor an iPhone (Safari):\n  1. install the certificate once (fingerprint {}):", material.fingerprint);
-                        for host in ips.iter().cloned().chain([format!("{host}.local")]) {
-                            println!("       http://{host}:{ca_port}/");
-                        }
-                        println!("  2. open the deck with the link of: ssd pair");
-                        for host in ips.iter().cloned().chain([format!("{host}.local")]) {
-                            println!("       https://{host}:{port}/");
-                        }
-                    }
-                    Err(message) => eprintln!("[ios] could not start the iPhone server: {message}"),
-                }
+        let material = match tokio::task::spawn_blocking(move || ios_material(&d, &n, &i)).await {
+            Ok(material) => material.map(Arc::new),
+            Err(error) => Err(error.to_string()),
+        };
+        let started = match &material {
+            Ok(material) => serve_tls(SocketAddr::from(([0, 0, 0, 0], port)), material, app)
+                .await
+                .and(serve_ca(SocketAddr::from(([0, 0, 0, 0], ca_port)), material.clone()).await),
+            Err(problem) => Err(problem.clone()),
+        };
+        match (started, material) {
+            (Ok(()), Ok(material)) => {
+                tokio::task::spawn_blocking(move || {
+                    firewall(&[port, ca_port], ssd_platform_windows::lan::RULE_IOS)
+                });
+                let hosts: Vec<String> = ips
+                    .iter()
+                    .cloned()
+                    .chain([format!("{host}.local")])
+                    .collect();
+                tracing::info!(
+                    port,
+                    certificate_port = ca_port,
+                    authority = %material.fingerprint,
+                    hosts = %hosts.join(", "),
+                    "iPhone server (HTTPS) listening; the certificate is at http://<host>:<certificate_port>/ and the link: ssd pair"
+                );
             }
-            Ok(Err(message)) => eprintln!("[ios] could not start the iPhone server: {message}"),
-            Err(error) => eprintln!("[ios] could not start the iPhone server: {error}"),
+            (Err(problem), _) | (_, Err(problem)) => {
+                tracing::error!(port, %problem, "could not start the iPhone server")
+            }
         }
     }
 }

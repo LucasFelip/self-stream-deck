@@ -129,10 +129,8 @@ pub fn ensure_firewall(ports: &[u16], rule: &str) -> String {
         "$ErrorActionPreference = 'Stop'\n$rule = Get-NetFirewallRule -DisplayName '{rule}' -ErrorAction SilentlyContinue\nif ($rule) {{\n  $current = (@(($rule | Get-NetFirewallPortFilter).LocalPort) | Sort-Object {{ [int]$_ }}) -join ','\n  if ($current -eq '{list}' -and $rule.Enabled -eq 'True') {{ 'present'; return }}\n  $rule | Remove-NetFirewallRule\n}}\nNew-NetFirewallRule -DisplayName '{rule}' -Direction Inbound -Action Allow -Protocol TCP -LocalPort {list} -Profile Any -RemoteAddress LocalSubnet | Out-Null\n'created'"
     ));
     if !ok {
-        eprintln!(
-            "[firewall] could not set the rule (administrator rights needed): {}",
-            err.lines().next().unwrap_or("")
-        );
+        // the caller says so in the log (this crate does not log); the first line of the error is all there is to tell
+        let _ = err;
         return "failed".into();
     }
     out
