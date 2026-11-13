@@ -48,6 +48,9 @@ fn run_script(script: &str, args: &[(&str, &str)], password: &str) -> Result<(),
     let output = std::process::Command::new("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", &command])
         .env("SSD_SECRET", password)
+        // Windows PowerShell started from PowerShell 7 (a CI runner, a developer's terminal) inherits PowerShell 7's module path and then
+        // cannot load its own Security module: the `Cert:` drive is gone. Without the variable it uses its own default.
+        .env_remove("PSModulePath")
         .creation_flags(0x0800_0000)
         .output()
         .map_err(|e| e.to_string())?;
