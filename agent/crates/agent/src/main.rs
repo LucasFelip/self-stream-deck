@@ -245,7 +245,7 @@ async fn run() -> Result<(), String> {
 
     let config = Config::load(&args.data_dir).map_err(|e| e.to_string())?;
     if let Some(rest) = &args.update {
-        return update::command(&config, rest);
+        return update::command(&config, rest).map_err(|e| e.to_string());
     }
     let port = args.port.unwrap_or_else(|| config.port());
     if args.pair {
