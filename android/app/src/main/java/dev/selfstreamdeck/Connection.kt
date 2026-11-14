@@ -19,7 +19,6 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.MessageDigest
 import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
 import javax.net.ssl.HttpsURLConnection
@@ -75,8 +74,7 @@ object Probe {
 
         override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
             val der = chain?.firstOrNull()?.encoded ?: throw CertificateException("no certificate")
-            val seen = MessageDigest.getInstance("SHA-256").digest(der).joinToString("") { "%02x".format(it) }
-            if (seen != fingerprint) throw CertificateException("not the certificate this app was paired with")
+            if (!Pairing.matchesPin(der, fingerprint)) throw CertificateException("not the certificate this app was paired with")
         }
 
         override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()

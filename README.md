@@ -48,9 +48,9 @@ O agente fala com o Windows por APIs nativas (Core Audio, SMTC, DWM, PDH, WMI…
 
 ## Início rápido
 
-1. **Instale o agente no PC.** Baixe o [MSI do último build](https://github.com/LucasFelip/self-stream-deck/releases/download/latest-build/SelfStreamDeck.msi) (sem assinatura) ou gere o instalador (veja [instalação](docs/instalacao.md)) e dê dois cliques em `SelfStreamDeck-<versão>.msi`. Ele pede administrador uma vez, instala em `Program Files`, cria o atalho e inicia o agente (sem janela; um ícone aparece perto do relógio).
+1. **Instale o agente no PC.** Baixe o MSI da [última versão](https://github.com/LucasFelip/self-stream-deck/releases/latest) (sem assinatura; o [build do último commit](https://github.com/LucasFelip/self-stream-deck/releases/tag/latest-build) também fica disponível) ou gere o instalador (veja [instalação](docs/instalacao.md)) e dê dois cliques em `SelfStreamDeck-<versão>.msi`. Ele pede administrador uma vez, instala em `Program Files`, cria o atalho e inicia o agente (sem janela; um ícone aparece perto do relógio).
 2. **Pegue o código de pareamento.** Clique com o botão direito no ícone da bandeja → *Mostrar código de pareamento*.
-3. **Instale o app no celular.** Android: o [APK do último build](https://github.com/LucasFelip/self-stream-deck/releases/download/latest-build/SelfStreamDeck-debug.apk) (depuração) ou compile o seu (veja [desenvolvimento](docs/desenvolvimento.md#app-android)). iPhone: nada a instalar, abra o link no Safari ([passo a passo](docs/rede-e-seguranca.md#iphone-safari-e-tela-de-início)).
+3. **Instale o app no celular.** Android: o APK da [última versão](https://github.com/LucasFelip/self-stream-deck/releases/latest) (ou o do [build do último commit](https://github.com/LucasFelip/self-stream-deck/releases/tag/latest-build), de depuração) ou compile o seu (veja [desenvolvimento](docs/desenvolvimento.md#app-android)). iPhone: nada a instalar, abra o link no Safari ([passo a passo](docs/rede-e-seguranca.md#iphone-safari-e-tela-de-início)).
 4. **Conecte.** Por USB: `adb reverse tcp:7878 tcp:7878` e abra o app. Pelo Wi-Fi: ligue `"lan": true` no `config.json` e cole o link `https://IP:7879/?token=…&fp=…` na tela "Conectar ao PC".
 
 Algo não conectou? Veja a [solução de problemas](docs/solucao-de-problemas.md) ou rode `ssd.exe diagnose`.

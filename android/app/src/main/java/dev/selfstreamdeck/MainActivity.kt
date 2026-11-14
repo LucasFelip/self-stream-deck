@@ -40,7 +40,6 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -158,8 +157,8 @@ class MainActivity : Activity() {
      */
     private fun savePairingFromIntent(intent: Intent?): Boolean {
         if (intent == null) return false
-        val url = normalize(intent.getStringExtra(KEY_URL))
-        val wifi = normalize(intent.getStringExtra(KEY_WIFI))
+        val url = Pairing.normalize(intent.getStringExtra(KEY_URL))
+        val wifi = Pairing.normalize(intent.getStringExtra(KEY_WIFI))
         if (url == null && wifi == null) return false
         savePairing(url, wifi)
         return true
@@ -170,24 +169,13 @@ class MainActivity : Activity() {
         if (url != null) editor.putString(KEY_URL, url)
         if (wifi != null) {
             editor.putString(KEY_WIFI, wifi)
-            Uri.parse(wifi).getQueryParameter("fp")?.let { editor.putString(KEY_FP, it.lowercase()) }
+            Pairing.fingerprintOf(wifi)?.let { editor.putString(KEY_FP, it) }
         }
         editor.apply()
     }
 
     /** The addresses to try, in order: this PC / USB first, then the home network. */
-    private fun buildCandidates(): List<String> {
-        val list = ArrayList<String>()
-        val url = prefs.getString(KEY_URL, null)
-        val wifi = prefs.getString(KEY_WIFI, null)
-        if (url != null) {
-            list.add(url)
-        } else if (wifi != null) {
-            Uri.parse(wifi).getQueryParameter("token")?.let { list.add("http://127.0.0.1:$USB_PORT/?token=$it") }
-        }
-        if (wifi != null) list.add(wifi)
-        return list
-    }
+    private fun buildCandidates(): List<String> = Pairing.candidates(prefs.getString(KEY_URL, null), prefs.getString(KEY_WIFI, null))
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
@@ -355,24 +343,17 @@ class MainActivity : Activity() {
     }
 
     private fun matchesPinnedCertificate(certificate: SslCertificate?): Boolean {
-        val pinned = prefs.getString(KEY_FP, null)
-        if (pinned == null || certificate == null) return false
+        if (certificate == null) return false
         return try {
             // saveState keeps the DER bytes of the certificate under this key on every Android version
-            val der = SslCertificate.saveState(certificate).getByteArray("x509-certificate") ?: return false
-            val digest = MessageDigest.getInstance("SHA-256").digest(der)
-            digest.joinToString("") { "%02x".format(it) } == pinned
+            Pairing.matchesPin(SslCertificate.saveState(certificate).getByteArray("x509-certificate"), prefs.getString(KEY_FP, null))
         } catch (e: Exception) {
             false
         }
     }
 
     private fun isDeckOrigin(origin: Uri?): Boolean {
-        val host = origin?.host ?: return false
-        return buildCandidates().any { candidate ->
-            val deck = Uri.parse(candidate)
-            host.equals(deck.host, ignoreCase = true) && origin.port == deck.port
-        }
+        return Pairing.isDeckOrigin(origin?.host, origin?.port ?: -1, buildCandidates())
     }
 
     private fun answerCameraRequest(request: PermissionRequest) {
@@ -539,7 +520,7 @@ class MainActivity : Activity() {
         val connect = Button(this).apply {
             text = "Conectar"
             setOnClickListener {
-                val link = normalize(input.text.toString())
+                val link = Pairing.normalize(input.text.toString())
                 if (link == null) {
                     error.text = "Endereço inválido. Use o formato https://IP:7879/?token=…&fp=… (Wi-Fi) ou http://127.0.0.1:7878/?token=… (USB)"
                     return@setOnClickListener
@@ -571,7 +552,6 @@ class MainActivity : Activity() {
         const val KEY_URL = "url" // this PC / USB tunnel
         const val KEY_WIFI = "wifi" // home network (https)
         const val KEY_FP = "fp" // the certificate's SHA-256, lower-case hex
-        const val USB_PORT = 7878
         const val REQUEST_CAMERA = 7
         const val REQUEST_ADMIN = 8
         const val RETRY_MS = 5000L // how often the "no connection" screen looks for the PC again
@@ -581,14 +561,5 @@ class MainActivity : Activity() {
         const val CLOCK_DATE_DP = 11.5f // a little over the 9.6 of a tab's label, which was too small to read at a glance
         const val CLOCK_BOTTOM_DP = 65 // the slot after the sixth tab, above the settings gear (a 48 slot at the bottom)
         val BACKGROUND = Palette.BACKGROUND // the page's --bg, so the app's own screens and the page are one
-
-        /** Accepts "ip:port/?token=x" without a scheme and rejects anything that is not http(s). */
-        fun normalize(raw: String?): String? {
-            var value = raw?.trim() ?: return null
-            if (value.isEmpty()) return null
-            if (!value.contains("://")) value = "http://$value"
-            if (!value.startsWith("http://") && !value.startsWith("https://")) return null
-            return value
-        }
     }
 }

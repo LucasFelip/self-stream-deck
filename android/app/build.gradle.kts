@@ -16,9 +16,25 @@ android {
         versionName = "0.1.7"
     }
 
+    // The release build is signed when the keystore is given in the environment (a release workflow, or the owner's PC); without it the
+    // release APK comes out unsigned and the debug build is the one to install. The key never lives in the repository.
+    val keystore = System.getenv("SSD_KEYSTORE")?.takeIf { it.isNotBlank() }
+    signingConfigs {
+        if (keystore != null) {
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = System.getenv("SSD_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("SSD_KEY_ALIAS")
+                keyPassword = System.getenv("SSD_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            // the app is a thin shell around a WebView with a JavaScript bridge: shrinking saves little and needs keep rules
             isMinifyEnabled = false
+            if (keystore != null) signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -30,4 +46,9 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+}
+
+dependencies {
+    // the app itself depends on nothing; this is for the tests of app/src/test
+    testImplementation(libs.junit)
 }

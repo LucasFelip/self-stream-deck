@@ -4,7 +4,7 @@ Para entender como as peças se encaixam, leia [docs/ARQUITETURA.md](docs/ARQUIT
 
 ## Rodando
 
-O Rust e o Node ficam no PATH (o Rust vem do `rustup`; o alvo é `x86_64-pc-windows-gnu`, veja `rust-toolchain.toml`).
+O Rust e o Node ficam no PATH. O Rust vem do `rustup`, na versão exata de `rust-toolchain.toml`; o agente compila com os dois alvos do Windows: `x86_64-pc-windows-msvc` (o do CI) e `x86_64-pc-windows-gnu` (MinGW, sem Visual Studio).
 
 ```powershell
 cd agent
@@ -21,6 +21,16 @@ npm run test:e2e                            # build e a interface num navegador 
 ```
 
 Antes de abrir um commit, `node tools/check.js` (na raiz) precisa passar: formatação, lints e testes do Rust e da interface, e o agente **contra o contrato da API** (`tools/contract-test` sobe o `ssd.exe` num PC de mentira) e contra as checagens de fora para dentro (`tools/agent-check`: Host, token, pareamento, câmera, arquivos estáticos). `--full` inclui a interface num navegador. O hook de `pre-push` (`git config core.hooksPath tools/hooks`) roda a versão rápida. Mudou só texto ou documentação: o que mudou basta.
+
+## Commits, branches e versões
+
+- **Um branch por mudança, um pull request por branch.** A `main` só recebe PRs com o workflow `build` verde, por *squash*: o título do PR vira o commit.
+- **Mensagens no padrão [Conventional Commits](https://www.conventionalcommits.org/pt-br/v1.0.0/):** `tipo(escopo): o que mudou`, em português, no presente, sem ponto final.
+  Tipos: `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`. Escopos: `agent`, `web`, `android`, `contract`, `tools`, `docs`, `ci`, `release`, `deps`.
+  Exemplos: `feat(web): o editor pergunta antes de descartar alterações`, `fix(agent): a câmera virtual conta como instalada onde o Windows a registrou`.
+  O hook `commit-msg` (`git config core.hooksPath tools/hooks`, o mesmo do `pre-push`) recusa o que foge disso.
+- **O que quem usa percebe entra no [CHANGELOG](CHANGELOG.md)**, em "Não lançado", no mesmo PR.
+- **A versão é uma só** (`agent/Cargo.toml`, repetida em `web/package.json` e no `build.gradle.kts` do Android; `tools/version-check` confere) e só muda no commit de release: [como publicar uma versão](docs/desenvolvimento.md#publicar-uma-versão).
 
 ## Convenções
 

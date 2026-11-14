@@ -1,0 +1,16 @@
+#!/bin/sh
+# Enabled with: git config core.hooksPath tools/hooks
+# The first line of a commit follows Conventional Commits (CONTRIBUTING.md): tipo(escopo): o que mudou
+subject=$(head -n 1 "$1")
+case "$subject" in
+  Merge\ *|Revert\ *|fixup!\ *|squash!\ *) exit 0 ;;
+esac
+if printf '%s' "$subject" | grep -Eq '^(feat|fix|docs|refactor|perf|test|build|ci|chore|revert)(\((agent|web|android|contract|tools|docs|ci|release|deps)\))?!?: .+'; then
+  exit 0
+fi
+echo "commit-msg: a primeira linha precisa ser 'tipo(escopo): o que mudou'" >&2
+echo "  tipos:   feat fix docs refactor perf test build ci chore revert" >&2
+echo "  escopos: agent web android contract tools docs ci release deps (opcional)" >&2
+echo "  exemplo: fix(agent): a camera virtual conta como instalada onde o Windows a registrou" >&2
+echo "  recebido: $subject" >&2
+exit 1
