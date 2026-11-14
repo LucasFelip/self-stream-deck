@@ -172,6 +172,20 @@ async fn main() -> std::process::ExitCode {
                 .unwrap_or_else(|_| "info".into()),
         )
         .init();
+    // a panic in any thread goes to the log with where it happened, not only to a console nobody sees
+    std::panic::set_hook(Box::new(|panic| {
+        let location = panic
+            .location()
+            .map(|l| format!("{}:{}", l.file(), l.line()))
+            .unwrap_or_default();
+        let message = panic
+            .payload()
+            .downcast_ref::<&str>()
+            .map(|s| (*s).to_owned())
+            .or_else(|| panic.payload().downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "(no message)".to_owned());
+        tracing::error!(location, message, "panic");
+    }));
     children_end_with_me();
     match run().await {
         Ok(()) => std::process::ExitCode::SUCCESS,
@@ -231,7 +245,7 @@ async fn run() -> Result<(), String> {
 
     let config = Config::load(&args.data_dir).map_err(|e| e.to_string())?;
     if let Some(rest) = &args.update {
-        return update::command(&config, rest);
+        return update::command(&config, rest).map_err(|e| e.to_string());
     }
     let port = args.port.unwrap_or_else(|| config.port());
     if args.pair {

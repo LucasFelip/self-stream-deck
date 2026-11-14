@@ -4,10 +4,10 @@ import type { components } from '../../api/schema';
 import { useToast } from '../../ui/Toast';
 import { DeviceList, type AudioDevice } from './DeviceList';
 import { VolumeRow } from './VolumeRow';
+import { errorText } from '../../lib/errors';
 
 type Audio = components['schemas']['Audio'];
 
-const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 /** The three cards of the audio half of the Som page: Saída, Entrada and the per-app mixer (Windows' Sound settings, from the phone). */
 export function AudioCards({ audio }: { audio: Audio | undefined }) {

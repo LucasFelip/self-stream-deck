@@ -30,6 +30,50 @@ use ssd_core::sha256::sha256_hex;
 const MANIFEST_LIMIT: u64 = 64 * 1024;
 const PACKAGE_LIMIT: u64 = 200 * 1024 * 1024;
 
+/// Why an update did not happen. The text is what `ssd update` prints and what the log says; the variant is what the code (and a test)
+/// tells apart: a refusal on purpose (`NoSigner`, `WrongSigner`, `WrongHash`) from something that failed (`Download`, `Tool`, `Io`).
+#[derive(Debug, thiserror::Error)]
+pub enum UpdateError {
+    #[error("no update address: set \"update\": {{ \"url\": \"https://…/manifest.json\" }} in config.json")]
+    NoAddress,
+    #[error("{what}: only https:// addresses are accepted (plain http only to this PC)")]
+    NotHttps { what: String },
+    #[error("{what}: the address has characters that do not belong in one")]
+    BadAddress { what: String },
+    /// the manifest is not JSON, has no such channel, or a field of the channel is missing or wrong
+    #[error("{0}")]
+    Manifest(String),
+    #[error("download failed: {0}")]
+    Download(String),
+    #[error("could not run {program}: {source}")]
+    Tool {
+        program: &'static str,
+        source: std::io::Error,
+    },
+    #[error("the package does not match the manifest (SHA-256 {found}, expected {expected})")]
+    WrongHash { found: String, expected: String },
+    #[error("this agent is not signed and no \"update.signer\" (a certificate thumbprint) is set, so there is nothing to check an update against")]
+    NoSigner,
+    #[error("this agent is not signed, so it does not update by itself (\"update.signer\" only counts for `ssd update --apply`)")]
+    UnsignedAgent,
+    #[error("the signature of the package is not good ({0})")]
+    BadSignature(String),
+    #[error("the package is signed by {found}, not by {expected}")]
+    WrongSigner { found: String, expected: String },
+    #[error("the path of the file has a quote in it")]
+    BadPath,
+    #[error("the \"update\" folder beside ssd.exe cannot be written, and an agent running as administrator does not install from a temporary folder")]
+    NoSafeFolder,
+    #[cfg(not(windows))]
+    #[error("installing updates is only supported on Windows")]
+    Unsupported,
+    /// `ssd update` was called with something it does not know
+    #[error("{0}")]
+    Usage(String),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+}
+
 /// What `config.json` says under `"update"`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
@@ -105,47 +149,46 @@ fn is_loopback_http(url: &str) -> bool {
         })
 }
 
-fn check_url(url: &str, what: &str) -> Result<(), String> {
-    if url.starts_with("https://") || is_loopback_http(url) {
-        if url.contains(char::is_whitespace) || url.contains('"') {
-            return Err(format!(
-                "{what}: the address has characters that do not belong in one"
-            ));
-        }
-        Ok(())
-    } else {
-        Err(format!(
-            "{what}: only https:// addresses are accepted (plain http only to this PC)"
-        ))
+fn check_url(url: &str, what: &str) -> Result<(), UpdateError> {
+    if !(url.starts_with("https://") || is_loopback_http(url)) {
+        return Err(UpdateError::NotHttps { what: what.into() });
     }
+    if url.contains(char::is_whitespace) || url.contains('"') {
+        return Err(UpdateError::BadAddress { what: what.into() });
+    }
+    Ok(())
 }
 
 /// The release of `channel` in a manifest, validated.
-pub fn pick_release(manifest: &Value, channel: &str) -> Result<Release, String> {
+pub fn pick_release(manifest: &Value, channel: &str) -> Result<Release, UpdateError> {
     let entry = manifest
         .get("channels")
         .and_then(|c| c.get(channel))
-        .ok_or_else(|| format!("the manifest has no channel \"{channel}\""))?;
+        .ok_or_else(|| {
+            UpdateError::Manifest(format!("the manifest has no channel \"{channel}\""))
+        })?;
     let field = |key: &str| {
         entry
             .get(key)
             .and_then(Value::as_str)
             .map(str::to_owned)
-            .ok_or_else(|| format!("channel \"{channel}\": \"{key}\" is missing"))
+            .ok_or_else(|| {
+                UpdateError::Manifest(format!("channel \"{channel}\": \"{key}\" is missing"))
+            })
     };
     let version = field("version")?;
     if parse_version(&version).is_none() {
-        return Err(format!(
+        return Err(UpdateError::Manifest(format!(
             "channel \"{channel}\": \"{version}\" is not a version (1.2.3 or 1.2.3-rc1)"
-        ));
+        )));
     }
     let url = field("url")?;
     check_url(&url, &format!("channel \"{channel}\""))?;
     let sha256 = field("sha256")?.to_lowercase();
     if sha256.len() != 64 || !sha256.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err(format!(
+        return Err(UpdateError::Manifest(format!(
             "channel \"{channel}\": sha256 must be 64 hex digits"
-        ));
+        )));
     }
     Ok(Release {
         version,
@@ -155,12 +198,12 @@ pub fn pick_release(manifest: &Value, channel: &str) -> Result<Release, String> 
 }
 
 /// Which signer an update must carry: the configured one, else the one of the running agent.
-pub fn expected_signer(configured: Option<&str>, own: Option<&str>) -> Result<String, String> {
+pub fn expected_signer(configured: Option<&str>, own: Option<&str>) -> Result<String, UpdateError> {
     configured
         .or(own)
         .filter(|s| !s.is_empty())
         .map(str::to_owned)
-        .ok_or_else(|| "this agent is not signed and no \"update.signer\" (a certificate thumbprint) is set, so there is nothing to check an update against".to_owned())
+        .ok_or(UpdateError::NoSigner)
 }
 
 /// Whose signature an update must carry, by who asked for it. `update.signer` comes from a file any program can write, so by itself
@@ -169,12 +212,10 @@ pub fn signer_for(
     asked: Asked,
     configured: Option<&str>,
     own: Option<&str>,
-) -> Result<String, String> {
+) -> Result<String, UpdateError> {
     match asked {
         Asked::ByHand => expected_signer(configured, own),
-        Asked::Automatic => expected_signer(None, own).map_err(|_| {
-            "this agent is not signed, so it does not update by itself (\"update.signer\" only counts for `ssd update --apply`)".to_owned()
-        }),
+        Asked::Automatic => expected_signer(None, own).map_err(|_| UpdateError::UnsignedAgent),
     }
 }
 
@@ -189,7 +230,7 @@ fn no_window(command: &mut Command) -> &mut Command {
 }
 
 /// Downloads `url` into `dest` with curl.exe (it ships with Windows 10 and later and checks the site's certificate).
-fn fetch(url: &str, dest: &Path, limit: u64) -> Result<(), String> {
+fn fetch(url: &str, dest: &Path, limit: u64) -> Result<(), UpdateError> {
     check_url(url, "download")?;
     let protocol = if url.starts_with("https://") {
         "=https"
@@ -216,33 +257,34 @@ fn fetch(url: &str, dest: &Path, limit: u64) -> Result<(), String> {
         ])
         .arg(dest)
         .arg(url);
-    let output = command
-        .output()
-        .map_err(|e| format!("could not run curl.exe: {e}"))?;
+    let output = command.output().map_err(|source| UpdateError::Tool {
+        program: "curl.exe",
+        source,
+    })?;
     if output.status.success() {
         Ok(())
     } else {
-        Err(format!(
-            "download failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
+        Err(UpdateError::Download(
+            String::from_utf8_lossy(&output.stderr).trim().to_owned(),
         ))
     }
 }
 
 /// `(status, thumbprint)` of the Authenticode signature of a file ("NotSigned" and "" when it has none).
-fn signature(file: &Path) -> Result<(String, String), String> {
+fn signature(file: &Path) -> Result<(String, String), UpdateError> {
     let path = file.to_string_lossy();
     if path.contains('\'') {
-        return Err("the path of the file has a quote in it".into());
+        return Err(UpdateError::BadPath);
     }
     let script = format!(
         "$s = Get-AuthenticodeSignature -LiteralPath '{path}'; \"$($s.Status)|$($s.SignerCertificate.Thumbprint)\""
     );
     let mut command = Command::new("powershell.exe");
     no_window(&mut command).args(["-NoProfile", "-NonInteractive", "-Command", &script]);
-    let output = command
-        .output()
-        .map_err(|e| format!("could not run powershell.exe: {e}"))?;
+    let output = command.output().map_err(|source| UpdateError::Tool {
+        program: "powershell.exe",
+        source,
+    })?;
     let text = String::from_utf8_lossy(&output.stdout);
     let line = text.trim();
     let (status, thumbprint) = line.split_once('|').unwrap_or((line, ""));
@@ -251,16 +293,15 @@ fn signature(file: &Path) -> Result<(String, String), String> {
 
 /// A signature counts when the file was not altered after signing ("Valid", or "UnknownError" when the root is a self-signed certificate
 /// that Windows does not trust, which is the case of a build signed with `sign.ps1` without a certificate authority) and the signer is the expected one.
-pub fn signature_ok(status: &str, thumbprint: &str, expected: &str) -> Result<(), String> {
+pub fn signature_ok(status: &str, thumbprint: &str, expected: &str) -> Result<(), UpdateError> {
     if !matches!(status, "Valid" | "UnknownError") {
-        return Err(format!(
-            "the signature of the package is not good ({status})"
-        ));
+        return Err(UpdateError::BadSignature(status.to_owned()));
     }
     if thumbprint != expected {
-        return Err(format!(
-            "the package is signed by {thumbprint}, not by {expected}"
-        ));
+        return Err(UpdateError::WrongSigner {
+            found: thumbprint.to_owned(),
+            expected: expected.to_owned(),
+        });
     }
     Ok(())
 }
@@ -285,15 +326,15 @@ fn beside_the_program() -> Option<PathBuf> {
 }
 
 /// Where the manifest, the package and the installer's log go (see the top of this file for why it is not simply the temporary folder).
-fn work_dir() -> Result<PathBuf, String> {
+fn work_dir() -> Result<PathBuf, UpdateError> {
     if let Some(dir) = beside_the_program() {
         return Ok(dir);
     }
     if is_elevated() {
-        return Err("the \"update\" folder beside ssd.exe cannot be written, and an agent running as administrator does not install from a temporary folder".into());
+        return Err(UpdateError::NoSafeFolder);
     }
     let dir = std::env::temp_dir().join("ssd-update");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir)?;
     Ok(dir)
 }
 
@@ -321,18 +362,18 @@ pub fn check(
     settings: &Settings,
     current: &str,
     url_override: Option<&str>,
-) -> Result<Option<Release>, String> {
+) -> Result<Option<Release>, UpdateError> {
     let url = url_override
         .map(str::to_owned)
         .or_else(|| settings.url.clone())
-        .ok_or("no update address: set \"update\": { \"url\": \"https://…/manifest.json\" } in config.json")?;
+        .ok_or(UpdateError::NoAddress)?;
     check_url(&url, "update.url")?;
     let file = work_dir()?.join("manifest.json");
     let _ = std::fs::remove_file(&file);
     fetch(&url, &file, MANIFEST_LIMIT)?;
-    let text = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
-    let manifest: Value =
-        serde_json::from_str(&text).map_err(|e| format!("the manifest is not JSON: {e}"))?;
+    let text = std::fs::read_to_string(&file)?;
+    let manifest: Value = serde_json::from_str(&text)
+        .map_err(|e| UpdateError::Manifest(format!("the manifest is not JSON: {e}")))?;
     let release = pick_release(&manifest, &settings.channel)?;
     Ok(is_newer(current, &release.version).then_some(release))
 }
@@ -349,19 +390,19 @@ pub fn download_and_verify(
     settings: &Settings,
     release: &Release,
     asked: Asked,
-) -> Result<PathBuf, String> {
+) -> Result<PathBuf, UpdateError> {
     let file = work_dir()?.join(format!("SelfStreamDeck-{}.msi", release.version));
     let _ = std::fs::remove_file(&file);
     fetch(&release.url, &file, PACKAGE_LIMIT)?;
 
-    let bytes = std::fs::read(&file).map_err(|e| e.to_string())?;
+    let bytes = std::fs::read(&file)?;
     let hash = sha256_hex(&bytes);
     if hash != release.sha256 {
         let _ = std::fs::remove_file(&file);
-        return Err(format!(
-            "the package does not match the manifest (SHA-256 {hash}, expected {})",
-            release.sha256
-        ));
+        return Err(UpdateError::WrongHash {
+            found: hash,
+            expected: release.sha256.clone(),
+        });
     }
 
     let own = std::env::current_exe()
@@ -384,7 +425,7 @@ fn install_log(package: &Path) -> PathBuf {
 
 /// Starts the installer on its own, so it outlives this process (the package stops the agent and starts the new one).
 #[cfg(windows)]
-pub fn install(package: &Path) -> Result<(), String> {
+pub fn install(package: &Path) -> Result<(), UpdateError> {
     use std::os::windows::process::CommandExt;
     const DETACHED: u32 = 0x0000_0008;
     const NO_WINDOW: u32 = 0x0800_0000;
@@ -403,15 +444,18 @@ pub fn install(package: &Path) -> Result<(), String> {
     spawn(DETACHED | NO_WINDOW | BREAKAWAY)
         .or_else(|_| spawn(DETACHED | NO_WINDOW))
         .map(|_| ())
-        .map_err(|e| format!("could not start msiexec: {e}"))
+        .map_err(|source| UpdateError::Tool {
+            program: "msiexec.exe",
+            source,
+        })
 }
 #[cfg(not(windows))]
-pub fn install(_package: &Path) -> Result<(), String> {
-    Err("installing updates is only supported on Windows".into())
+pub fn install(_package: &Path) -> Result<(), UpdateError> {
+    Err(UpdateError::Unsupported)
 }
 
 /// `ssd update [--apply] [--no-install] [--channel NAME] [--url ADDRESS]`
-pub fn command(config: &Config, args: &[String]) -> Result<(), String> {
+pub fn command(config: &Config, args: &[String]) -> Result<(), UpdateError> {
     let mut settings = Settings::from_config(config);
     let (mut apply, mut install_it, mut url) = (false, true, None);
     let mut it = args.iter();
@@ -419,9 +463,9 @@ pub fn command(config: &Config, args: &[String]) -> Result<(), String> {
         match flag.as_str() {
             "--apply" => apply = true,
             "--no-install" => install_it = false,
-            "--channel" => settings.channel = it.next().ok_or("--channel needs a name")?.clone(),
-            "--url" => url = Some(it.next().ok_or("--url needs an address")?.clone()),
-            other => return Err(format!("unknown option {other}\nusage: ssd update [--apply] [--no-install] [--channel NAME] [--url ADDRESS]")),
+            "--channel" => settings.channel = it.next().ok_or_else(|| UpdateError::Usage("--channel needs a name".into()))?.clone(),
+            "--url" => url = Some(it.next().ok_or_else(|| UpdateError::Usage("--url needs an address".into()))?.clone()),
+            other => return Err(UpdateError::Usage(format!("unknown option {other}\nusage: ssd update [--apply] [--no-install] [--channel NAME] [--url ADDRESS]"))),
         }
     }
     let current = env!("CARGO_PKG_VERSION");
@@ -464,15 +508,16 @@ pub async fn run_forever(config: Config) {
     tokio::time::sleep(std::time::Duration::from_secs(60)).await;
     loop {
         let settings = settings.clone();
-        let outcome = tokio::task::spawn_blocking(move || -> Result<Option<String>, String> {
-            let Some(release) = check(&settings, env!("CARGO_PKG_VERSION"), None)? else {
-                return Ok(None);
-            };
-            let package = download_and_verify(&settings, &release, Asked::Automatic)?;
-            install(&package)?;
-            Ok(Some(release.version))
-        })
-        .await;
+        let outcome =
+            tokio::task::spawn_blocking(move || -> Result<Option<String>, UpdateError> {
+                let Some(release) = check(&settings, env!("CARGO_PKG_VERSION"), None)? else {
+                    return Ok(None);
+                };
+                let package = download_and_verify(&settings, &release, Asked::Automatic)?;
+                install(&package)?;
+                Ok(Some(release.version))
+            })
+            .await;
         match outcome {
             Ok(Ok(Some(version))) => tracing::info!("update: installing {version}"),
             Ok(Ok(None)) => tracing::info!("update: this is the newest version"),
@@ -536,12 +581,15 @@ mod tests {
             ),
             ("https://example.com/a.msi", HASH, "latest", "not a version"),
         ] {
-            let error = pick_release(&manifest(url, sha, version), "stable").unwrap_err();
+            let error = pick_release(&manifest(url, sha, version), "stable")
+                .unwrap_err()
+                .to_string();
             assert!(error.contains(why), "{url} {sha} {version}: {error}");
         }
         assert!(
             pick_release(&manifest("https://x/a.msi", HASH, "0.2.0"), "test")
                 .unwrap_err()
+                .to_string()
                 .contains("no channel")
         );
         assert!(pick_release(&json!({}), "stable").is_err());
@@ -582,9 +630,10 @@ mod tests {
             signer_for(Asked::Automatic, Some("AA"), Some("BB")).unwrap(),
             "BB"
         );
-        assert!(signer_for(Asked::Automatic, Some("AA"), None)
-            .unwrap_err()
-            .contains("does not update by itself"));
+        assert!(matches!(
+            signer_for(Asked::Automatic, Some("AA"), None),
+            Err(UpdateError::UnsignedAgent)
+        ));
         assert_eq!(
             signer_for(Asked::ByHand, Some("AA"), Some("BB")).unwrap(),
             "AA"
@@ -599,11 +648,22 @@ mod tests {
             signature_ok("UnknownError", "AA", "AA").is_ok(),
             "a self-signed certificate is the normal case here"
         );
-        assert!(signature_ok("HashMismatch", "AA", "AA").is_err());
-        assert!(signature_ok("NotSigned", "", "AA").is_err());
-        assert!(signature_ok("Valid", "BB", "AA")
-            .unwrap_err()
-            .contains("not by"));
+        assert!(matches!(
+            signature_ok("HashMismatch", "AA", "AA"),
+            Err(UpdateError::BadSignature(_))
+        ));
+        assert!(matches!(
+            signature_ok("NotSigned", "", "AA"),
+            Err(UpdateError::BadSignature(_))
+        ));
+        assert!(matches!(
+            signature_ok("Valid", "BB", "AA"),
+            Err(UpdateError::WrongSigner { .. })
+        ));
+        assert!(matches!(
+            expected_signer(None, None),
+            Err(UpdateError::NoSigner)
+        ));
     }
 
     #[test]

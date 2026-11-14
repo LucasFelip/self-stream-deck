@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { duration } from '../../lib/format';
 import { orDash, storageBlocks, usedPercent, type SystemInfo } from './pc';
 import { Bar } from './widgets';
+import { errorText } from '../../lib/errors';
 
 type Row = readonly [string, string | number | null | undefined];
 
@@ -55,7 +56,7 @@ export function SystemPane({ hidden, active, info, error }: SystemPaneProps) {
   if (!info) {
     return (
       <section className="system-page pc-pane" hidden={hidden}>
-        <div className="loading">{error ? `Não foi possível ler o sistema: ${error.message}` : 'Lendo informações do sistema…'}</div>
+        <div className="loading">{error ? `Não foi possível ler o sistema: ${errorText(error)}` : 'Lendo informações do sistema…'}</div>
       </section>
     );
   }

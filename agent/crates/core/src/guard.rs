@@ -1,3 +1,4 @@
+use crate::sync::Locked;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Mutex;
@@ -62,7 +63,7 @@ impl Guard {
     }
 
     pub fn is_locked_out(&self, ip: IpAddr) -> bool {
-        let mut failures = self.failures.lock().unwrap();
+        let mut failures = self.failures.locked();
         match failures.get(&ip) {
             None => false,
             Some((_, since)) if since.elapsed() > FAILURE_WINDOW => {
@@ -74,7 +75,7 @@ impl Guard {
     }
 
     pub fn record_failure(&self, ip: IpAddr) {
-        let mut failures = self.failures.lock().unwrap();
+        let mut failures = self.failures.locked();
         if failures.len() > MAX_TRACKED {
             // the table never grows without bound, whatever the network throws at it
             failures.retain(|_, (_, since)| since.elapsed() <= FAILURE_WINDOW);
@@ -204,7 +205,7 @@ mod tests {
                 g.record_failure(IpAddr::from([10, 0, m, n]));
             }
         }
-        assert!(g.failures.lock().unwrap().len() <= MAX_TRACKED + 1);
+        assert!(g.failures.locked().len() <= MAX_TRACKED + 1);
     }
 
     #[test]

@@ -39,13 +39,15 @@ Antes de abrir um commit, `node tools/check.js` (na raiz) precisa passar: format
 - **O cliente só dispara o que o agente lista.** Uma rota nova valida tudo que recebe (ids contra as listas do agente, números com limites) e devolve 400/404 com um motivo.
 - **O Windows fica atrás de uma porta.** A lógica (`agent/crates/core`) só conhece os traits de `ports.rs` e tem um `Fake*` de cada; só `agent/crates/platform-windows` chama a API do Windows. Assim tudo se testa sem tocar no PC (`--fake-platform`).
 - **`unsafe` só no `platform-windows`, com um comentário do que o Windows promete.**
+- **Sem `lock().unwrap()`:** use `locked()` (`ssd_core::sync::Locked`). **Sem `Result<_, String>` em código novo:** um erro que o código distingue tem um tipo (`thiserror`).
+- **No painel, toda mensagem de erro passa por `errorText` (`web/src/lib/errors.ts`)**, e toda camada (`z-index`) é um dos tokens `--z-*` de `style.css`.
 - **Não coloque dados da máquina ou pessoais no código nem nos testes** (token, nome do PC, IPs, números de série).
 
 ## Adicionar uma rota
 
 1. Descreva em `contracts/openapi.yaml` (caminho, corpo, respostas, `operationId`, tag) e rode `npm run gen:api` em `web/`.
 2. Se for uma operação do PC, acrescente o método ao trait certo em `agent/crates/core/src/ports.rs` (e ao `Fake*` dele).
-3. Registre a rota em `agent/crates/api/src/routes.rs` (função `answer`, ou o módulo do assunto: `winroutes`, `powerroutes`, `monitorroutes`, `editor`, `camera`). Valide o corpo antes de usar e devolva 400/404 com `error`.
+3. Registre a rota na tabela do módulo do assunto, em `agent/crates/api/src/` (a função `routes()` de `audio`, `media`, `shortcuts`, `apps`, `winroutes`, `powerroutes`, `monitorroutes`, `editor` ou `camera`; um assunto novo ganha um módulo e uma linha em `routes::table`). Valide o corpo antes de usar e devolva 400/404 com `error`; se a rota muda algo que merece rastro, acrescente o caminho a `access::is_audited`.
 4. Acrescente os casos em `tools/contract-test/cases.js` (entrada inválida, id desconhecido, o caso de sucesso) e um teste de unidade ao lado do código.
 5. Se for algo que a interface precisa saber na hora, avalie um tópico novo em `agent/crates/api/src/events.rs` (o produtor só roda enquanto alguém escuta).
 

@@ -1,5 +1,6 @@
 //! What the PC offers, as traits. `platform-windows` implements them with the Windows APIs proved in the spike (ADR 0008); the tests, and the
 //! agent's `--fake-platform` mode, implement them with in-memory fakes (see [`FakeAudio`]). The ports are added with their module (plan 3.2).
+use crate::sync::Locked;
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
@@ -166,7 +167,7 @@ impl Default for FakeMedia {
 
 impl MediaPort for FakeMedia {
     fn state(&self) -> PortResult<MediaState> {
-        let session = self.session.lock().unwrap().clone();
+        let session = self.session.locked().clone();
         Ok(MediaState {
             current: Some(session.id.clone()),
             sessions: vec![session],
@@ -174,7 +175,7 @@ impl MediaPort for FakeMedia {
     }
 
     fn control(&self, session: &str, action: MediaAction) -> PortResult<bool> {
-        let mut current = self.session.lock().unwrap();
+        let mut current = self.session.locked();
         if current.id != session {
             return Err(PortError::Failed("media session not found".into()));
         }
@@ -196,7 +197,7 @@ impl MediaPort for FakeMedia {
     }
 
     fn art(&self, session: &str) -> PortResult<Option<Art>> {
-        if self.session.lock().unwrap().id != session {
+        if self.session.locked().id != session {
             return Err(PortError::Failed("media session not found".into()));
         }
         // a 1x1 PNG, no content type: the API has to sniff it
@@ -221,13 +222,13 @@ pub struct FakeInput {
 
 impl FakeInput {
     pub fn pressed(&self) -> Vec<Vec<u8>> {
-        self.pressed.lock().unwrap().clone()
+        self.pressed.locked().clone()
     }
 }
 
 impl InputPort for FakeInput {
     fn press_keys(&self, vks: &[u8]) -> PortResult<()> {
-        self.pressed.lock().unwrap().push(vks.to_vec());
+        self.pressed.locked().push(vks.to_vec());
         Ok(())
     }
 }
@@ -249,13 +250,13 @@ pub struct FakeTaskbar {
 
 impl FakeTaskbar {
     pub fn launched(&self) -> Vec<String> {
-        self.launched.lock().unwrap().clone()
+        self.launched.locked().clone()
     }
 }
 
 impl TaskbarPort for FakeTaskbar {
     fn launch(&self, lnk: &str) -> PortResult<()> {
-        self.launched.lock().unwrap().push(lnk.to_owned());
+        self.launched.locked().push(lnk.to_owned());
         Ok(())
     }
 
@@ -370,7 +371,7 @@ impl Default for FakeWindows {
 
 impl FakeWindows {
     pub fn log(&self) -> Vec<String> {
-        self.log.lock().unwrap().clone()
+        self.log.locked().clone()
     }
 
     fn known(&self, handle: i64) -> PortResult<()> {
@@ -382,7 +383,7 @@ impl FakeWindows {
     }
 
     fn note(&self, line: String) {
-        self.log.lock().unwrap().push(line);
+        self.log.locked().push(line);
     }
 }
 
@@ -504,7 +505,7 @@ impl FakePower {
     }
 
     pub fn calls(&self) -> Vec<String> {
-        self.calls.lock().unwrap().clone()
+        self.calls.locked().clone()
     }
 }
 
@@ -520,7 +521,7 @@ impl PowerPort for FakePower {
 
     fn shutdown(&self, args: &[String]) -> PortResult<crate::power::CommandResult> {
         let call = format!("shutdown {}", args.join(" "));
-        self.calls.lock().unwrap().push(call.clone());
+        self.calls.locked().push(call.clone());
         Ok(match &self.failure {
             Some((failing, code, output)) if *failing == call => crate::power::CommandResult {
                 code: *code,
@@ -534,12 +535,12 @@ impl PowerPort for FakePower {
     }
 
     fn lock(&self) -> PortResult<()> {
-        self.calls.lock().unwrap().push("lock".into());
+        self.calls.locked().push("lock".into());
         Ok(())
     }
 
     fn sleep(&self) -> PortResult<()> {
-        self.calls.lock().unwrap().push("sleep".into());
+        self.calls.locked().push("sleep".into());
         Ok(())
     }
 }
@@ -632,7 +633,7 @@ pub struct FakeVcam {
 
 impl FakeVcam {
     pub fn log(&self) -> Vec<String> {
-        self.log.lock().unwrap().clone()
+        self.log.locked().clone()
     }
 }
 
@@ -655,17 +656,17 @@ impl VcamPort for FakeVcam {
     }
 
     fn install(&self) -> PortResult<()> {
-        self.log.lock().unwrap().push("install".into());
+        self.log.locked().push("install".into());
         Ok(())
     }
 
     fn uninstall(&self) -> PortResult<()> {
-        self.log.lock().unwrap().push("uninstall".into());
+        self.log.locked().push("uninstall".into());
         Ok(())
     }
 
     fn copy_to_clipboard(&self, text: &str) -> PortResult<()> {
-        self.log.lock().unwrap().push(format!("clipboard {text}"));
+        self.log.locked().push(format!("clipboard {text}"));
         Ok(())
     }
 }
@@ -732,7 +733,7 @@ impl FakeAudio {
         id: &str,
         change: impl FnOnce(&mut AudioDevice) -> T,
     ) -> PortResult<T> {
-        let mut guard = self.state.lock().unwrap();
+        let mut guard = self.state.locked();
         let state = &mut *guard;
         let devices = state
             .devices
@@ -749,10 +750,10 @@ impl FakeAudio {
 
 impl AudioPort for FakeAudio {
     fn volume(&self) -> PortResult<Volume> {
-        Ok(self.state.lock().unwrap().volume)
+        Ok(self.state.locked().volume)
     }
     fn set_volume(&self, level: Percent) -> PortResult<Volume> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.locked();
         state.volume.level = level.min(100);
         if level > 0 {
             state.volume.muted = false;
@@ -760,7 +761,7 @@ impl AudioPort for FakeAudio {
         Ok(state.volume)
     }
     fn set_mute(&self, mute: Mute) -> PortResult<Volume> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.locked();
         state.volume.muted = match mute {
             Mute::Set(value) => value,
             Mute::Toggle => !state.volume.muted,
@@ -768,10 +769,10 @@ impl AudioPort for FakeAudio {
         Ok(state.volume)
     }
     fn mic(&self) -> PortResult<Mic> {
-        Ok(self.state.lock().unwrap().mic)
+        Ok(self.state.locked().mic)
     }
     fn set_mic(&self, mute: Mute) -> PortResult<Mic> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.locked();
         state.mic.muted = match mute {
             Mute::Set(value) => value,
             Mute::Toggle => !state.mic.muted,
@@ -779,13 +780,13 @@ impl AudioPort for FakeAudio {
         Ok(state.mic)
     }
     fn devices(&self) -> PortResult<Devices> {
-        Ok(self.state.lock().unwrap().devices.clone())
+        Ok(self.state.locked().devices.clone())
     }
     fn sessions(&self) -> PortResult<Vec<AudioSession>> {
-        Ok(self.state.lock().unwrap().sessions.clone())
+        Ok(self.state.locked().sessions.clone())
     }
     fn set_default_device(&self, id: &str) -> PortResult<()> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.locked();
         let list = if state.devices.playback.iter().any(|d| d.id == id) {
             &mut state.devices.playback
         } else {
@@ -811,7 +812,7 @@ impl AudioPort for FakeAudio {
         self.with_device(id, |d| d.muted = muted)
     }
     fn set_session_volume(&self, pid: u32, system: bool, level: Percent) -> PortResult<()> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.locked();
         for s in state.sessions.iter_mut().filter(|s| {
             if system {
                 s.system
@@ -824,7 +825,7 @@ impl AudioPort for FakeAudio {
         Ok(())
     }
     fn set_session_mute(&self, pid: u32, system: bool, muted: bool) -> PortResult<()> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.locked();
         for s in state.sessions.iter_mut().filter(|s| {
             if system {
                 s.system

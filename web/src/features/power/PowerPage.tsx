@@ -10,10 +10,10 @@ import { useSheets } from '../../ui/Sheets';
 import { useToast } from '../../ui/Toast';
 import { ACTIONS, SCHEDULE_LABELS, type ActionDef } from './actions';
 import { ConfirmSheet } from './ConfirmSheet';
+import { errorText } from '../../lib/errors';
 
 const POLL_MS = 5000;
 
-const errorText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 /**
  * "Energia" page: lock, sleep, hibernate, sign out, restart, shut down, restart into the BIOS or the advanced boot menu, with an

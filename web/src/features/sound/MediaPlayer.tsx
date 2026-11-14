@@ -5,6 +5,7 @@ import { clock } from '../../lib/format';
 import { Icon } from '../../ui/Icon';
 import { useToast } from '../../ui/Toast';
 import { artUrl, pickSession, positionNow, subtitle, type Base, type Media } from './media';
+import { errorText } from '../../lib/errors';
 
 const CLOCK_MS = 250;
 const EMPTY_TEXT = 'Abra o Spotify, um vídeo do YouTube ou qualquer música no navegador.';
@@ -68,7 +69,7 @@ export function MediaPlayer({ media, active, failed, updatedAt }: MediaPlayerPro
       const { accepted } = await call(client.POST('/api/media/control', { body: { session: session.id, action, position } }));
       if (!accepted) toast('O player não aceitou o comando', true);
     } catch (error) {
-      toast(`Erro: ${error instanceof Error ? error.message : String(error)}`, true);
+      toast(`Erro: ${errorText(error)}`, true);
     }
     reloadSoon();
   }

@@ -1,5 +1,6 @@
 //! Energia and the state of the header: `GET/POST /api/power` and `GET /api/state`. Parity with `legacy/server/src/routes/pc.js` (power) and
 //! `routes/apps.js` (state); the rules of the power actions are in `ssd_core::power`.
+use ssd_core::sync::Locked;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -24,7 +25,7 @@ fn blocking_failed() -> Response {
 
 /// The scheduled shutdown as the phone sees it (and forgets it once its time has passed).
 pub fn scheduled_now(state: &AppState) -> Option<Value> {
-    schedule_view(&mut state.scheduled.lock().unwrap(), now_ms())
+    schedule_view(&mut state.scheduled.locked(), now_ms())
 }
 
 /// `GET /api/power`.
@@ -40,7 +41,7 @@ pub async fn build_power(state: &Arc<AppState>) -> Option<Value> {
         .filter_map(|app| app.proc.map(|proc| (proc, app.name)))
         .collect();
     let now = now_ms();
-    let enabled = state.config.lock().unwrap().get("powerControls") != Some(&Value::Bool(false));
+    let enabled = state.config.locked().get("powerControls") != Some(&Value::Bool(false));
     let mut body = Map::new();
     body.insert("enabled".into(), json!(enabled));
     body.extend(ssd_core::power::info(
@@ -73,7 +74,7 @@ fn ui_version(state: &AppState) -> u64 {
             }
         }
     }
-    let mut cache = state.ui_cache.lock().unwrap();
+    let mut cache = state.ui_cache.locked();
     if cache
         .0
         .is_none_or(|at| at.elapsed() > Duration::from_millis(1500))
@@ -91,10 +92,10 @@ fn ui_version(state: &AppState) -> u64 {
 
 /// What is playing, for the header's mini player (and shared for 1.5 s: several pages ask within the same second).
 async fn now_playing(state: &Arc<AppState>) -> Value {
-    if state.config.lock().unwrap().get("miniPlayer") == Some(&Value::Bool(false)) {
+    if state.config.locked().get("miniPlayer") == Some(&Value::Bool(false)) {
         return Value::Null;
     }
-    if let Some((at, value)) = state.playing_cache.lock().unwrap().as_ref() {
+    if let Some((at, value)) = state.playing_cache.locked().as_ref() {
         if at.elapsed() < Duration::from_millis(1500) {
             return value.clone();
         }
@@ -107,7 +108,7 @@ async fn now_playing(state: &Arc<AppState>) -> Value {
     }
     .await
     .unwrap_or(Value::Null);
-    *state.playing_cache.lock().unwrap() = Some((Instant::now(), value.clone()));
+    *state.playing_cache.locked() = Some((Instant::now(), value.clone()));
     value
 }
 
@@ -141,9 +142,9 @@ pub async fn build_state(state: &Arc<AppState>) -> Option<Value> {
         "mic": mic,
         "volume": volume,
         "playing": playing,
-        "miniPlayer": state.config.lock().unwrap().get("miniPlayer") != Some(&Value::Bool(false)),
+        "miniPlayer": state.config.locked().get("miniPlayer") != Some(&Value::Bool(false)),
         "ui": ui_version(state),
-        "appsRev": state.apps.lock().unwrap().rev,
+        "appsRev": state.apps.locked().rev,
     }))
 }
 
@@ -170,7 +171,7 @@ pub async fn power_route(state: &Arc<AppState>, post: bool, body: &[u8]) -> Resp
     let Some(power) = state.platform.power.clone() else {
         return error(StatusCode::NOT_FOUND, "not found");
     };
-    if state.config.lock().unwrap().get("powerControls") == Some(&Value::Bool(false)) {
+    if state.config.locked().get("powerControls") == Some(&Value::Bool(false)) {
         return error(
             StatusCode::FORBIDDEN,
             "power controls are disabled in config.json",
@@ -202,7 +203,7 @@ pub async fn power_route(state: &Arc<AppState>, post: bool, body: &[u8]) -> Resp
     };
     let state = state.clone();
     let outcome = tokio::task::spawn_blocking(move || {
-        let mut scheduled = state.scheduled.lock().unwrap();
+        let mut scheduled = state.scheduled.locked();
         perform(power.as_ref(), &asked, &mut scheduled, now_ms())
     })
     .await;
@@ -221,4 +222,26 @@ pub async fn power_route(state: &Arc<AppState>, post: bool, body: &[u8]) -> Resp
         ),
         Err(_) => blocking_failed(),
     }
+}
+
+pub(crate) fn routes() -> axum::Router<Arc<AppState>> {
+    use crate::routes::not_found;
+    use axum::routing::get;
+    axum::Router::new()
+        .route("/api/power", get(power).post(power).fallback(not_found))
+        .route("/api/state", get(header_state).fallback(not_found))
+}
+
+async fn power(call: crate::routes::Call) -> Response {
+    if call.state.platform.power.is_none() || call.state.platform.windows.is_none() {
+        return crate::routes::not_found().await;
+    }
+    power_route(&call.state, call.post, &call.body).await
+}
+
+async fn header_state(call: crate::routes::Call) -> Response {
+    if !state_ready(&call.state) {
+        return crate::routes::not_found().await;
+    }
+    state_route(&call.state).await
 }

@@ -9,7 +9,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState({ message: '', error: false, show: false });
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const toast = useCallback<ToastFn>((message, isError = false, ms = 2000) => {
+  // an error has to be read, not just seen: it stays twice as long as a plain notice
+  const toast = useCallback<ToastFn>((message, isError = false, ms = isError ? 4000 : 2000) => {
     setState({ message, error: isError, show: true });
     clearTimeout(timer.current);
     timer.current = setTimeout(() => setState((previous) => ({ ...previous, show: false })), ms);

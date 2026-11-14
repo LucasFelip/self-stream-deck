@@ -141,7 +141,7 @@ O botão **Bloquear tela** usa o papel de administrador do aparelho, só com a p
 |---|---|
 | `agent/crates/core` | a lógica sem Windows: `guard` (Host, token, bloqueio), `config`, `ports` (um trait por parte do PC e um `Fake*` de cada), teclas, macros, energia… |
 | `agent/crates/api` | o HTTP (axum): o fluxo do pedido, as rotas, os eventos SSE, os arquivos estáticos (o painel embutido) |
-| `agent/crates/platform-windows` | os adaptadores: Core Audio, SMTC, teclas, barra de tarefas, janelas, energia, monitor, notificações, câmera virtual, rede. É o único lugar com `unsafe` |
+| `agent/crates/platform-windows` | os adaptadores: Core Audio, SMTC, teclas, barra de tarefas, janelas, energia, monitor, notificações, câmera virtual, rede. É onde fica o `unsafe` da API do Windows |
 | `agent/crates/agent` | o programa `ssd`: argumentos, bandeja, `diagnose`, atualização, HTTPS do Wi-Fi e do iPhone |
 | `web/src` | `api/` (cliente gerado do contrato), `features/` (uma pasta por assunto), `shell/` (abas, menu, barra offline), `lib/` |
 | `android/app/src/main` | `MainActivity.kt`, `Connection.kt`, `LockAdmin.kt` |

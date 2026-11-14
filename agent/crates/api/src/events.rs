@@ -1,5 +1,6 @@
 //! Server-sent events: the PC tells the phone when something changed instead of the phone asking every second or two. A topic's producer runs only while somebody listens to it, a new value is sent only when it differs from the
 //! last one (by its signature), and a client that joins a running topic gets the last value at once.
+use ssd_core::sync::Locked;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -154,7 +155,7 @@ async fn produce(state: &Arc<AppState>, name: &str) -> Option<(String, String)> 
         "notifications" => {
             let port = state.platform.notifications.clone()?;
             let words: Vec<String> = {
-                let config = state.config.lock().unwrap();
+                let config = state.config.locked();
                 let section = config.get("notifications");
                 if section.and_then(|s| s.get("enabled")) == Some(&Value::Bool(false)) {
                     Vec::new()
@@ -211,7 +212,7 @@ impl Hub {
     }
 
     fn publish(&self, name: &str, json: String, signature: String) {
-        let mut topics = self.topics.lock().unwrap();
+        let mut topics = self.topics.locked();
         let Some(topic) = topics.get_mut(name) else {
             return;
         };
@@ -228,7 +229,7 @@ impl Hub {
     }
 
     fn leave(&self, id: u64, wanted: &[&'static str]) {
-        let mut topics = self.topics.lock().unwrap();
+        let mut topics = self.topics.locked();
         for name in wanted {
             let Some(topic) = topics.get_mut(name) else {
                 continue;
@@ -332,7 +333,7 @@ pub async fn subscribe(state: &Arc<AppState>, query: &str) -> Response {
         .collect();
 
     {
-        let mut topics = state.hub.topics.lock().unwrap();
+        let mut topics = state.hub.topics.locked();
         for name in &mine {
             let topic = topics.entry(name).or_insert_with(|| Topic {
                 clients: HashMap::new(),

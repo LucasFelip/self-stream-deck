@@ -1,6 +1,7 @@
 //! The numbers behind the Desempenho, Processos and Sistema pages, for the `MonitorPort`: Windows performance counters (PDH, one query for
 //! everything, collected every second on a thread that rests when nobody asks), `nvidia-smi`, MSI Afterburner / RivaTuner shared memory, the
 //! memory status and the process list. Same answers as `legacy/server/native/MonitorOps.cs`; the static "About this PC" part is in `sysinfo.rs`.
+use ssd_core::sync::Locked;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -151,7 +152,7 @@ fn collector(shared: Arc<Shared>) {
 
         PdhCollectQueryData(query); // the baseline for the rates
         {
-            let mut data = shared.data.lock().unwrap();
+            let mut data = shared.data.locked();
             data.utility = utility;
             data.collections = 1;
         }
@@ -178,7 +179,7 @@ fn collector(shared: Arc<Shared>) {
                     singles.insert(*key, value.Anonymous.doubleValue);
                 }
             }
-            let mut data = shared.data.lock().unwrap();
+            let mut data = shared.data.locked();
             data.arrays.extend(arrays);
             data.singles.extend(singles);
             data.collections += 1;
@@ -190,7 +191,7 @@ fn collector(shared: Arc<Shared>) {
 /// The counters, started on the first use and waited for until rates exist (they need two collections, a second apart).
 fn counters() -> PortResult<Arc<Shared>> {
     let shared = {
-        let mut slot = PDH.lock().unwrap();
+        let mut slot = PDH.locked();
         match slot.as_ref().filter(|s| s.alive.load(Ordering::SeqCst)) {
             Some(shared) => shared.clone(),
             None => {
@@ -211,7 +212,7 @@ fn counters() -> PortResult<Arc<Shared>> {
     };
     shared.last_used.store(now_ms(), Ordering::SeqCst);
     let until = Instant::now() + Duration::from_millis(2500);
-    while Instant::now() < until && shared.data.lock().unwrap().collections < 2 {
+    while Instant::now() < until && shared.data.locked().collections < 2 {
         if !shared.alive.load(Ordering::SeqCst) {
             return Err(PortError::Failed("PDH is not available".into()));
         }
@@ -289,7 +290,7 @@ static MAHM: Mutex<Option<Mapping>> = Mutex::new(None);
 static RTSS: Mutex<Option<Mapping>> = Mutex::new(None);
 
 fn mapped(slot: &Mutex<Option<Mapping>>, name: &str) -> bool {
-    let mut guard = slot.lock().unwrap();
+    let mut guard = slot.locked();
     if guard.is_none() {
         *guard = Mapping::open(name);
     }
@@ -301,11 +302,11 @@ fn afterburner() -> Option<HashMap<String, f64>> {
     if !mapped(&MAHM, "MAHMSharedMemory") {
         return None;
     }
-    let guard = MAHM.lock().unwrap();
+    let guard = MAHM.locked();
     let map = guard.as_ref()?;
     if map.u32_at(0) != 0x4D41_484D {
         drop(guard);
-        *MAHM.lock().unwrap() = None;
+        *MAHM.locked() = None;
         return None;
     }
     let (header, count, size) = (
@@ -331,11 +332,11 @@ fn rtss_fps() -> Option<Value> {
     if !mapped(&RTSS, "RTSSSharedMemoryV2") {
         return None;
     }
-    let guard = RTSS.lock().unwrap();
+    let guard = RTSS.locked();
     let map = guard.as_ref()?;
     if map.u32_at(0) != 0x5254_5353 {
         drop(guard);
-        *RTSS.lock().unwrap() = None;
+        *RTSS.locked() = None;
         return None;
     }
     let (entry_size, array_offset, count) = (
@@ -414,7 +415,7 @@ static SMI_PATH: Mutex<Option<Option<std::path::PathBuf>>> = Mutex::new(None);
 static GPU_CACHE: Mutex<Option<(Instant, Value)>> = Mutex::new(None);
 
 fn find_smi() -> Option<std::path::PathBuf> {
-    let mut slot = SMI_PATH.lock().unwrap();
+    let mut slot = SMI_PATH.locked();
     slot.get_or_insert_with(|| {
         std::env::var_os("PATH").and_then(|path| {
             std::env::split_paths(&path)
@@ -434,7 +435,7 @@ fn read_gpu() -> Value {
     let Some(smi) = find_smi() else {
         return Value::Null;
     };
-    if let Some((at, value)) = GPU_CACHE.lock().unwrap().as_ref() {
+    if let Some((at, value)) = GPU_CACHE.locked().as_ref() {
         if at.elapsed() < Duration::from_millis(1200) {
             return value.clone();
         }
@@ -458,7 +459,7 @@ fn read_gpu() -> Value {
             })
         })
         .unwrap_or(Value::Null);
-    *GPU_CACHE.lock().unwrap() = Some((Instant::now(), value.clone()));
+    *GPU_CACHE.locked() = Some((Instant::now(), value.clone()));
     value
 }
 
@@ -541,7 +542,7 @@ struct Group {
 /// The six programs using most CPU and the six using most memory, grouped by program name.
 fn read_top_processes() -> Value {
     let cores = std::thread::available_parallelism().map_or(1, |n| n.get()) as f64;
-    let mut clock = PROCESS_CLOCK.lock().unwrap();
+    let mut clock = PROCESS_CLOCK.locked();
     let previous = clock.take().unwrap_or(ProcessClock {
         cpu_seconds: HashMap::new(),
         at: Instant::now(),
@@ -642,7 +643,7 @@ impl MonitorPort for WindowsMonitor {
     fn sample(&self) -> PortResult<Value> {
         let shared = counters()?;
         let _ = read_top_processes_prime();
-        let data = shared.data.lock().unwrap();
+        let data = shared.data.locked();
         let sensors = afterburner();
         let sensor = |key: &str| sensors.as_ref().and_then(|s| s.get(key)).copied();
 
@@ -737,7 +738,7 @@ impl MonitorPort for WindowsMonitor {
 
 /// A sample also primes the process baseline, as the Node helper's `Init` did, so the first Processos page has deltas.
 fn read_top_processes_prime() -> bool {
-    PROCESS_CLOCK.lock().unwrap().is_none() && {
+    PROCESS_CLOCK.locked().is_none() && {
         let _ = read_top_processes();
         true
     }

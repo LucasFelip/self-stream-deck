@@ -5,6 +5,7 @@ import { useLiveQuery } from '../../api/events';
 import { useToast } from '../../ui/Toast';
 import { predict, type Change, type Rect, type Request, type Screen, type Win, type Zone } from './geometry';
 import { POLL_MS, normalRect, updateSeen } from './model';
+import { errorText } from '../../lib/errors';
 
 const REFRESH_AT = [60, 220, 520, 1100];
 const NO_SCREENS: Screen[] = [];
@@ -107,7 +108,7 @@ export function useWindowsController(active: boolean): WindowsController {
     try {
       await task();
     } catch (error) {
-      toast(`Erro: ${error instanceof Error ? error.message : String(error)}`, true);
+      toast(`Erro: ${errorText(error)}`, true);
     } finally {
       lock.current.pending -= 1;
     }

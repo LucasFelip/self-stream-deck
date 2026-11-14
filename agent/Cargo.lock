@@ -1093,6 +1093,7 @@ dependencies = [
  "ssd-api",
  "ssd-core",
  "ssd-platform-windows",
+ "thiserror 1.0.69",
  "tokio",
  "tokio-native-tls",
  "tower",

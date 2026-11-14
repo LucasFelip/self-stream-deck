@@ -2,6 +2,7 @@
 //! (focus, minimize, maximize, restore, close, move to another screen, place, snap to a half) plus the monitors (geometry, DDC/CI
 //! brightness, off, projection mode). The same rules as `legacy/server/native/DeckNative.cs`; the handles an action may touch are only
 //! the ones in the live list.
+use ssd_core::sync::Locked;
 use std::collections::{HashMap, HashSet};
 use std::ffi::c_void;
 use std::sync::{Mutex, Once};
@@ -392,7 +393,7 @@ unsafe extern "system" fn on_event(
     if id_object != 0 || id_child != 0 || window.0.is_null() {
         return;
     }
-    if let Some(callback) = ON_CHANGE.lock().unwrap().as_ref() {
+    if let Some(callback) = ON_CHANGE.locked().as_ref() {
         callback(event == EVENT_OBJECT_NAMECHANGE);
     }
 }
@@ -411,14 +412,14 @@ impl Drop for WatchGuard {
         if let Some(join) = self.join.take() {
             let _ = join.join();
         }
-        *ON_CHANGE.lock().unwrap() = None;
+        *ON_CHANGE.locked() = None;
     }
 }
 
 /// `SetWinEventHook` out of context, on a thread of its own with a message loop (the callbacks arrive as messages to it): focus changes, windows
 /// created, destroyed, shown, hidden, moved, resized, minimized and renamed.
 fn start_watch(callback: ChangeCallback) -> Option<WatchGuard> {
-    *ON_CHANGE.lock().unwrap() = Some(callback);
+    *ON_CHANGE.locked() = Some(callback);
     let (sender, receiver) = std::sync::mpsc::channel::<u32>();
     let join = std::thread::Builder::new()
         .name("window-events".into())

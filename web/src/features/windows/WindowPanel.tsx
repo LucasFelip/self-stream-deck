@@ -6,6 +6,7 @@ import { useToast } from '../../ui/Toast';
 import type { Win } from './geometry';
 import { CLOSE_ARM_MS, metaText } from './model';
 import type { WindowsController } from './controller';
+import { errorText } from '../../lib/errors';
 
 /** A big, labelled touch target (the panel is built for a phone in a stand, not for a fingertip held an inch away). */
 function Big({ label, glyph, onTap, className = '', armed }: { label: string; glyph: string; onTap: () => void; className?: string; armed?: boolean }) {
@@ -66,7 +67,7 @@ export function WindowPanel({ controller }: { controller: WindowsController }) {
       toast('Mudando a projeção…');
       setTimeout(controller.reloadScreens, 3000);
     } catch (error) {
-      toast(`Erro: ${error instanceof Error ? error.message : String(error)}`, true);
+      toast(`Erro: ${errorText(error)}`, true);
     }
   }
 
@@ -75,7 +76,7 @@ export function WindowPanel({ controller }: { controller: WindowsController }) {
       await call(client.POST('/api/screens/off'));
       toast('Telas desligadas (mexa o mouse para acordar)');
     } catch (error) {
-      toast(`Erro: ${error instanceof Error ? error.message : String(error)}`, true);
+      toast(`Erro: ${errorText(error)}`, true);
     }
   };
 
