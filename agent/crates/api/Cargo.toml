@@ -10,7 +10,7 @@ workspace = true
 
 [dependencies]
 ssd-core = { path = "../core" }
-axum = { version = "0.7", default-features = false, features = ["http1", "tokio", "macros"] }
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "macros"] }
 tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "time", "fs"] }
 http-body-util = "0.1"
 tokio-stream = "0.1"
