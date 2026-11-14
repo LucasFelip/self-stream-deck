@@ -23,11 +23,14 @@ O arquivo aceita BOM e é conferido ao iniciar: valores de tipo errado, ids repe
 | `tileOrder` | `{}` | Posição dos botões: `{ "apps": [...], "shortcuts": [...] }` com chaves `a:<app>`, `s:<atalho>`, `m:<macro>`, `c:camera`. Salvo ao arrastar; não precisa editar à mão. |
 | `notifications` | `{ "enabled": true, "apps": ["whatsapp"] }` | Veja abaixo. |
 | `miniPlayer` | `true` | `false` desliga o aviso de faixa nova. |
+| `typingKeys` | `false` | `true` deixa o editor do celular criar atalhos com letra, número, Enter ou Espaço **sozinhos**. Veja abaixo. |
 | `update` | desligado | Atualização do agente. Veja abaixo. |
 
 ### Teclas dos atalhos
 
 `ctrl`, `shift`, `alt`, `win`, letras, números, `f1`–`f24`, setas, `esc`, `tab`, `enter`, `space`, `printscreen` e as teclas de mídia, combinadas com `+`. A lista completa está em `agent/crates/core/src/keys.rs`. Atalhos inválidos são ignorados com um aviso no log.
+
+O que é criado **pelo editor do celular** precisa segurar `ctrl`, `alt` ou `win`, ou ser uma tecla que não escreve (`f5`, `esc`, setas, mídia). Letra, número, `enter` ou `space` sozinhos (ou só com `shift`) são recusados: vários deles em sequência digitam um comando, e o agente roda como administrador. O que está escrito à mão no `config.json` não passa por essa regra, e `"typingKeys": true` a desliga para o editor (essa chave só muda no PC).
 
 ### Notificações
 
@@ -48,7 +51,7 @@ Mostra no painel as notificações do Windows dos aplicativos cujo nome ou ident
 | `url` | O manifesto. **Sem `url` o agente não contata ninguém.** |
 | `channel` | `stable` (padrão) ou `test`, os canais do manifesto. |
 | `auto` | `true`: uma verificação um minuto depois de o agente subir e uma por dia; uma versão mais nova é instalada na hora. |
-| `signer` | Impressão digital (SHA-1) do certificado que deve ter assinado o pacote. Se vazio, vale o certificado do **próprio agente**; um agente sem assinatura e sem `signer` recusa atualizar. |
+| `signer` | Impressão digital (SHA-1) do certificado que deve ter assinado o pacote. Só vale para o `ssd update --apply` **digitado por uma pessoa**; sem ele, vale o certificado do próprio agente. A atualização automática aceita apenas o certificado do **próprio agente** e ignora este campo (o `config.json` é gravável por qualquer programa, e o agente instala como administrador); um agente sem assinatura não se atualiza sozinho. |
 
 Como gerar e publicar o manifesto: [desenvolvimento](desenvolvimento.md#publicar-atualizações).
 

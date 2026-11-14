@@ -2,6 +2,7 @@
 //!
 //!   ssd [--data-dir DIR] [--web-dir DIR] [--port N] [--no-tray] [--migrate-from DIR] [--fake-platform]
 //!   ssd diagnose [--out FILE]      one report to read (or send) when something does not work
+//!   ssd pair                       the links (with the pairing code) that connect a phone
 //!   ssd update [--apply] [--no-install] [--channel NAME] [--url ADDRESS]    look for (and install) a newer version
 //!   ssd --version
 //!
@@ -28,12 +29,13 @@ struct Args {
     no_tray: bool,
     migrate_from: Option<PathBuf>,
     diagnose: bool,
+    pair: bool,
     out: Option<PathBuf>,
     /// `ssd update …`: what follows the word
     update: Option<Vec<String>>,
 }
 
-const USAGE: &str = "usage: ssd [--data-dir DIR] [--web-dir DIR] [--port N] [--no-tray] [--migrate-from DIR] [--fake-platform]\n       ssd diagnose [--out FILE]\n       ssd update [--apply] [--no-install] [--channel NAME] [--url ADDRESS]\n       ssd --version";
+const USAGE: &str = "usage: ssd [--data-dir DIR] [--web-dir DIR] [--port N] [--no-tray] [--migrate-from DIR] [--fake-platform]\n       ssd diagnose [--out FILE]\n       ssd pair\n       ssd update [--apply] [--no-install] [--channel NAME] [--url ADDRESS]\n       ssd --version";
 
 fn parse_args() -> Result<Args, String> {
     let mut args = Args {
@@ -46,12 +48,17 @@ fn parse_args() -> Result<Args, String> {
         no_tray: false,
         migrate_from: None,
         diagnose: false,
+        pair: false,
         out: None,
         update: None,
     };
     let mut it = std::env::args().skip(1).peekable();
     if it.peek().is_some_and(|first| first == "diagnose") {
         args.diagnose = true;
+        it.next();
+    }
+    if it.peek().is_some_and(|first| first == "pair") {
+        args.pair = true;
         it.next();
     }
     if it.peek().is_some_and(|first| first == "update") {
@@ -227,6 +234,11 @@ async fn run() -> Result<(), String> {
         return update::command(&config, rest);
     }
     let port = args.port.unwrap_or_else(|| config.port());
+    if args.pair {
+        #[cfg(windows)]
+        lan::print_pairing(&config, port, &args.data_dir);
+        return Ok(());
+    }
     let machine = std::env::var("COMPUTERNAME").unwrap_or_default();
 
     let state = AppState::new(
@@ -239,9 +251,9 @@ async fn run() -> Result<(), String> {
     let listener = tokio::net::TcpListener::bind(address)
         .await
         .map_err(|e| format!("port {port} is not available: {e}"))?;
+    // no token here: this line goes to server.log (`ssd pair` and the icon by the clock show the pairing link)
     tracing::info!(
-        "listening on http://{address}/?token={} (web: {})",
-        config.token(),
+        "listening on http://{address}/ (web: {})",
         if embedded {
             "inside the executable".to_owned()
         } else {
@@ -265,10 +277,10 @@ async fn run() -> Result<(), String> {
     });
 
     // the home network: HTTPS with the certificate the phone pins, the iPhone side and the firewall rules
-    let scripts = lan::extract_scripts()?;
     let app = router(state);
-    lan::start(&config, &args.data_dir, &scripts, app.clone()).await;
+    lan::start(&config, &args.data_dir, app.clone()).await;
     // with "update": { "auto": true } in config.json: look for a newer version a minute from now, then once a day
+    update::forget_old_packages();
     tokio::spawn(update::run_forever(config.clone()));
 
     let serve = axum::serve(

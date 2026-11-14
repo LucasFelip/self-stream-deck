@@ -95,7 +95,7 @@ O agente só contata um endereço se `update.url` estiver configurado. Para publ
 3. Publique o `.msi` e o `manifest.json` num servidor **HTTPS** estático.
 4. Nos PCs: `"update": { "url": "https://seu-servidor/ssd/manifest.json" }` no `config.json`. `ssd.exe update` mostra se há versão; `--apply` instala; `"auto": true` faz sozinho, uma vez por dia.
 
-O agente confere, nesta ordem: HTTPS, versão mais nova (`0.2.0-rc1` vale menos que `0.2.0`), tamanho e SHA-256 do manifesto e a assinatura do pacote **pelo mesmo certificado do agente que está rodando** (ou o `update.signer`). Um agente sem assinatura e sem `signer` recusa atualizar. O instalador é lançado fora do processo do agente para sobreviver a ele, e um gatilho único da tarefa o sobe de novo se o Agendador ignorar o início.
+O agente confere, nesta ordem: HTTPS, versão mais nova (`0.2.0-rc1` vale menos que `0.2.0`), tamanho e SHA-256 do manifesto e a assinatura do pacote **pelo mesmo certificado do agente que está rodando** (o `update.signer` vale só para o `ssd update --apply` manual; a atualização automática o ignora). Um agente sem assinatura e sem `signer` recusa atualizar, e nunca se atualiza sozinho. O pacote fica em `update\` ao lado do `ssd.exe`, pasta que só administrador escreve. O instalador é lançado fora do processo do agente para sobreviver a ele, e um gatilho único da tarefa o sobe de novo se o Agendador ignorar o início.
 
 ## App Android
 

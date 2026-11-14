@@ -10,8 +10,16 @@
 //!
 //! What is checked before anything is installed, in this order: the manifest and the package come over HTTPS (plain HTTP only to this PC,
 //! for tests); the version is newer; the package has the size and SHA-256 the manifest says; and the package is **signed by the same
-//! certificate as the agent that is running** (or by the thumbprint in `update.signer`). A manifest on a hacked server can therefore not
-//! make the agent install anything its owner did not sign; an agent that is not signed and has no `update.signer` refuses to update.
+//! certificate as the agent that is running**. A manifest on a hacked server can therefore not make the agent install anything its owner
+//! did not sign.
+//!
+//! The agent runs as administrator and `config.json` is a file any program of the user can write, so two things do not depend on it:
+//! - **whose signature counts.** The automatic update accepts only the certificate of the running agent; an agent that is not signed does
+//!   not update by itself. `update.signer` (a thumbprint) is read only by `ssd update --apply`, typed by a person, for an agent without a
+//!   signature or a change of certificate.
+//! - **where the package waits.** It is downloaded, checked and installed from `update\` beside the executable (Program Files in an
+//!   install), which only an administrator can write. Between the check and the installer nothing else can swap the file. An agent that
+//!   cannot write there and is not elevated uses a temporary folder: its installer has no more rights than whoever could swap the file.
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -155,6 +163,21 @@ pub fn expected_signer(configured: Option<&str>, own: Option<&str>) -> Result<St
         .ok_or_else(|| "this agent is not signed and no \"update.signer\" (a certificate thumbprint) is set, so there is nothing to check an update against".to_owned())
 }
 
+/// Whose signature an update must carry, by who asked for it. `update.signer` comes from a file any program can write, so by itself
+/// the agent trusts only its own certificate; a person typing `ssd update --apply` may name another one there.
+pub fn signer_for(
+    asked: Asked,
+    configured: Option<&str>,
+    own: Option<&str>,
+) -> Result<String, String> {
+    match asked {
+        Asked::ByHand => expected_signer(configured, own),
+        Asked::Automatic => expected_signer(None, own).map_err(|_| {
+            "this agent is not signed, so it does not update by itself (\"update.signer\" only counts for `ssd update --apply`)".to_owned()
+        }),
+    }
+}
+
 #[cfg(windows)]
 fn no_window(command: &mut Command) -> &mut Command {
     use std::os::windows::process::CommandExt;
@@ -242,8 +265,55 @@ pub fn signature_ok(status: &str, thumbprint: &str, expected: &str) -> Result<()
     Ok(())
 }
 
-fn work_dir() -> PathBuf {
-    std::env::temp_dir().join("ssd-update")
+#[cfg(windows)]
+fn is_elevated() -> bool {
+    ssd_platform_windows::is_elevated()
+}
+#[cfg(not(windows))]
+fn is_elevated() -> bool {
+    false
+}
+
+/// `update` beside the executable, when this process can write there.
+fn beside_the_program() -> Option<PathBuf> {
+    let dir = std::env::current_exe().ok()?.parent()?.join("update");
+    std::fs::create_dir_all(&dir).ok()?;
+    let probe = dir.join(".write-test");
+    std::fs::write(&probe, b"").ok()?;
+    let _ = std::fs::remove_file(&probe);
+    Some(dir)
+}
+
+/// Where the manifest, the package and the installer's log go (see the top of this file for why it is not simply the temporary folder).
+fn work_dir() -> Result<PathBuf, String> {
+    if let Some(dir) = beside_the_program() {
+        return Ok(dir);
+    }
+    if is_elevated() {
+        return Err("the \"update\" folder beside ssd.exe cannot be written, and an agent running as administrator does not install from a temporary folder".into());
+    }
+    let dir = std::env::temp_dir().join("ssd-update");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+/// The packages of earlier updates are of no use once the agent they installed is running.
+pub fn forget_old_packages() {
+    let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|d| d.join("update")))
+    else {
+        return;
+    };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_some_and(|e| e == "msi") || path.ends_with("manifest.json") {
+            let _ = std::fs::remove_file(path);
+        }
+    }
 }
 
 /// Asks the manifest for the release of the channel. `None` when this version is the newest.
@@ -257,9 +327,7 @@ pub fn check(
         .or_else(|| settings.url.clone())
         .ok_or("no update address: set \"update\": { \"url\": \"https://…/manifest.json\" } in config.json")?;
     check_url(&url, "update.url")?;
-    let dir = work_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let file = dir.join("manifest.json");
+    let file = work_dir()?.join("manifest.json");
     let _ = std::fs::remove_file(&file);
     fetch(&url, &file, MANIFEST_LIMIT)?;
     let text = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
@@ -269,11 +337,20 @@ pub fn check(
     Ok(is_newer(current, &release.version).then_some(release))
 }
 
+/// Who asked for the update: a person at the keyboard (`ssd update --apply`) or the agent by itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Asked {
+    ByHand,
+    Automatic,
+}
+
 /// Downloads the package and runs every check. Returns the file that is safe to install.
-pub fn download_and_verify(settings: &Settings, release: &Release) -> Result<PathBuf, String> {
-    let dir = work_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let file = dir.join(format!("SelfStreamDeck-{}.msi", release.version));
+pub fn download_and_verify(
+    settings: &Settings,
+    release: &Release,
+    asked: Asked,
+) -> Result<PathBuf, String> {
+    let file = work_dir()?.join(format!("SelfStreamDeck-{}.msi", release.version));
     let _ = std::fs::remove_file(&file);
     fetch(&release.url, &file, PACKAGE_LIMIT)?;
 
@@ -291,13 +368,18 @@ pub fn download_and_verify(settings: &Settings, release: &Release) -> Result<Pat
         .ok()
         .and_then(|exe| signature(&exe).ok())
         .map(|(_, thumbprint)| thumbprint);
-    let expected = expected_signer(settings.signer.as_deref(), own.as_deref())?;
+    let expected = signer_for(asked, settings.signer.as_deref(), own.as_deref())?;
     let (status, thumbprint) = signature(&file)?;
     if let Err(reason) = signature_ok(&status, &thumbprint, &expected) {
         let _ = std::fs::remove_file(&file);
         return Err(reason);
     }
     Ok(file)
+}
+
+/// The installer's log, beside the package.
+fn install_log(package: &Path) -> PathBuf {
+    package.with_file_name("install.log")
 }
 
 /// Starts the installer on its own, so it outlives this process (the package stops the agent and starts the new one).
@@ -307,7 +389,7 @@ pub fn install(package: &Path) -> Result<(), String> {
     const DETACHED: u32 = 0x0000_0008;
     const NO_WINDOW: u32 = 0x0800_0000;
     const BREAKAWAY: u32 = 0x0100_0000;
-    let log = work_dir().join("install.log");
+    let log = install_log(package);
     let spawn = |flags: u32| {
         Command::new("msiexec.exe")
             .arg("/i")
@@ -356,7 +438,7 @@ pub fn command(config: &Config, args: &[String]) -> Result<(), String> {
         println!("run `ssd update --apply` to install it.");
         return Ok(());
     }
-    let package = download_and_verify(&settings, &release)?;
+    let package = download_and_verify(&settings, &release, Asked::ByHand)?;
     println!(
         "downloaded and checked (size, SHA-256 and signature): {}",
         package.display()
@@ -365,7 +447,7 @@ pub fn command(config: &Config, args: &[String]) -> Result<(), String> {
         install(&package)?;
         println!(
             "the installer is running; the agent restarts by itself in a few seconds (log: {}).",
-            work_dir().join("install.log").display()
+            install_log(&package).display()
         );
     } else {
         println!("not installing (--no-install).");
@@ -386,7 +468,7 @@ pub async fn run_forever(config: Config) {
             let Some(release) = check(&settings, env!("CARGO_PKG_VERSION"), None)? else {
                 return Ok(None);
             };
-            let package = download_and_verify(&settings, &release)?;
+            let package = download_and_verify(&settings, &release, Asked::Automatic)?;
             install(&package)?;
             Ok(Some(release.version))
         })
@@ -491,6 +573,23 @@ mod tests {
         assert_eq!(expected_signer(None, Some("BB")).unwrap(), "BB");
         assert!(expected_signer(None, Some("")).is_err());
         assert!(expected_signer(None, None).is_err());
+    }
+
+    #[test]
+    fn by_itself_the_agent_trusts_only_its_own_certificate() {
+        // config.json is writable by any program of the user: it must not be able to name the signer of what an elevated agent installs
+        assert_eq!(
+            signer_for(Asked::Automatic, Some("AA"), Some("BB")).unwrap(),
+            "BB"
+        );
+        assert!(signer_for(Asked::Automatic, Some("AA"), None)
+            .unwrap_err()
+            .contains("does not update by itself"));
+        assert_eq!(
+            signer_for(Asked::ByHand, Some("AA"), Some("BB")).unwrap(),
+            "AA"
+        );
+        assert_eq!(signer_for(Asked::ByHand, Some("AA"), None).unwrap(), "AA");
     }
 
     #[test]

@@ -72,7 +72,7 @@ Menu **⚙ → Editar botões** (ou direto no `config.json`). Três abas:
 - **Macros:** uma lista de passos executados em ordem com um toque (a tecla mostra "n passos" e fica marcada enquanto roda). Passos disponíveis: abrir ou focar um app; posicionar a janela de um app (metade esquerda, direita ou tela cheia, em uma tela); pressionar teclas; tecla de mídia; definir o volume; mudo do som; mudo do microfone; trocar a saída ou a entrada de áudio padrão; esperar (0,5 a 10 s); ligar ou desligar a câmera do celular. Cada macro escolhe em que página aparece (Atalhos ou Apps). Se um passo falha (app fechado, dispositivo ausente), os outros continuam e o aviso diz quantos falharam.
 - **Apps:** ocultar ou mostrar os apps da barra de tarefas.
 
-**Segurança:** o agente só aceita passos de uma lista fixa e confere tudo ao salvar (apps por identificador da barra de tarefas, dispositivos pela lista atual, teclas pelos nomes conhecidos). Não existe passo de linha de comando, caminho de arquivo, texto digitado ou energia. Mesmo assim, quem tem o token passa a poder montar atalhos de teclado pelo celular; para impedir, ponha `"editor": false` no `config.json`.
+**Segurança:** o agente só aceita passos de uma lista fixa e confere tudo ao salvar (apps por identificador da barra de tarefas, dispositivos pela lista atual, teclas pelos nomes conhecidos). Não existe passo de linha de comando, caminho de arquivo, texto digitado ou energia, e uma tecla que escreve (letra, número, Enter, Espaço) só é aceita junto de Ctrl, Alt ou Win. Mesmo assim, quem tem o token passa a poder montar atalhos de teclado pelo celular; para impedir, ponha `"editor": false` no `config.json`.
 
 ## Notificações
 

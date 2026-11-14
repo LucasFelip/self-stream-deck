@@ -122,14 +122,16 @@ async fn route(
     let request = body_object(body)?;
     Ok(match path {
         "/api/editor/shortcuts" => {
-            let items = normalize_shortcuts(request.get("items"))
+            let typing = state.config.lock().unwrap().flag("typingKeys");
+            let items = normalize_shortcuts(request.get("items"), typing)
                 .map_err(|e| error(StatusCode::BAD_REQUEST, &e.0))?;
             save(state, "shortcuts", items)?;
             json(StatusCode::OK, json!({ "shortcuts": shortcut_list(state) }))
         }
         "/api/editor/macros" => {
             let known: HashSet<String> = all_apps(state).into_iter().map(|a| a.id).collect();
-            let items = normalize_macros(request.get("items"), &known)
+            let typing = state.config.lock().unwrap().flag("typingKeys");
+            let items = normalize_macros(request.get("items"), &known, typing)
                 .map_err(|e| error(StatusCode::BAD_REQUEST, &e.0))?;
             save(state, "macros", items)?;
             json(StatusCode::OK, json!({ "macros": macros_now(state) }))

@@ -61,20 +61,8 @@ fn defaults() -> Map<String, Value> {
 }
 
 fn new_token() -> String {
-    // 128 random bits as hex, from the OS (the std hasher is randomly keyed per process; two of them give 128 bits without a new dependency)
-    use std::hash::{BuildHasher, Hasher};
-    let mut out = String::with_capacity(32);
-    for _ in 0..2 {
-        let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
-        hasher.write_u128(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0),
-        );
-        out.push_str(&format!("{:016x}", hasher.finish()));
-    }
-    out
+    // 128 bits from the operating system's generator, as hex
+    crate::random::hex(16)
 }
 
 impl Config {

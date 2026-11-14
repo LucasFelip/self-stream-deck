@@ -1,6 +1,7 @@
 //! What the phone's button editor may create: keyboard shortcuts and macros (a list of steps). Everything is checked against a fixed whitelist
 //! before it is stored: a macro step names an app by an id from the taskbar list, a device by an id from the live list, or one of a few fixed
-//! actions; there is no way to put a command line, a path or text to type in a macro. Parity with `legacy/server/src/macros.js`.
+//! actions; there is no way to put a command line, a path or text to type in a macro: a shortcut or a "keys" step must hold Ctrl, Alt or Win (or be a
+//! key that does not type, like F5 or an arrow) unless the owner set `"typingKeys": true` in `config.json` on the PC. Parity with `legacy/server/src/macros.js`.
 use std::collections::HashSet;
 
 use serde_json::{json, Map, Value};
@@ -133,18 +134,24 @@ fn pick_id(item: &Value, taken: &HashSet<String>, prefix: &str, label: &str) -> 
     }
 }
 
-fn keys_spec(value: Option<&Value>) -> Result<String, Invalid> {
+fn keys_spec(value: Option<&Value>, typing: bool) -> Result<String, Invalid> {
     let spec: String = text(value, "keys", 60)?
         .to_lowercase()
         .split_whitespace()
         .collect();
     // the person typed it: a refusal with the reason, not a server error
     keys::parse(&spec).map_err(Invalid)?;
+    if !typing && keys::types_text(&spec) {
+        return bad(format!(
+            "\"{spec}\" types text: a letter, a digit, Enter or Space needs Ctrl, Alt or Win with it"
+        ));
+    }
     Ok(spec)
 }
 
 /// A list of `{ id?, label, keys }` from the editor becomes the stored list (ids kept, new ones created, order as given).
-pub fn normalize_shortcuts(items: Option<&Value>) -> Result<Vec<Value>, Invalid> {
+/// `typing` is the owner's `"typingKeys": true` in `config.json`: without it a key that types by itself is refused (see `keys::types_text`).
+pub fn normalize_shortcuts(items: Option<&Value>, typing: bool) -> Result<Vec<Value>, Invalid> {
     let Some(Value::Array(items)) =
         items.filter(|i| i.as_array().is_some_and(|a| a.len() <= MAX_SHORTCUTS))
     else {
@@ -155,7 +162,7 @@ pub fn normalize_shortcuts(items: Option<&Value>) -> Result<Vec<Value>, Invalid>
         .iter()
         .map(|item| {
             let label = text(item.get("label"), "label", MAX_LABEL)?;
-            let spec = keys_spec(item.get("keys"))?;
+            let spec = keys_spec(item.get("keys"), typing)?;
             let id = pick_id(item, &taken, "atalho", &label);
             taken.insert(id.clone());
             Ok(json!({ "id": id, "label": label, "keys": spec }))
@@ -163,7 +170,7 @@ pub fn normalize_shortcuts(items: Option<&Value>) -> Result<Vec<Value>, Invalid>
         .collect()
 }
 
-fn normalize_step(step: &Value, app_ids: &HashSet<String>) -> Result<Value, Invalid> {
+fn normalize_step(step: &Value, app_ids: &HashSet<String>, typing: bool) -> Result<Value, Invalid> {
     let Value::Object(step) = step else {
         return bad("invalid step");
     };
@@ -178,7 +185,7 @@ fn normalize_step(step: &Value, app_ids: &HashSet<String>) -> Result<Value, Inva
             Some(app) => Ok(json!({ "type": "launch", "app": app })),
             None => bad("unknown app in a step"),
         },
-        Some("keys") => Ok(json!({ "type": "keys", "keys": keys_spec(step.get("keys"))? })),
+        Some("keys") => Ok(json!({ "type": "keys", "keys": keys_spec(step.get("keys"), typing)? })),
         Some("media") => match step.get("key").and_then(Value::as_str) {
             Some(key @ ("prev" | "playpause" | "next")) => {
                 Ok(json!({ "type": "media", "key": key }))
@@ -226,6 +233,7 @@ fn normalize_step(step: &Value, app_ids: &HashSet<String>) -> Result<Value, Inva
 pub fn normalize_macros(
     items: Option<&Value>,
     app_ids: &HashSet<String>,
+    typing: bool,
 ) -> Result<Vec<Value>, Invalid> {
     let Some(Value::Array(items)) =
         items.filter(|i| i.as_array().is_some_and(|a| a.len() <= MAX_MACROS))
@@ -245,7 +253,7 @@ pub fn normalize_macros(
             };
             let steps = raw_steps
                 .iter()
-                .map(|step| normalize_step(step, app_ids))
+                .map(|step| normalize_step(step, app_ids, typing))
                 .collect::<Result<Vec<_>, _>>()?;
             let waited: f64 = steps
                 .iter()
@@ -300,7 +308,7 @@ mod tests {
             { "label": "Gerenciador de tarefas", "keys": "ctrl+shift+esc" },
             { "id": "copy", "label": "Outro", "keys": "alt+f4" }
         ]);
-        let list = normalize_shortcuts(Some(&items)).unwrap();
+        let list = normalize_shortcuts(Some(&items), false).unwrap();
         assert_eq!(
             (
                 list[0]["id"].as_str(),
@@ -344,7 +352,7 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                normalize_shortcuts(Some(&items)).unwrap_err(),
+                normalize_shortcuts(Some(&items), false).unwrap_err(),
                 Invalid(reason.into()),
                 "{items}"
             );
@@ -358,7 +366,7 @@ mod tests {
             { "type": "output", "device": "{0.0.0}.{x}", "name": " Fones " }, { "type": "place", "app": "b2", "monitor": 1, "zone": "left" },
             { "type": "wait", "ms": 500 }, { "type": "camera", "on": true }, { "type": "media", "key": "next" }, { "type": "keys", "keys": "WIN + D" }
         ] }]);
-        let macros = normalize_macros(Some(&items), &apps()).unwrap();
+        let macros = normalize_macros(Some(&items), &apps(), false).unwrap();
         assert_eq!(macros[0]["page"], "apps");
         assert_eq!(
             macros[0]["steps"][1],
@@ -377,9 +385,13 @@ mod tests {
     #[test]
     fn a_macro_cannot_run_anything_else() {
         let one = |step: Value| {
-            normalize_macros(Some(&json!([{ "label": "m", "steps": [step] }])), &apps())
-                .unwrap_err()
-                .0
+            normalize_macros(
+                Some(&json!([{ "label": "m", "steps": [step] }])),
+                &apps(),
+                false,
+            )
+            .unwrap_err()
+            .0
         };
         assert_eq!(
             one(json!({ "type": "launch", "app": "../evil.exe" })),
@@ -410,14 +422,20 @@ mod tests {
             "camera must be on or off"
         );
         assert_eq!(one(json!("nope")), "invalid step");
-        let empty = normalize_macros(Some(&json!([{ "label": "m", "steps": [] }])), &apps())
-            .unwrap_err()
-            .0;
+        let empty = normalize_macros(
+            Some(&json!([{ "label": "m", "steps": [] }])),
+            &apps(),
+            false,
+        )
+        .unwrap_err()
+        .0;
         assert_eq!(empty, "a macro needs 1 to 40 steps");
         let long_wait =
             json!([{ "label": "m", "steps": vec![json!({ "type": "wait", "ms": 10000 }); 7] }]);
         assert_eq!(
-            normalize_macros(Some(&long_wait), &apps()).unwrap_err().0,
+            normalize_macros(Some(&long_wait), &apps(), false)
+                .unwrap_err()
+                .0,
             "the waits add up to more than a minute"
         );
     }
@@ -436,5 +454,32 @@ mod tests {
     fn the_stored_macro_list_skips_broken_entries() {
         let stored = json!([{ "id": "ok", "label": "x", "steps": [] }, { "label": "no id", "steps": [] }, { "id": "no-steps" }, 5]);
         assert_eq!(macro_list(Some(&stored)).len(), 1);
+    }
+
+    #[test]
+    fn a_key_that_types_is_refused_unless_the_owner_allowed_it() {
+        // win+r, then c, m, d, enter would be a command line typed from the phone
+        for keys in ["c", "enter", "shift+a", "space"] {
+            let shortcut = json!([{ "label": "x", "keys": keys }]);
+            assert!(
+                normalize_shortcuts(Some(&shortcut), false)
+                    .unwrap_err()
+                    .0
+                    .contains("types text"),
+                "{keys}"
+            );
+            assert!(normalize_shortcuts(Some(&shortcut), true).is_ok(), "{keys}");
+            let step = json!([{ "label": "m", "steps": [{ "type": "keys", "keys": keys }] }]);
+            assert!(
+                normalize_macros(Some(&step), &apps(), false).is_err(),
+                "{keys}"
+            );
+            assert!(
+                normalize_macros(Some(&step), &apps(), true).is_ok(),
+                "{keys}"
+            );
+        }
+        let fine = json!([{ "label": "x", "keys": "win+r" }, { "label": "y", "keys": "f5" }, { "label": "z", "keys": "left" }]);
+        assert!(normalize_shortcuts(Some(&fine), false).is_ok());
     }
 }

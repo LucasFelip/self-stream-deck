@@ -38,7 +38,7 @@ Cada gravação guarda a versão anterior em `config.json.bak` e move o novo arq
 
 **Dados.** `%APPDATA%\SelfStreamDeck\` (`--data-dir` troca; `--migrate-from` copia o token e os certificados de uma instalação anterior só quando não há config). Contém `config.json`, `.bak`, `tls/`, `icons/`, `vcam/`, `server.log`.
 
-**Atualização.** `update.rs`: `ssd update [--apply]` e, com `update.auto`, uma verificação por dia. Baixa por `curl.exe` (HTTPS, tamanho máximo), confere o SHA-256 do manifesto e a assinatura Authenticode (`Get-AuthenticodeSignature`) contra o certificado do próprio agente ou `update.signer`, e só então roda o `msiexec /qn`, fora do job object do agente (`JOB_OBJECT_LIMIT_BREAKAWAY_OK`) para o instalador sobreviver ao agente que ele troca.
+**Atualização.** `update.rs`: `ssd update [--apply]` e, com `update.auto`, uma verificação por dia. Baixa por `curl.exe` (HTTPS, tamanho máximo), confere o SHA-256 do manifesto e a assinatura Authenticode (`Get-AuthenticodeSignature`) contra o certificado do próprio agente (ou `update.signer`, só no comando manual), tudo dentro de `update\` ao lado do executável, e só então roda o `msiexec /qn`, fora do job object do agente (`JOB_OBJECT_LIMIT_BREAKAWAY_OK`) para o instalador sobreviver ao agente que ele troca.
 
 **Operação.** `ssd.exe` roda como tarefa agendada no logon (administrador, sem janela, reinício automático); a bandeja dá o painel, o código de pareamento e o registro; `ssd diagnose` junta o estado para investigar.
 Um objeto de job do Windows mata o que o agente iniciou (PowerShell do firewall, auxiliares) se ele cair.
