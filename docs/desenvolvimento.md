@@ -78,7 +78,7 @@ Todos os scripts ficam em `agent/scripts/`. O build de empacotamento usa `agent\
 
 ### O MSI (WiX 3.14)
 
-O WiX não faz parte do repositório. Baixe `wix314-binaries.zip` do [release wix3141rtm](https://github.com/wixtoolset/wix3/releases/tag/wix3141rtm) e descompacte em `.tools\wix` (os executáveis do WiX 3.14 não têm assinatura digital; o GitHub não publica um hash desse arquivo, então confira o tamanho: 41 297 555 bytes). Depois: `powershell -File agent/scripts/msi/build-msi.ps1 -Sign`.
+O WiX não faz parte do repositório. Baixe `wix314-binaries.zip` do [release wix3141rtm](https://github.com/wixtoolset/wix3/releases/tag/wix3141rtm) e descompacte em `.tools\wix` (os executáveis do WiX 3.14 não têm assinatura digital; o GitHub não publica um hash desse arquivo; o CI confere o SHA-256 `6ac824e1642d6f7277d0ed7ea09411a508f6116ba6fae0aa5f2c7daa2ff43d31`, o do arquivo de 41 297 555 bytes usado desde o primeiro MSI: `Get-FileHash wix314-binaries.zip`). Depois: `powershell -File agent/scripts/msi/build-msi.ps1 -Sign`.
 
 O instalador está em `agent/scripts/msi/ssd.wxs`: copia os arquivos, cria o atalho e roda duas ações (`task-register.ps1` e `task-remove.ps1`) que registram e removem a tarefa e as regras de firewall. Atualizar por cima funciona também com a mesma versão (`AllowSameVersionUpgrades`).
 

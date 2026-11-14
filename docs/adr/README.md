@@ -10,5 +10,7 @@ a substitua (e marque o antigo como "Substituído por NNNN"); não reescreva o h
 | [0003](0003-contrato-openapi.md) | OpenAPI como fonte única do contrato | Aceito e em uso desde a Fase 0 |
 | [0004](0004-eventos-sse.md) | Tempo real por SSE | Aceito |
 | [0005](0005-android-kotlin-iphone-pwa.md) | Android em Kotlin fino; iPhone continua PWA | Aceito |
-| [0006](0006-verificacao-local-sem-actions.md) | Verificação local e hook de pre-push (Actions ligado depois) | Aceito |
+| [0006](0006-verificacao-local-sem-actions.md) | Verificação local e hook de pre-push, sem GitHub Actions | Substituído em parte por 0009 |
 | [0007](0007-migracao-incremental.md) | Migração incremental (strangler) | Aceito |
+| [0008](0008-spike-rust-windows.md) | Spike do agente em Rust: portão de decisão | Aceito |
+| [0009](0009-ci-no-github-actions.md) | CI no GitHub Actions | Aceito |

@@ -4,6 +4,8 @@ use rust_embed::RustEmbed;
 
 #[derive(RustEmbed)]
 #[folder = "../../../web/dist"]
+// a megabyte of source maps is for whoever debugs the interface from a checkout, not for every install
+#[exclude = "*.map"]
 #[allow_missing = true]
 struct Assets;
 

@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { SECTIONS, type SectionId } from './sections';
 
 interface PageProps {
@@ -27,7 +28,8 @@ export function Page({ section, id, className = '', title, data = {}, style, chi
       style={style}
       {...Object.fromEntries(Object.entries(data).map(([key, value]) => [`data-${key}`, value]))}
     >
-      {children}
+      {/* a page that fails to draw shows a notice in its own place; the other pages keep working */}
+      <ErrorBoundary scope="page">{children}</ErrorBoundary>
     </section>
   );
 }

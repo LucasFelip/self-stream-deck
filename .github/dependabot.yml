@@ -1,0 +1,23 @@
+# Atualizações de dependências, uma vez por semana, em PRs agrupados por ecossistema (o workflow "build" roda em cada um).
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /agent
+    schedule: { interval: weekly }
+    groups: { cargo: { patterns: ['*'] } }
+  - package-ecosystem: npm
+    directory: /web
+    schedule: { interval: weekly }
+    groups: { web: { patterns: ['*'] } }
+  - package-ecosystem: npm
+    directory: /tools/contract-test
+    schedule: { interval: weekly }
+    groups: { contract-test: { patterns: ['*'] } }
+  - package-ecosystem: gradle
+    directory: /android
+    schedule: { interval: weekly }
+    groups: { android: { patterns: ['*'] } }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups: { actions: { patterns: ['*'] } }

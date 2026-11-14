@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, call, client } from '../../api/client';
 import { Icon } from '../../ui/Icon';
 import { Overlay } from '../../ui/Overlay';
+import { useSheets } from '../../ui/Sheets';
 import { useToast } from '../../ui/Toast';
 import { DECK_QUERIES } from '../deck/data';
 import { useDeckActions } from '../deck/useDeckActions';
@@ -28,6 +29,7 @@ export function EditorOverlay() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const { tap } = useDeckActions();
+  const sheets = useSheets();
 
   const [data, setData] = useState<EditorData | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -38,7 +40,29 @@ export function EditorOverlay() {
   const form = useRef<HTMLDivElement | null>(null);
   const focusNew = useRef(false);
 
-  const close = useCallback(() => editStore.closeEditor(), []);
+  // what the person changed and did not save yet (the blank item of "Novo atalho" alone is not a change of theirs)
+  const unsaved = useRef(false);
+  const asking = useRef(false);
+
+  // Closing (the button, the dimmed strip, a drag down, Back) with unsaved changes asks first: a stray tap must not lose an 8-step macro.
+  const close = useCallback(() => {
+    if (!unsaved.current) {
+      editStore.closeEditor();
+      return;
+    }
+    if (asking.current) return;
+    asking.current = true;
+    sheets.open('Alterações não salvas', (done) => (
+      <>
+        <header data-tone="warn"><Icon name="edit" /><h2>Alterações não salvas</h2></header>
+        <p>O que você mudou aqui ainda não foi salvo no PC. Se fechar agora, as alterações se perdem.</p>
+        <div className="sheet-actions">
+          <button type="button" id="ed-keep" onClick={() => { asking.current = false; done(); }}>Continuar editando</button>
+          <button type="button" id="ed-discard" onClick={() => { asking.current = false; unsaved.current = false; done(); editStore.closeEditor(); }}>Descartar</button>
+        </div>
+      </>
+    ));
+  }, [sheets]);
 
   // every time it opens: read what the PC has and select what edit mode pointed at
   useEffect(() => {
@@ -48,6 +72,8 @@ export function EditorOverlay() {
     setData(null);
     setFailure(null);
     setDirty(false);
+    unsaved.current = false;
+    asking.current = false;
     call(client.GET('/api/editor')).then((reply) => {
       if (cancelled) return;
       const next: Lists = { shortcuts: clone(reply.shortcuts), macros: clone(reply.macros), apps: clone(reply.apps) };
@@ -85,6 +111,7 @@ export function EditorOverlay() {
       return draft;
     });
     setDirty(true);
+    unsaved.current = true;
   };
 
   /** Saves the list of the current tab (the working copy, or `from` when the caller has just changed it). Returns what the PC kept, or null. */
@@ -102,6 +129,7 @@ export function EditorOverlay() {
       }
       setLists(saved);
       setDirty(false);
+      unsaved.current = false;
       setSelected((previous) => ({ shortcuts: Math.min(previous.shortcuts, Math.max(0, saved.shortcuts.length - 1)), macros: Math.min(previous.macros, Math.max(0, saved.macros.length - 1)) }));
       toast('Salvo');
       for (const key of DECK_QUERIES) void queryClient.invalidateQueries({ queryKey: [key] });

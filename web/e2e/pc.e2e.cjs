@@ -32,6 +32,16 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
   const openPane = async (page, name) => {
     await tapUntil(page, `.pc-page .seg-btn[data-seg="${name}"]`, `document.querySelector('.pc-page .seg-btn[data-seg="${name}"]').getAttribute('aria-selected') === 'true'`, `the ${name} pane`);
   };
+  // waits (polling, not a fixed pause: a CI runner is slower than a PC) until `check()` holds, and gives back its value
+  const until = async (check, what, ms = 10000) => {
+    const end = Date.now() + ms;
+    for (;;) {
+      const value = check();
+      if (value) return value;
+      if (Date.now() > end) throw new Error(`timed out waiting for: ${what}`);
+      await sleep(100);
+    }
+  };
   // what the page subscribed to on its push stream the last time it changed (every pane change reconnects with its own topics)
   const topicsNow = () => {
     const opened = deck.model.calls.filter((c) => c.path === '/api/events');
@@ -56,8 +66,11 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       const only = async (name, wanted) => {
         deck.model.calls.length = 0;
         await openPane(page, name);
-        await sleep(700); // the stream reconnects with the new topics
-        const topics = topicsNow();
+        // the stream reconnects with the new topics
+        const topics = await until(() => {
+          const now = topicsNow();
+          return now && ['monitor', 'processes'].every((topic) => now.includes(topic) === (topic === wanted)) ? now : null;
+        }, `${name}: the page resubscribed with the topics of this pane`).catch(() => topicsNow());
         assert.ok(topics, `${name}: the page did not resubscribe`);
         for (const topic of ['monitor', 'processes']) assert.strictEqual(topics.includes(topic), topic === wanted, `${name}: topics ${topics}`);
         assert.strictEqual(infoCalls() > 0, name === 'system', `${name}: /api/monitor/info calls ${infoCalls()}`);
@@ -75,12 +88,17 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
     await test('PC: leaving the page from each pane drops the subscription it had', async () => {
       for (const name of ['monitor', 'processes', 'system']) {
         await openPane(page, name);
-        await sleep(700);
-        const before = topicsNow();
+        const before = await until(() => {
+          const now = topicsNow();
+          return name === 'system' ? now : now && now.includes(name) ? now : null;
+        }, `${name}: subscribed`).catch(() => topicsNow());
         deck.model.calls.length = 0;
         await tapTab(page, 'apps');
-        await sleep(600);
-        const away = topicsNow();
+        // leaving the page changes the subscription (the system pane has none to drop)
+        const away = await until(() => {
+          const now = topicsNow();
+          return now && !now.includes('monitor') && !now.includes('processes') ? now : null;
+        }, `${name}: the subscription dropped`, name === 'system' ? 1500 : 10000).catch(() => topicsNow());
         if (name !== 'system') {
           assert.ok(before && before.includes(name), `${name}: was subscribed before leaving (${before})`);
           assert.ok(away, `${name}: leaving the page did not change the subscription`);

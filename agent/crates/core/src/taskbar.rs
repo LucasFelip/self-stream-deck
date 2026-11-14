@@ -105,6 +105,56 @@ pub fn natural_cmp(a: &str, b: &str) -> Ordering {
     x.len().cmp(&y.len()).then_with(|| a.cmp(b))
 }
 
+/// A shortcut to a Store-style (packaged) app does not name the program: it runs `explorer.exe shell:AppsFolder\<family>!<app>`. This gives
+/// the package family and the app id of such a shortcut ("Claude_pzs8sxrjxfjjc" and "Claude"), so the program can be looked up.
+pub fn packaged_app(target: &str, args: &str) -> Option<(String, String)> {
+    const PREFIX: &str = "shell:appsfolder\\";
+    let program = target.rsplit(['\\', '/']).next().unwrap_or(target);
+    if !program.eq_ignore_ascii_case("explorer.exe") {
+        return None;
+    }
+    let args = args.trim().trim_matches('"');
+    if !args.get(..PREFIX.len())?.eq_ignore_ascii_case(PREFIX) {
+        return None;
+    }
+    let (family, app) = args[PREFIX.len()..].split_once('!')?;
+    let plain = |text: &str| {
+        !text.is_empty()
+            && text
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+    };
+    (plain(family) && plain(app)).then(|| (family.to_owned(), app.to_owned()))
+}
+
+/// The `Executable` of one `<Application Id="…">` of a package's `AppxManifest.xml` ("app\Claude.exe"), relative to the package folder.
+pub fn manifest_executable(manifest: &str, app_id: &str) -> Option<String> {
+    fn attribute<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
+        let mut rest = tag;
+        loop {
+            let at = rest.find(name)?;
+            let (before, after) = (&rest[..at], &rest[at + name.len()..]);
+            let quoted = after.trim_start().strip_prefix('=').map(str::trim_start);
+            match quoted.and_then(|q| q.strip_prefix('"')) {
+                // a whole attribute name, not the end of another one ("EntryId=")
+                Some(value) if before.ends_with(char::is_whitespace) => {
+                    return value.split_once('"').map(|(value, _)| value)
+                }
+                _ => rest = after,
+            }
+        }
+    }
+    manifest
+        .split("<Application")
+        .skip(1)
+        .filter(|rest| rest.starts_with(char::is_whitespace))
+        .filter_map(|rest| rest.split_once('>').map(|(tag, _)| tag))
+        .find(|tag| attribute(tag, "Id") == Some(app_id))
+        .and_then(|tag| attribute(tag, "Executable"))
+        .filter(|path| !path.is_empty() && !path.contains(".."))
+        .map(str::to_owned)
+}
+
 /// The TaskBar folder can hold both numbered ("02 Brave.lnk") and plain ("Brave.lnk") shortcuts to the same app. One per target is kept,
 /// the numbered one preferred so the order follows the numbering.
 pub fn dedupe(items: &[TaskbarItem]) -> Vec<TaskbarItem> {
@@ -215,6 +265,8 @@ pub fn folder_signature(dir: &Path) -> String {
         })
         .collect();
     parts.sort();
+    // what is read from a shortcut changed (a packaged app now gives its real program): a list cached before that is read again once
+    parts.push("items: 2".into());
     sha1_hex(parts.join("\n").as_bytes())
 }
 
@@ -304,5 +356,62 @@ mod tests {
         let a = item("Explorador de Arquivos.lnk", "");
         let b = item("02 File Explorer.lnk", "");
         assert_eq!(dedupe(&[a, b]).len(), 1);
+    }
+
+    #[test]
+    fn a_packaged_app_is_recognised_by_its_shell_address() {
+        assert_eq!(
+            packaged_app(
+                r"C:\WINDOWS\explorer.exe",
+                r"shell:AppsFolder\Claude_pzs8sxrjxfjjc!Claude"
+            ),
+            Some(("Claude_pzs8sxrjxfjjc".into(), "Claude".into()))
+        );
+        assert_eq!(
+            packaged_app(
+                "explorer.exe",
+                r#" "SHELL:appsfolder\Microsoft.WindowsTerminal_8wekyb3d8bbwe!App" "#
+            ),
+            Some((
+                "Microsoft.WindowsTerminal_8wekyb3d8bbwe".into(),
+                "App".into()
+            ))
+        );
+        for (target, args) in [
+            (r"C:\Apps\brave.exe", r"shell:AppsFolder\A_b!C"),
+            (r"C:\WINDOWS\explorer.exe", ""),
+            (r"C:\WINDOWS\explorer.exe", r"C:\Users"),
+            (r"C:\WINDOWS\explorer.exe", r"shell:AppsFolder\NoBang"),
+            (r"C:\WINDOWS\explorer.exe", r"shell:AppsFolder\..\x!y"),
+            (r"C:\WINDOWS\explorer.exe", r"shell:AppsFolder\A_b!"),
+        ] {
+            assert_eq!(packaged_app(target, args), None, "{target} {args}");
+        }
+    }
+
+    #[test]
+    fn the_manifest_names_the_program_of_each_app() {
+        let manifest = r#"<Package><Applications>
+            <Application Id="Claude" Executable="app\Claude.exe" EntryPoint="Windows.FullTrustApplication">
+              <Extensions><uap:Extension EntryId="x" Executable="app\other.exe"/></Extensions>
+            </Application>
+            <Application
+                EntryPoint="Windows.FullTrustApplication"
+                Executable = "app\resources\askpass.exe"
+                Id = "SshAskpass"></Application>
+            <Application Id="Up" Executable="..\evil.exe"/>
+            <ApplicationExtra Id="Nope" Executable="no.exe"/>
+        </Applications></Package>"#;
+        assert_eq!(
+            manifest_executable(manifest, "Claude").as_deref(),
+            Some(r"app\Claude.exe")
+        );
+        assert_eq!(
+            manifest_executable(manifest, "SshAskpass").as_deref(),
+            Some(r"app\resources\askpass.exe")
+        );
+        for missing in ["Up", "Nope", "x", "claude", ""] {
+            assert_eq!(manifest_executable(manifest, missing), None, "{missing}");
+        }
     }
 }

@@ -5,6 +5,9 @@ edition.workspace = true
 publish.workspace = true
 license.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 ssd-core = { path = "../core" }
 serde = { version = "1", features = ["derive"] }
@@ -25,6 +28,7 @@ windows = { version = "0.58", features = [
   "Win32_System_Threading",
   "Win32_System_Variant",
   "Win32_Storage_FileSystem",
+  "Win32_Storage_Packaging_Appx",
   "Win32_UI_Shell_PropertiesSystem",
   "Win32_Devices_FunctionDiscovery",
   "Win32_UI_Input_KeyboardAndMouse",

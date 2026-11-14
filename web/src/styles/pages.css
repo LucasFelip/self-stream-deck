@@ -364,7 +364,7 @@ button.chip:active { background: var(--border); }
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 50; /* above the overlays (the editor asks before discarding changes), below the toast */
   display: grid;
   place-items: center;
   padding: calc(12px + var(--safe-top)) calc(12px + var(--safe-right)) calc(12px + var(--safe-bottom)) calc(12px + var(--safe-left));

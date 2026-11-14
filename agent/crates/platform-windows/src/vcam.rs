@@ -97,7 +97,9 @@ impl Filter {
     }
 
     unsafe fn write_i32(&self, offset: usize, value: i32) {
-        (self.view.add(offset) as *mut i32).write_unaligned(value);
+        unsafe {
+            (self.view.add(offset) as *mut i32).write_unaligned(value);
+        }
     }
 
     /// Decodes a JPEG and publishes it. False when nobody is receiving (or the frame does not fit).
