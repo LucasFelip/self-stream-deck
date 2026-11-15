@@ -269,6 +269,11 @@ pub fn report(data: &Path, web_embedded: bool) -> String {
         |s| format!("direct camera installed: {}", s["installed"]),
     );
 
+    // the USB cable: which adb this agent may run and which phones it sees (nothing is changed here)
+    if let Ok(config) = &config {
+        let _ = writeln!(out, "\nusb:\n  {}", crate::adb::probe(config));
+    }
+
     let _ = writeln!(out, "\nend of the log:");
     match std::fs::read_to_string(data.join("server.log")) {
         Ok(text) => {

@@ -9,6 +9,7 @@ O arquivo aceita BOM e é conferido ao iniciar: valores de tipo errado, ids repe
 | Chave | Padrão | Descrição |
 |---|---|---|
 | `token` | gerado | O código de pareamento. Apague a chave e reinicie para gerar outro (todos os celulares precisarão parear de novo). |
+| `usb` | `{ "auto": false }` | `"auto": true` faz o agente manter o túnel `adb reverse` de cada celular no cabo; `"adb"` aceita o caminho de um `adb` dentro de Program Files ou da pasta do agente. Veja [USB](usb.md). |
 | `rules` | `[]` | As [regras de automação](regras.md): quando algo acontece no PC, o painel troca de página, mostra um aviso ou guarda um valor. |
 | `webhookKey` | gerado | A chave dos [webhooks](webhooks.md): abre só `/api/hook/*`. `ssd webhook` a mostra e `ssd webhook --rotate` faz outra. |
 | `port` | `7878` | Porta HTTP, **só em `127.0.0.1`**. |
@@ -53,6 +54,7 @@ Mostra no painel as notificações do Windows dos aplicativos cujo nome ou ident
 | `url` | O manifesto. **Sem `url` o agente não contata ninguém.** |
 | `channel` | `stable` (padrão) ou `test`, os canais do manifesto. |
 | `auto` | `true`: uma verificação um minuto depois de o agente subir e uma por dia; uma versão mais nova é instalada na hora. |
+| `apk` | `true`: uma vez por dia o agente também atualiza o **app Android** de um celular no cabo (`adb install -r`), se o manifesto trouxer o `apk` e o app já estiver instalado. Precisa de `usb.auto`. Veja [USB](usb.md). |
 | `signer` | Impressão digital (SHA-1) do certificado que deve ter assinado o pacote. Só vale para o `ssd update --apply` **digitado por uma pessoa**; sem ele, vale o certificado do próprio agente. A atualização automática aceita apenas o certificado do **próprio agente** e ignora este campo (o `config.json` é gravável por qualquer programa, e o agente instala como administrador); um agente sem assinatura não se atualiza sozinho. |
 
 Como gerar e publicar o manifesto: [desenvolvimento](desenvolvimento.md#publicar-atualizações).
@@ -68,8 +70,9 @@ Como gerar e publicar o manifesto: [desenvolvimento](desenvolvimento.md#publicar
 | `--migrate-from DIR` | Copia `config.json` e `tls\` de outra pasta, se a de dados ainda não tem config. |
 | `--fake-platform` | Troca o PC por um PC de mentira em memória (é o que os testes usam). |
 | `diagnose [--out ARQ]` | Relatório de diagnóstico. |
+| `usb` | Acha o `adb`, olha os celulares no cabo e faz o túnel uma vez (veja [USB](usb.md)). |
 | `webhook [--rotate]` | Mostra a chave dos webhooks e exemplos de `curl`; `--rotate` gera outra (reinicie o agente depois). |
-| `update [--apply] [--no-install] [--channel NOME] [--url ENDEREÇO]` | Procura, baixa, confere e instala uma versão. |
+| `update [--apply] [--no-install] [--apk] [--channel NOME] [--url ENDEREÇO]` | Procura, baixa, confere e instala uma versão. `--apk` atualiza o app Android dos celulares no cabo, no lugar. |
 | `--version`, `--help` | Versão e uso. |
 
 ## Variáveis de ambiente

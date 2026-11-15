@@ -39,6 +39,7 @@ fn defaults() -> Map<String, Value> {
         "iosCaPort": 7881,
         "powerControls": true,
         "rules": [],
+        "usb": { "auto": false },
         "miniPlayer": true,
         "notifications": { "enabled": true, "apps": ["whatsapp"] },
         "editor": true,

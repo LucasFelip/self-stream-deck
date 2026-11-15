@@ -3,12 +3,14 @@
 //!   ssd [--data-dir DIR] [--web-dir DIR] [--port N] [--no-tray] [--migrate-from DIR] [--fake-platform]
 //!   ssd diagnose [--out FILE]      one report to read (or send) when something does not work
 //!   ssd pair                       the links (with the pairing code) that connect a phone
+//!   ssd usb                        finds adb and puts the USB tunnel in place once ("usb": { "auto": true } keeps it in place)
 //!   ssd webhook [--rotate]         the key of the webhooks and how to call them (`--rotate` makes a new key; restart the agent after)
 //!   ssd update [--apply] [--no-install] [--channel NAME] [--url ADDRESS]    look for (and install) a newer version
 //!   ssd --version
 //!
 //! An installed agent needs nothing else: the interface is packed inside the executable and the files live in `%APPDATA%\SelfStreamDeck`.
 //! `--web-dir` serves the interface from a folder instead (while it is being worked on).
+mod adb;
 mod data;
 mod diagnose;
 mod lan;
@@ -33,12 +35,13 @@ struct Args {
     pair: bool,
     webhook: bool,
     rotate: bool,
+    usb: bool,
     out: Option<PathBuf>,
     /// `ssd update …`: what follows the word
     update: Option<Vec<String>>,
 }
 
-const USAGE: &str = "usage: ssd [--data-dir DIR] [--web-dir DIR] [--port N] [--no-tray] [--migrate-from DIR] [--fake-platform]\n       ssd diagnose [--out FILE]\n       ssd pair\n       ssd update [--apply] [--no-install] [--channel NAME] [--url ADDRESS]\n       ssd --version";
+const USAGE: &str = "usage: ssd [--data-dir DIR] [--web-dir DIR] [--port N] [--no-tray] [--migrate-from DIR] [--fake-platform]\n       ssd diagnose [--out FILE]\n       ssd pair\n       ssd usb\n       ssd webhook [--rotate]\n       ssd update [--apply] [--no-install] [--apk] [--channel NAME] [--url ADDRESS]\n       ssd --version";
 
 fn parse_args() -> Result<Args, String> {
     let mut args = Args {
@@ -54,6 +57,7 @@ fn parse_args() -> Result<Args, String> {
         pair: false,
         webhook: false,
         rotate: false,
+        usb: false,
         out: None,
         update: None,
     };
@@ -64,6 +68,10 @@ fn parse_args() -> Result<Args, String> {
     }
     if it.peek().is_some_and(|first| first == "pair") {
         args.pair = true;
+        it.next();
+    }
+    if it.peek().is_some_and(|first| first == "usb") {
+        args.usb = true;
         it.next();
     }
     if it.peek().is_some_and(|first| first == "webhook") {
@@ -286,6 +294,9 @@ async fn run() -> Result<(), String> {
     if args.webhook {
         return print_webhook(config, port, args.rotate);
     }
+    if args.usb {
+        return adb::command(&config);
+    }
     if args.pair {
         #[cfg(windows)]
         lan::print_pairing(&config, port, &args.data_dir);
@@ -337,6 +348,8 @@ async fn run() -> Result<(), String> {
     // with "update": { "auto": true } in config.json: look for a newer version a minute from now, then once a day
     update::forget_old_packages();
     tokio::spawn(update::run_forever(config.clone()));
+    // with "usb": { "auto": true }: the tunnel to a phone on the cable makes itself (ADR 0012)
+    tokio::spawn(adb::run_forever(config.clone()));
 
     let serve = axum::serve(
         listener,
