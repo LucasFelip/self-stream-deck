@@ -20,7 +20,7 @@ use tokio_stream::StreamExt;
 use crate::{apps, error_json, with_security, AppState};
 
 /// Every topic the phone may ask for.
-pub const TOPICS: [&str; 9] = [
+pub const TOPICS: [&str; 11] = [
     "windows",
     "state",
     "audio",
@@ -30,6 +30,8 @@ pub const TOPICS: [&str; 9] = [
     "processes",
     "power",
     "game",
+    "push",
+    "panel",
 ];
 const KEEPALIVE: Duration = Duration::from_secs(20);
 const RETRY_LINE: &[u8] = b"retry: 2000\n\n";
@@ -55,6 +57,7 @@ fn owned(state: &AppState, name: &str) -> bool {
         "media" => state.platform.media.is_some(),
         "monitor" | "game" | "processes" => state.platform.monitor.is_some(),
         "notifications" => state.platform.notifications.is_some(),
+        "push" | "panel" => true,
         "state" => crate::powerroutes::state_ready(state),
         "power" => state.platform.power.is_some() && state.platform.windows.is_some(),
         _ => false,
@@ -68,6 +71,8 @@ fn interval(name: &str) -> Duration {
         "game" => 1000,
         "state" | "processes" => 3000,
         "power" => 5000,
+        "push" => 1000,
+        "panel" => 500,
         _ => 2000,
     })
 }
@@ -177,6 +182,17 @@ async fn produce(state: &Arc<AppState>, name: &str) -> Option<(String, String)> 
                 .ok()?;
             let data = ssd_core::notices::shown(&listing, &words).to_string();
             Some((data.clone(), data))
+        }
+        // what the webhooks put in (ADR 0010): the values with their version, and the queue of events with its last number
+        "push" => {
+            let data = state.push.locked().to_json(crate::hooks::now_ms());
+            let signature = data["version"].to_string();
+            Some((data.to_string(), signature))
+        }
+        "panel" => {
+            let data = state.push.locked().events_json();
+            let signature = data["seq"].to_string();
+            Some((data.to_string(), signature))
         }
         "game" => {
             let data = crate::monitorroutes::read(state, "fps").await.ok()?;

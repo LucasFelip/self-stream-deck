@@ -105,6 +105,13 @@ impl Config {
         if !has_token {
             values.insert("token".into(), Value::String(new_token()));
         }
+        let has_key = values
+            .get("webhookKey")
+            .and_then(Value::as_str)
+            .is_some_and(|t| !t.is_empty());
+        if !has_key {
+            values.insert("webhookKey".into(), Value::String(new_token()));
+        }
         let config = Self { file, values };
         let text = config.to_text();
         if !config.file.exists() || fs::read_to_string(&config.file)? != text {
@@ -136,6 +143,25 @@ impl Config {
             .and_then(Value::as_str)
             .unwrap_or_default()
     }
+    /// The key of the webhooks (ADR 0010): it opens `/api/hook/*` and nothing else.
+    pub fn webhook_key(&self) -> &str {
+        self.values
+            .get("webhookKey")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+    }
+
+    /// Replaces the webhook key with a new one and saves it; the pairing token and the paired phones are not touched.
+    pub fn rotate_webhook_key(&mut self) -> Result<String, ConfigError> {
+        let key = new_token();
+        let mut next = self.values.clone();
+        next.insert("webhookKey".into(), Value::String(key.clone()));
+        let text = serde_json::to_string_pretty(&next).expect("a JSON object always serializes");
+        self.save_text(&text)?;
+        self.values = next;
+        Ok(key)
+    }
+
     pub fn port(&self) -> u16 {
         self.values
             .get("port")
@@ -195,6 +221,24 @@ mod tests {
             Config::load(&dir).unwrap().token(),
             config.token(),
             "the token survives a restart"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_webhook_key_is_made_once_and_rotating_it_leaves_the_token_alone() {
+        let dir = temp("webhook");
+        let mut config = Config::load(&dir).unwrap();
+        let (token, key) = (config.token().to_owned(), config.webhook_key().to_owned());
+        assert_eq!(key.len(), 32);
+        assert_ne!(key, token);
+        assert_eq!(Config::load(&dir).unwrap().webhook_key(), key);
+        let next = config.rotate_webhook_key().unwrap();
+        assert_ne!(next, key);
+        let reloaded = Config::load(&dir).unwrap();
+        assert_eq!(
+            (reloaded.webhook_key(), reloaded.token()),
+            (next.as_str(), token.as_str())
         );
         let _ = fs::remove_dir_all(&dir);
     }

@@ -43,8 +43,16 @@ pub fn percent_decode(text: &str) -> Option<String> {
     String::from_utf8(out).ok()
 }
 
+/// The webhooks live under this prefix (ADR 0010): the one place the webhook key opens.
+pub const HOOK_PREFIX: &str = "/api/hook/";
+
+pub fn is_hook_path(path: &str) -> bool {
+    path.starts_with(HOOK_PREFIX)
+}
+
 pub struct Guard {
     token: String,
+    webhook_key: String,
     machine: String,
     failures: Mutex<HashMap<IpAddr, (u32, Instant)>>,
 }
@@ -53,9 +61,25 @@ impl Guard {
     pub fn new(token: impl Into<String>, machine_name: impl AsRef<str>) -> Self {
         Self {
             token: token.into(),
+            webhook_key: String::new(),
             machine: machine_name.as_ref().to_lowercase(),
             failures: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// The key that opens the webhooks only. Without one (an empty key) the webhooks are open to the phone's token alone.
+    pub fn with_webhook_key(mut self, key: impl Into<String>) -> Self {
+        self.webhook_key = key.into();
+        self
+    }
+
+    /// Is one of these (the `?key=` of the query, the `x-token` header, the bearer token) the webhook key? Never true for an empty key.
+    pub fn is_webhook_authenticated(&self, candidates: &[Option<&str>]) -> bool {
+        !self.webhook_key.is_empty()
+            && candidates
+                .iter()
+                .flatten()
+                .any(|candidate| !candidate.is_empty() && safe_equal(candidate, &self.webhook_key))
     }
 
     pub fn token(&self) -> &str {
@@ -183,6 +207,16 @@ mod tests {
         ] {
             assert!(!g.is_allowed_host(bad), "{bad}");
         }
+    }
+
+    #[test]
+    fn the_webhook_key_opens_the_hooks_and_is_not_the_phones_token() {
+        let g = guard().with_webhook_key("hookkey");
+        assert!(g.is_webhook_authenticated(&[None, Some("hookkey")]));
+        assert!(!g.is_webhook_authenticated(&[Some("abc123"), None]));
+        assert!(!g.is_authenticated(Some("hookkey"), Some("hookkey"), None));
+        assert!(!guard().is_webhook_authenticated(&[Some("")]));
+        assert!(is_hook_path("/api/hook/push/a") && !is_hook_path("/api/audio"));
     }
 
     #[test]

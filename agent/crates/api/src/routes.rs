@@ -84,6 +84,7 @@ pub(crate) fn table() -> Router<Arc<AppState>> {
         .merge(crate::monitorroutes::routes())
         .merge(crate::editor::routes())
         .merge(crate::camera::routes())
+        .merge(crate::hooks::routes())
 }
 
 /// What a handler gets of a request: the state, whether it changes something, the path, the query and the body (read up to the limit of

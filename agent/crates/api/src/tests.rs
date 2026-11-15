@@ -1222,3 +1222,251 @@ async fn the_phone_camera_frames_the_stream_the_status_and_the_direct_camera() {
         "{log:?}"
     );
 }
+
+// ---- webhooks (ADR 0010)
+
+/// A request with a body and any method, with the webhook key (or whatever header the case needs).
+async fn send(
+    app: &Router,
+    method: &str,
+    uri: &str,
+    headers: &[(&str, &str)],
+    body: &str,
+) -> Response {
+    let mut builder = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("host", "127.0.0.1:7878");
+    for (k, v) in headers {
+        builder = builder.header(*k, *v);
+    }
+    app.clone()
+        .oneshot(builder.body(Body::from(body.to_owned())).unwrap())
+        .await
+        .unwrap()
+}
+
+const HOOK_KEY: &str = "hookkey";
+
+fn hook_app() -> Router {
+    app_configured(
+        Platform::default(),
+        r#"{"token":"tok","webhookKey":"hookkey"}"#,
+    )
+    .0
+}
+
+#[tokio::test]
+async fn the_webhook_key_opens_the_hooks_in_all_three_places_and_nothing_else() {
+    let app = hook_app();
+    for headers in [
+        vec![("authorization", "Bearer hookkey")],
+        vec![("authorization", "bearer hookkey")],
+        vec![("x-token", HOOK_KEY)],
+    ] {
+        let r = send(&app, "POST", "/api/hook/refresh", &headers, "").await;
+        assert_eq!(r.status(), StatusCode::OK, "{headers:?}");
+    }
+    assert_eq!(
+        send(&app, "POST", "/api/hook/refresh?key=hookkey", &[], "")
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    // the key is not the phone's token: it opens no other route, and ?key= means nothing outside the hooks
+    for (uri, headers) in [
+        ("/api/ping", vec![("x-token", HOOK_KEY)]),
+        ("/api/volume", vec![("authorization", "Bearer hookkey")]),
+        ("/api/ping?key=hookkey", vec![]),
+        ("/api/hook/refresh", vec![("x-token", "wrong")]),
+        ("/api/hook/refresh", vec![]),
+    ] {
+        let method = if uri.starts_with("/api/hook") {
+            "POST"
+        } else {
+            "GET"
+        };
+        let r = send(&app, method, uri, &headers, "").await;
+        assert_eq!(r.status(), StatusCode::UNAUTHORIZED, "{uri} {headers:?}");
+    }
+    // the phone's token still opens the hooks
+    assert_eq!(
+        send(&app, "POST", "/api/hook/refresh", &[("x-token", "tok")], "")
+            .await
+            .status(),
+        StatusCode::OK
+    );
+}
+
+#[tokio::test]
+async fn a_hook_with_a_wrong_key_counts_as_a_failed_attempt_and_locks_the_address_out() {
+    let app = hook_app();
+    for _ in 0..10 {
+        send(
+            &app,
+            "POST",
+            "/api/hook/refresh",
+            &[("x-token", "nope")],
+            "",
+        )
+        .await;
+    }
+    let r = send(
+        &app,
+        "POST",
+        "/api/hook/refresh",
+        &[("x-token", HOOK_KEY)],
+        "",
+    )
+    .await;
+    assert_eq!(r.status(), StatusCode::TOO_MANY_REQUESTS);
+}
+
+#[tokio::test]
+async fn a_cross_origin_page_cannot_use_the_hooks_even_with_the_key() {
+    let app = hook_app();
+    let r = send(
+        &app,
+        "POST",
+        "/api/hook/notify",
+        &[
+            ("x-token", HOOK_KEY),
+            ("origin", "https://evil.example.com"),
+        ],
+        "hi",
+    )
+    .await;
+    assert_eq!(r.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn notify_goto_and_refresh_queue_numbered_events() {
+    let app = hook_app();
+    let auth = [("authorization", "Bearer hookkey")];
+    let a = body_of(send(&app, "POST", "/api/hook/notify", &auth, "build done").await).await;
+    assert_eq!(a, serde_json::json!({ "ok": true, "seq": 1 }));
+    let b = send(
+        &app,
+        "POST",
+        "/api/hook/notify",
+        &auth,
+        r#"{"title":"CI","text":"verde"}"#,
+    )
+    .await;
+    assert_eq!(body_of(b).await["seq"], 2);
+    assert_eq!(
+        body_of(send(&app, "POST", "/api/hook/goto/som", &auth, "").await).await["seq"],
+        3
+    );
+    assert_eq!(
+        body_of(send(&app, "POST", "/api/hook/refresh", &auth, "").await).await["seq"],
+        4
+    );
+    for bad in ["/api/hook/goto/Some%20Page", "/api/hook/goto/a/b"] {
+        assert_eq!(
+            send(&app, "POST", bad, &auth, "").await.status(),
+            StatusCode::BAD_REQUEST,
+            "{bad}"
+        );
+    }
+    for bad in ["", r#"{"title":"x"}"#, &"x".repeat(501)] {
+        assert_eq!(
+            send(&app, "POST", "/api/hook/notify", &auth, bad)
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+    assert_eq!(
+        send(&app, "POST", "/api/hook/notify", &auth, &"x".repeat(9000))
+            .await
+            .status(),
+        StatusCode::PAYLOAD_TOO_LARGE
+    );
+}
+
+#[tokio::test]
+async fn values_are_set_read_listed_expire_and_are_removed() {
+    let app = hook_app();
+    let auth = [("x-token", HOOK_KEY)];
+    let set = send(&app, "PUT", "/api/hook/push/temp.cpu", &auth, "21.5").await;
+    assert_eq!(set.status(), StatusCode::OK);
+    assert_eq!(
+        send(&app, "POST", "/api/hook/push/note", &auth, r#"{"a":[1,2]}"#)
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    let got = body_of(send(&app, "GET", "/api/hook/push/temp.cpu", &auth, "").await).await;
+    assert_eq!(got["data"], 21.5);
+    let listed = body_of(send(&app, "GET", "/api/hook/push", &auth, "").await).await;
+    assert_eq!(
+        listed["values"]["note"]["data"],
+        serde_json::json!({ "a": [1, 2] })
+    );
+    assert!(listed["version"].as_u64().unwrap() >= 2);
+    assert_eq!(
+        send(&app, "DELETE", "/api/hook/push/note", &auth, "")
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        send(&app, "DELETE", "/api/hook/push/note", &auth, "")
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        send(&app, "GET", "/api/hook/push/note", &auth, "")
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+    for bad in [
+        "/api/hook/push/a%20b",
+        "/api/hook/push/x?ttl=abc",
+        "/api/hook/push/x?ttl=99999999999",
+    ] {
+        assert_eq!(
+            send(&app, "PUT", bad, &auth, "1").await.status(),
+            StatusCode::BAD_REQUEST,
+            "{bad}"
+        );
+    }
+    assert_eq!(
+        send(&app, "PUT", "/api/hook/push/empty", &auth, "")
+            .await
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    // a ttl of 1 s: gone after it
+    send(&app, "PUT", "/api/hook/push/brief?ttl=1", &auth, "x").await;
+    tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
+    assert_eq!(
+        send(&app, "GET", "/api/hook/push/brief", &auth, "")
+            .await
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+}
+
+#[tokio::test]
+async fn the_hook_topics_stream_the_values_and_the_events() {
+    let app = hook_app();
+    let auth = [("x-token", "tok")];
+    send(&app, "PUT", "/api/hook/push/k", &auth, "7").await;
+    send(&app, "POST", "/api/hook/notify", &auth, "oi").await;
+    let response = call(&app, "GET", "/api/events?topics=push,panel", &auth).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let mut body = response.into_body();
+    let mut all = read_until(&mut body, "event: push").await;
+    if !all.contains("event: panel") {
+        all.push_str(&read_until(&mut body, "event: panel").await);
+    }
+    assert!(all.contains(r#""values":{"k":{"data":7"#), "{all}");
+    assert!(
+        all.contains(r#""events":[{"seq":1,"kind":"notify""#),
+        "{all}"
+    );
+}

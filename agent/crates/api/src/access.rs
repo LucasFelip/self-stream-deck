@@ -79,6 +79,7 @@ fn is_audited(path: &str) -> bool {
             "/api/camera/direct/",
             "/api/launch/",
             "/api/shortcut/",
+            ssd_core::guard::HOOK_PREFIX,
         ]
         .iter()
         .any(|prefix| path.starts_with(prefix))
@@ -110,12 +111,32 @@ pub(crate) async fn guard(
         return statics::serve(&state, if_none_match.as_deref(), &path).await;
     }
 
-    let token_in_query = query_param(request.uri().query().unwrap_or(""), "token");
-    if !guard.is_authenticated(
-        token_in_query.as_deref(),
-        header_of(&request, "x-token").as_deref(),
-        header_of(&request, "cookie").as_deref(),
-    ) {
+    let query = request.uri().query().unwrap_or("");
+    let token_in_query = query_param(query, "token");
+    let x_token = header_of(&request, "x-token");
+    // The webhooks (ADR 0010) also open with their own key: a bearer token, the x-token header or ?key= (for senders that cannot set headers).
+    // That key opens nothing else, and the phone's token keeps opening everything.
+    let hook_key = ssd_core::guard::is_hook_path(&path) && {
+        let bearer = header_of(&request, "authorization").and_then(|value| {
+            let (scheme, token) = value.split_once(' ')?;
+            scheme
+                .eq_ignore_ascii_case("bearer")
+                .then(|| token.trim().to_owned())
+        });
+        let in_query = query_param(query, "key");
+        guard.is_webhook_authenticated(&[
+            in_query.as_deref(),
+            x_token.as_deref(),
+            bearer.as_deref(),
+        ])
+    };
+    if !hook_key
+        && !guard.is_authenticated(
+            token_in_query.as_deref(),
+            x_token.as_deref(),
+            header_of(&request, "cookie").as_deref(),
+        )
+    {
         // A browser opening the deck without a (valid) token gets the pairing page instead of a bare 401: a Home Screen app on iPhone keeps its
         // cookies apart from Safari, so it has to be paired once. Only a wrong token counts as a failed attempt.
         let wants_page = header_of(&request, "accept").is_some_and(|a| a.contains("text/html"));
@@ -153,7 +174,7 @@ pub(crate) async fn guard(
     let started = std::time::Instant::now();
     let response = next.run(request).await;
     // the trail of what can hurt: who asked the PC to shut down, ran a macro, changed the buttons, installed the camera, opened an app
-    if method == Method::POST && is_audited(&path) {
+    if method != Method::GET && is_audited(&path) {
         tracing::info!(target: "audit", %ip, path, status = response.status().as_u16(), "action");
     }
     tracing::debug!(
