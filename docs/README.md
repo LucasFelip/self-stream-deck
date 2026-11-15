@@ -33,6 +33,7 @@ Comece pelo [README](../README.md) para a visão geral e o início rápido. Aqui
 | [Plano da reestruturação](plano-reestruturacao.md) | as fases, o que cada uma entregou e os incidentes que apareceram |
 | [Retrospectiva](retrospectiva.md) | o antes e o depois, em números, e o que ficou sem fazer |
 | [Plano de qualidade](plano-qualidade.md) · [Redesign](plano-redesign.md) | planos anteriores à reestruturação |
+| [Plano de recursos](plano-recursos.md) | webhooks, regras, demo, `adb`, distribuição, vários PCs e o spike de Linux |
 | [Referência visual](referencia-visual/README.md) | capturas da interface antiga, para comparação |
 
 ## Imagens
