@@ -23,6 +23,7 @@ Como publicar uma versão: [docs/desenvolvimento.md](docs/desenvolvimento.md#pub
 
 ### Adicionado
 
+- **Visual: aparência escolhível**: menu › *Aparência…* troca a cor de destaque (seis, todas com contraste de leitura conferido por teste) e o tamanho do texto (pequeno, normal, grande); vale na hora, fica guardado no aparelho e vale só nele.
 - **Visual: tela de descanso**: ao escurecer (menu › Escurecer após…) o painel mostra um relógio grande, o dia, o que está tocando e até três valores dos webhooks, em cinza apagado sobre o preto e deslocado alguns pixels a cada minuto (para não marcar a tela AMOLED); o primeiro toque continua só acordando a tela.
 - **Visual: player de Som maior**: na paisagem a capa, o título e o botão de tocar crescem com a altura da tela (a capa vai de 64 a 96 px), com sombra na capa e o nome do app em destaque; em pé o player continua fino.
 - **Visual: grade de Apps cheia**: na paisagem a grade tem 7 colunas e só as linhas de que as teclas (e o espaço livre) precisam, no mínimo 2, então uma dúzia de apps ocupa duas fileiras com teclas grandes; os espaços vazios só aparecem ao editar ou quando uma tecla arrastada passa por cima.

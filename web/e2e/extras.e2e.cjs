@@ -126,6 +126,26 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       } finally { close(); }
     });
 
+    await test('aparencia: the menu changes the accent color and the text size at once, and the choice is still there after a reload', async () => {
+      const { page, close } = await open(411, 914);
+      try {
+        const root = (prop) => page.eval(`getComputedStyle(document.documentElement).getPropertyValue('${prop}').trim()`);
+        assert.strictEqual(await root('--accent'), '#7c9cff');
+        await openMenuItem(page, 'Aparência…');
+        await page.tap('.swatch[data-accent="verde"]');
+        await page.waitFor(`getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() === '#4cc38a'`, 'the green accent');
+        assert.strictEqual(await root('--accent-rgb'), '76, 195, 138');
+        await page.tap('.look-page .seg-btn[data-seg="g"]');
+        await page.waitFor(`document.documentElement.style.fontSize === '112%'`, 'the large text');
+        assert.strictEqual(await page.eval(`document.querySelector('.swatch[data-accent="verde"]').getAttribute('aria-checked')`), 'true');
+        await page.eval('location.reload()');
+        await page.waitFor(`document.body.dataset.state === 'online'`, 'online after the reload', 9000);
+        assert.strictEqual(await root('--accent'), '#4cc38a');
+        assert.strictEqual(await page.eval(`document.documentElement.style.fontSize`), '112%');
+        assert.ok(!page.errors.length, JSON.stringify(page.errors));
+      } finally { close(); }
+    });
+
     await test('idle dimmer: the dimmed screen shows a big clock, the date, what is playing and the webhook values, and a touch still only wakes it', async () => {
       const before = deck.model.state;
       deck.model.state = { ...before, playing: { session: 's1', title: 'Faixa de teste', artist: 'Banda', app: 'Spotify', status: 'playing', canToggle: true } };
