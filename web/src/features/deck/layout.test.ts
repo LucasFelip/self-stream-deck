@@ -50,9 +50,18 @@ describe('appsLayout', () => {
     expect(fit.rows).toBeGreaterThanOrEqual(Math.ceil(151 / fit.cols));
   });
 
-  it('landscape: a fixed 7 x 3, more rows for more keys', () => {
-    expect(appsLayout(10, landscape, true)).toMatchObject({ mode: 'fit', cols: 7, rows: 3 });
+  it('landscape: 7 columns and just the rows the keys (plus the free slot) need, at least 2', () => {
+    expect(appsLayout(3, landscape, true)).toMatchObject({ mode: 'fit', cols: 7, rows: 2 });
+    expect(appsLayout(13, landscape, true)).toMatchObject({ mode: 'fit', cols: 7, rows: 2 });
+    expect(appsLayout(14, landscape, true)).toMatchObject({ cols: 7, rows: 3 });
     expect(appsLayout(30, landscape, true)).toMatchObject({ cols: 7, rows: 5 });
+  });
+
+  it('landscape: the free slot of edit mode always has a place, even when the keys fill the rows exactly', () => {
+    for (const count of [6, 13, 20, 27]) {
+      const fit = appsLayout(count, landscape, true);
+      expect(fit.cols * fit.rows).toBeGreaterThan(count);
+    }
   });
 
   it('landscape: the keys of a very short screen scroll instead of shrinking under 60 px', () => {
