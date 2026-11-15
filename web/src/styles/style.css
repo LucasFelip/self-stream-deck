@@ -471,5 +471,13 @@ body.editing .slot::before { content: "+"; font-size: 1.8rem; font-weight: 300; 
 /* idle dimmer (idle.js): a black veil above everything; the first touch only wakes it */
 .idle-veil { position: fixed; inset: 0; z-index: var(--z-top); background: #000; opacity: 0.97; touch-action: none; transition: opacity 0.2s; }
 .idle-veil.waking { opacity: 0; }
+/* the dimmed screen: a big clock and a little news, in a dim gray on black (the shell turns the brightness down; the block moves a few pixels each minute) */
+.idle-veil { display: grid; place-items: center; }
+.idle-veil[hidden] { display: none; }
+.idle-ambient { display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 90vw; color: #6b7080; text-align: center; pointer-events: none; transition: transform 1s linear; }
+.idle-time { font-size: clamp(3.5rem, 22vh, 8rem); font-weight: 200; line-height: 1; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }
+.idle-date { font-size: clamp(0.9rem, 4vh, 1.4rem); text-transform: capitalize; }
+.idle-track { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: clamp(0.85rem, 3.6vh, 1.2rem); color: #7a8092; }
+.idle-values { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; font-size: clamp(0.75rem, 3vh, 1rem); font-variant-numeric: tabular-nums; }
 .idle-page { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
 .idle-page p { margin: 0; font-size: 0.85rem; }

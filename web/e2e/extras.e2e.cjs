@@ -126,6 +126,25 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       } finally { close(); }
     });
 
+    await test('idle dimmer: the dimmed screen shows a big clock, the date, what is playing and the webhook values, and a touch still only wakes it', async () => {
+      const before = deck.model.state;
+      deck.model.state = { ...before, playing: { session: 's1', title: 'Faixa de teste', artist: 'Banda', app: 'Spotify', status: 'playing', canToggle: true } };
+      deck.model.pushed = { values: { 'temp.sala': { data: '21.5', at: 1, expiresAt: null } }, version: 1 };
+      const { page, close } = await open(411, 914, `${DIM} localStorage.setItem('ssd.idleMinutes', '1');`);
+      try {
+        await page.waitFor(`document.querySelector('.idle-veil').dataset.dimmed === 'true' && !document.querySelector('.idle-veil').hidden`, 'the veil', 6000);
+        const text = await page.eval(`document.querySelector('.idle-ambient').innerText`);
+        assert.match(text, /\d\d:\d\d/, 'a clock');
+        assert.match(text, /\d\d\/\d\d/, 'a date');
+        assert.match(text, /Faixa de teste · Banda/, 'the track');
+        assert.match(text, /temp\.sala 21\.5/, 'the pushed value');
+        assert.ok(await page.eval(`parseFloat(getComputedStyle(document.querySelector('.idle-time')).fontSize) >= 56`), 'the clock is big');
+        await page.tap('.idle-veil');
+        await page.waitFor(`document.querySelector('.idle-veil').dataset.dimmed === 'false'`, 'waking');
+        assert.ok(!page.errors.length, JSON.stringify(page.errors));
+      } finally { deck.model.state = before; deck.model.pushed = { values: {}, version: 0 }; close(); }
+    });
+
     await test('idle dimmer: works without Android.setDim (old APK) and with localStorage unavailable; an open sheet postpones it', async () => {
       const NOSTORE = `window.__ssdIdleUnitMs = 400; window.Android = { vibrate() {} }; Object.defineProperty(window, 'localStorage', { get() { throw new Error('denied'); } });`;
       const { page, close } = await open(411, 914, NOSTORE);
