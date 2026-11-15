@@ -104,6 +104,8 @@ Ordem de valor: 1, 3, 4, 2, 6, 5, 7. As fases 3, 4 e 6 são independentes e pode
 
 ## Fase 5: distribuição (M)
 
+> **Feito diferente do plano:** a proveniência, os manifestos do winget (validados com `winget validate`) e a variável `SSD_REQUIRE_SIGNED_APK` entraram. O **lint do Android já rodava** no `build.yml` (`./gradlew testDebugUnitTest lint assembleDebug`). O **Scoop ficou de fora**: o agente é instalado como tarefa agendada de administrador, a release não publica o zip portátil e não há Scoop neste ambiente para validar um manifesto; sem isso seria prometer o que não foi testado.
+
 - **Proveniência:** `actions/attest-build-provenance` no `release.yml`, junto ao `SHA256SUMS`, referenciada por commit como as demais actions.
 - **Scoop:** `bucket/` no repositório, com o zip do `package.ps1` como fonte. Antes de prometer, validar como o manifesto chama a instalação e a remoção da tarefa agendada de administrador (hoje no `install.ps1` e `uninstall.ps1`) em `post_install` e `uninstaller`.
 - **winget:** manifestos gerados no workflow a partir do `SHA256SUMS`; sem submeter ao `winget-pkgs` enquanto o MSI não for assinado.

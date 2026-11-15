@@ -60,7 +60,12 @@ jobs:
           rm -f "$RUNNER_TEMP/release.jks"
       - name: Sem chave
         if: env.KEYSTORE_B64 == ''
-        run: echo "::notice title=APK de depuração::Os secrets SSD_KEYSTORE_B64, SSD_KEYSTORE_PASSWORD, SSD_KEY_ALIAS e SSD_KEY_PASSWORD não existem; a release leva o APK de depuração."
+        env:
+          REQUIRE_SIGNED: ${{ vars.SSD_REQUIRE_SIGNED_APK }}
+        run: |
+          echo "::notice title=APK de depuração::Os secrets SSD_KEYSTORE_B64, SSD_KEYSTORE_PASSWORD, SSD_KEY_ALIAS e SSD_KEY_PASSWORD não existem; a release leva o APK de depuração."
+          # com a variável SSD_REQUIRE_SIGNED_APK=true no repositório, uma release não sai com o APK de depuração (ele não atualiza por cima do de release: docs/usb.md)
+          if [ "$REQUIRE_SIGNED" = "true" ]; then echo "::error title=APK sem assinatura::SSD_REQUIRE_SIGNED_APK=true e a chave de assinatura não está nos secrets."; exit 1; fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: SelfStreamDeck-apk-release
@@ -74,13 +79,15 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      id-token: write # a proveniência dos arquivos é assinada em nome deste workflow (Sigstore)
+      attestations: write
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version-file: .nvmrc }
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with: { path: artefatos }
-      - name: Publica
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+      - name: Prepara os arquivos
         run: |
           version="${GITHUB_REF_NAME#v}"
           mkdir pub
@@ -91,8 +98,23 @@ jobs:
             cp artefatos/SelfStreamDeck-apk/*.apk "pub/SelfStreamDeck-$version-debug.apk"
           fi
           (cd pub && sha256sum * > SHA256SUMS.txt)
+          # os manifestos do winget (docs/desenvolvimento.md): vão como anexos da release; enviá-los ao winget-pkgs é decisão do dono
+          node tools/release/manifests.cjs --version "$version" --sums pub/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --out pub/winget
           {
             cat artefatos/notas/notas.md
             printf '\n---\nO MSI **não é assinado** (o Windows mostra "editor desconhecido") e por isso não serve ao atualizador automático: para isso, assine localmente (docs/desenvolvimento.md). Confira os arquivos com `SHA256SUMS.txt`.\n'
           } > corpo.md
-          gh release create "$GITHUB_REF_NAME" pub/* --verify-tag --title "Self Stream Deck $version" --notes-file corpo.md
+      # a proveniência: cada arquivo da release fica ligado a este workflow e a este commit (confira com `gh attestation verify ARQUIVO --repo dono/nome`)
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            pub/*.msi
+            pub/*.apk
+            pub/SHA256SUMS.txt
+      - name: Publica
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" $(find pub -type f | sort) --verify-tag --title "Self Stream Deck $version" --notes-file corpo.md

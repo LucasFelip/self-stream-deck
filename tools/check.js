@@ -35,6 +35,7 @@ add('agent: release build', 'agent', 'cargo', ['build', '--release', '-p', 'ssd-
 // the contract (every operation, schemas, security) and the outside-in checks run against that build, on a fake PC
 steps.push({ name: 'docs: links and anchors', cwd: 'tools/docs-check', command: 'node', argv: ['run.cjs'] });
 steps.push({ name: 'one version (agent, web, Android)', cwd: 'tools/version-check', command: 'node', argv: ['run.cjs'] });
+steps.push({ name: 'release: winget manifests', cwd: 'tools/release', command: 'node', argv: ['--test', 'manifests.test.cjs'] });
 add('contract tests (agent on a fake PC)', 'tools/contract-test', npm, ['test']);
 if (hasAgent) steps.push({ name: 'agent: conformance (security, pairing, static files, camera)', cwd: 'tools/agent-check', command: 'node', argv: ['run.js'] });
 
