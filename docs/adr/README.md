@@ -14,3 +14,6 @@ a substitua (e marque o antigo como "Substituído por NNNN"); não reescreva o h
 | [0007](0007-migracao-incremental.md) | Migração incremental (strangler) | Aceito |
 | [0008](0008-spike-rust-windows.md) | Spike do agente em Rust: portão de decisão | Aceito |
 | [0009](0009-ci-no-github-actions.md) | CI no GitHub Actions | Aceito |
+| [0010](0010-webhooks-e-eventos-do-painel.md) | Webhooks e eventos do painel, com chave própria | Aceito |
+| [0011](0011-regras-de-automacao.md) | Regras de automação | Aceito |
+| [0012](0012-agente-e-o-adb.md) | O agente fala com o `adb` | Aceito |
