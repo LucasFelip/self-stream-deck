@@ -114,6 +114,8 @@ Ordem de valor: 1, 3, 4, 2, 6, 5, 7. As fases 3, 4 e 6 são independentes e pode
 
 ## Fase 6: vários PCs no app (M)
 
+> **Feito:** a lógica ficou em `Pcs.kt` (puro, 7 testes) e não em `Pairing.kt`; a identidade do PC é o hash do **token** (o endereço USB e o do Wi-Fi do mesmo agente o compartilham), não a impressão digital. Compila, passa nos testes de unidade e no `lint`; **a tela nova não foi exercitada num aparelho** (não há celular neste ambiente).
+
 - `Pairing.kt` (puro, testes em `app/src/test`): tipo `Pc(id = fingerprint, nome, hosts, porta, token)` e lista de PCs. Hoje o app conhece até dois endereços do mesmo PC.
 - `Connection.kt` e `MainActivity.kt`: lista em `SharedPreferences`, PC ativo, USB sempre vence e vira o ativo, queda de um endereço para outro como hoje.
 - **Migração obrigatória** do formato antigo (um endereço e um `wifi`) para a lista, no primeiro uso.

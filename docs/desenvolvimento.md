@@ -140,7 +140,7 @@ cd android
 
 `assembleRelease` gera o APK de release: assinado quando `SSD_KEYSTORE` (o caminho do `.jks`), `SSD_KEYSTORE_PASSWORD`, `SSD_KEY_ALIAS` e `SSD_KEY_PASSWORD` estão no ambiente, sem assinatura caso contrário.
 
-As versões (AGP 8.5.2, Kotlin 1.9.24) ficam em `android/gradle/libs.versions.toml`. O app é uma casca: `MainActivity.kt` (a WebView, a ponte `Android.*`, o relógio, o bloqueio de tela), `Connection.kt` (o teste dos endereços e as telas "Conectando" e "Sem conexão") e `Pairing.kt` (o que não depende do Android e por isso tem testes em `app/src/test`: o formato do endereço, a ordem das tentativas, quais origens são o painel e a conferência do certificado fixado). A ponte que a página enxerga é `openSettings`, `reconnect`, `setDim`, `vibrate` e `lockScreen`; todos opcionais do lado do painel, porque um APK antigo não tem os mais novos (veja `web/src/lib/android.ts`).
+As versões (AGP 8.5.2, Kotlin 1.9.24) ficam em `android/gradle/libs.versions.toml`. O app é uma casca: `MainActivity.kt` (a WebView, a ponte `Android.*`, o relógio, o bloqueio de tela), `Connection.kt` (o teste dos endereços e as telas "Conectando" e "Sem conexão") `Pairing.kt` e `Pcs.kt` (o que não depende do Android e por isso tem testes em `app/src/test`: o formato do endereço, a lista de PCs pareados e a ordem das tentativas, quais origens são o painel e a conferência do certificado fixado). A ponte que a página enxerga é `openSettings`, `reconnect`, `setDim`, `vibrate` e `lockScreen`; todos opcionais do lado do painel, porque um APK antigo não tem os mais novos (veja `web/src/lib/android.ts`).
 
 Para parear por linha de comando (sem digitar):
 
