@@ -24,6 +24,7 @@ A resposta costuma vir em até uma semana. Uma falha confirmada é corrigida ant
 - Fazer o agente executar um programa, um caminho ou um texto que ele não listou (o painel só dispara o que o agente lista).
 - Um programa **sem privilégio** no PC conseguir, pelo agente (que roda como administrador), direitos de administrador.
 - Aceitar uma atualização ou um certificado que não seja o esperado.
+- A chave dos [webhooks](docs/webhooks.md) abrir qualquer coisa fora de `/api/hook/*`, ou um webhook fazer algo além de mexer no painel.
 
 ## O que não conta
 

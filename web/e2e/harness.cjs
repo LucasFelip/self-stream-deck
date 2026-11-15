@@ -97,6 +97,23 @@ data: ${JSON.stringify(model.notifications)}
 
 `);
   };
+  // the webhooks (ADR 0010): the queue of panel events and the pushed values; a test calls model.pushPanel() / model.pushValues()
+  model.panel = { seq: 0, events: [] };
+  model.pushed = { values: {}, version: 0 };
+  const hookStreams = new Set();
+  const sendHooks = (res, name, value) => res.write(`event: ${name}
+data: ${JSON.stringify(value)}
+
+`);
+  model.pushPanel = (kind, data = null) => {
+    model.panel.seq += 1;
+    model.panel.events.push({ seq: model.panel.seq, kind, data, at: Date.now() });
+    for (const [res, topics] of hookStreams) if (topics.includes('panel')) sendHooks(res, 'panel', model.panel);
+  };
+  model.pushValues = (values) => {
+    model.pushed = { values, version: model.pushed.version + 1 };
+    for (const [res, topics] of hookStreams) if (topics.includes('push')) sendHooks(res, 'push', model.pushed);
+  };
   // a test can replace them (before opening a page) to get several pages of Atalhos or macros on the pages
   model.shortcuts = [{ id: 'copy', label: 'Copiar', keys: 'ctrl+c', display: 'Ctrl+C' }, { id: 'paste', label: 'Colar', keys: 'ctrl+v', display: 'Ctrl+V' }];
   model.macros = [];
@@ -167,6 +184,7 @@ data: ${JSON.stringify(model.notifications)}
     if (key === 'GET /api/monitor/processes') return sendJson(res, 200, processesReply());
     if (key === 'GET /api/monitor/info') return model.infoFails ? sendJson(res, 500, { error: 'sem leitura' }) : sendJson(res, 200, infoReply());
     if (key === 'GET /api/power') return sendJson(res, 200, model.power);
+    if (key === 'GET /api/hook/push') return sendJson(res, 200, model.pushed);
     if (key === 'GET /api/audio') return sendJson(res, 200, model.audio);
     if (key === 'GET /api/media') return sendJson(res, 200, model.media);
     if (key === 'GET /api/volume') return sendJson(res, 200, model.state.volume);
@@ -189,6 +207,12 @@ data: ${JSON.stringify(model.notifications)}
         noticeStreams.add(res);
         res.on('close', () => noticeStreams.delete(res));
         push('notifications', model.notifications);
+      }
+      if (topics.includes('panel') || topics.includes('push')) {
+        hookStreams.add([res, topics]);
+        res.on('close', () => { for (const entry of hookStreams) if (entry[0] === res) hookStreams.delete(entry); });
+        if (topics.includes('panel')) push('panel', model.panel);
+        if (topics.includes('push')) push('push', model.pushed);
       }
       if (topics.includes('game')) {
         streams.add(res);

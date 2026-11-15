@@ -14,8 +14,8 @@ Como o self-stream-deck funciona por dentro. Para usar o painel, veja o [README]
 | Pasta | O que tem |
 |---|---|
 | `android/` | App Android fino (Kotlin, sem bibliotecas; versões no catálogo `android/gradle/libs.versions.toml`): guarda o endereço, mantém a tela ligada, vibra, expõe `Android.openSettings/vibrate/reconnect` à página. |
-| `agent/crates/core/` | A lógica sem Windows: `guard` (Host, token, bloqueio, Origin), `config`, `ports` (um trait por parte do PC e um `Fake*` de cada), `keys`, `macros`, `media`, `taskbar`, `windows`, `power`, `notices`, `sha1`/`sha256`. |
-| `agent/crates/api/` | O HTTP (axum): `lib.rs` (o estado e o roteador), `access.rs` (a guarda na frente de tudo), `routes.rs` (a tabela de rotas e o que os módulos compartilham), os módulos por assunto, cada um com as suas rotas (`audio`, `media`, `shortcuts`, `apps`, `winroutes`, `powerroutes`, `monitorroutes`, `editor`, `camera`), `events.rs` (SSE), `statics.rs` + `embedded.rs` (a interface dentro do `.exe`). |
+| `agent/crates/core/` | A lógica sem Windows: `guard` (Host, token, bloqueio, Origin), `config`, `ports` (um trait por parte do PC e um `Fake*` de cada), `keys`, `macros`, `media`, `taskbar`, `windows`, `power`, `notices`, `push` (valores e eventos dos webhooks), `sha1`/`sha256`. |
+| `agent/crates/api/` | O HTTP (axum): `lib.rs` (o estado e o roteador), `access.rs` (a guarda na frente de tudo), `routes.rs` (a tabela de rotas e o que os módulos compartilham), os módulos por assunto, cada um com as suas rotas (`audio`, `media`, `shortcuts`, `apps`, `winroutes`, `powerroutes`, `monitorroutes`, `editor`, `camera`, `hooks`), `events.rs` (SSE), `statics.rs` + `embedded.rs` (a interface dentro do `.exe`). |
 | `agent/crates/platform-windows/` | Os adaptadores: Core Audio, SMTC, teclas, barra de tarefas, janelas (DWM), energia, monitor (PDH, `nvidia-smi`, RTSS, WMI), notificações, câmera virtual, rede. É onde fica o `unsafe` da API do Windows (fora dele, só a bandeja e o job object do processo, em `agent/crates/agent`). |
 | `agent/crates/agent/` | O programa `ssd`: argumentos, bandeja (`tray.rs`), `diagnose.rs`, `data.rs` (pasta de dados e migração), `lan.rs` (HTTPS pelo Schannel, iPhone, firewall) e os scripts de certificado (embutidos). |
 | `agent/scripts/` | `package.ps1`, `install.ps1`, `uninstall.ps1`, `sign.ps1` e `launch-hidden.vbs` (a tarefa agendada o usa para subir sem janela). |
@@ -46,7 +46,7 @@ Um objeto de job do Windows mata o que o agente iniciou (PowerShell do firewall,
 
 ## Atualização por push (SSE)
 
-`GET /api/events?topics=windows,state,audio,media,monitor,game,processes,power,notifications` mantém a resposta aberta e envia um valor **só quando ele muda**
+`GET /api/events?topics=windows,state,audio,media,monitor,game,processes,power,notifications,push,panel` mantém a resposta aberta e envia um valor **só quando ele muda**
 (comparado por uma assinatura). Um tópico tem um *produtor* (`api/events.rs`) que **só roda enquanto alguém escuta**; quem chega depois recebe o último valor
 na hora; um comentário de manutenção sai a cada 20 s. `windows` é empurrado pelo próprio Windows (`SetWinEventHook`, com a mudança só de título suavizada em ~600 ms); os outros perguntam ao PC num intervalo
 (uma pergunta para todos os celulares). Se a conexão não abre, a interface volta a perguntar de tempos em tempos e espaça os pedidos enquanto nada muda. `GET /api/requests` mostra quantas vezes cada rota foi usada.

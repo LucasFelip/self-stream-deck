@@ -55,7 +55,8 @@ O alvo é uma máquina de uma pessoa, na rede da casa: o painel dá controle do 
 | Camada | O que faz |
 |---|---|
 | Escuta | só em `127.0.0.1` por padrão; o Wi-Fi e o iPhone são opcionais, em portas próprias |
-| Token | todo pedido o exige (cabeçalho `x-token`, `?token=` ou cookie `HttpOnly`/`SameSite=Lax`); só o manifesto, os ícones e o `pair.js` abrem sem token (nada privado), e quem abre `/` sem token vê a página de pareamento |
+| Token | todo pedido o exige (cabeçalho `x-token` ou cookie `HttpOnly`/`SameSite=Lax`; o `?token=` do endereço só vale no link de pareamento, nos arquivos do painel e no `/api/ping`, porque endereços vão para logs); só o manifesto, os ícones e o `pair.js` abrem sem token (nada privado), e quem abre `/` sem token vê a página de pareamento |
+| Webhooks | uma chave própria (`webhookKey`) abre só `/api/hook/*` (avisos, troca de página, valores) e nunca o resto do PC; veja [webhooks](webhooks.md) |
 | Bloqueio | dez falhas de token em um minuto bloqueiam o endereço por um minuto, **mesmo para o token certo** |
 | `Host` | validado (IP, `localhost`, nome do PC, `nome.local`): protege contra *DNS rebinding* |
 | `Origin` | um `POST` de outro site é recusado |

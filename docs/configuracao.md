@@ -9,6 +9,7 @@ O arquivo aceita BOM e é conferido ao iniciar: valores de tipo errado, ids repe
 | Chave | Padrão | Descrição |
 |---|---|---|
 | `token` | gerado | O código de pareamento. Apague a chave e reinicie para gerar outro (todos os celulares precisarão parear de novo). |
+| `webhookKey` | gerado | A chave dos [webhooks](webhooks.md): abre só `/api/hook/*`. `ssd webhook` a mostra e `ssd webhook --rotate` faz outra. |
 | `port` | `7878` | Porta HTTP, **só em `127.0.0.1`**. |
 | `lan` | `false` | `true` liga o HTTPS do Wi-Fi na `httpsPort`. |
 | `httpsPort` | `7879` | Porta do HTTPS da rede local. |
@@ -66,6 +67,7 @@ Como gerar e publicar o manifesto: [desenvolvimento](desenvolvimento.md#publicar
 | `--migrate-from DIR` | Copia `config.json` e `tls\` de outra pasta, se a de dados ainda não tem config. |
 | `--fake-platform` | Troca o PC por um PC de mentira em memória (é o que os testes usam). |
 | `diagnose [--out ARQ]` | Relatório de diagnóstico. |
+| `webhook [--rotate]` | Mostra a chave dos webhooks e exemplos de `curl`; `--rotate` gera outra (reinicie o agente depois). |
 | `update [--apply] [--no-install] [--channel NOME] [--url ENDEREÇO]` | Procura, baixa, confere e instala uma versão. |
 | `--version`, `--help` | Versão e uso. |
 
