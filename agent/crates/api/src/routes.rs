@@ -98,7 +98,6 @@ pub(crate) struct Call {
     pub(crate) body: Bytes,
 }
 
-#[axum::async_trait]
 impl FromRequest<Arc<AppState>> for Call {
     type Rejection = Response;
 

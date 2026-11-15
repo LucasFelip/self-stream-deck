@@ -405,7 +405,7 @@ pub(crate) fn routes() -> axum::Router<Arc<AppState>> {
         .route("/api/editor/macros", post(editor).fallback(not_found))
         .route("/api/editor/apps", post(editor).fallback(not_found))
         .route("/api/macros", get(macros).fallback(not_found))
-        .route("/api/macro/*id", post(run).fallback(not_found))
+        .route("/api/macro/{*id}", post(run).fallback(not_found))
 }
 
 async fn editor(call: crate::routes::Call) -> Response {
