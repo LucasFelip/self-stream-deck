@@ -165,6 +165,15 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
         await page.waitFor(`document.getElementById('toast').classList.contains('show') && document.getElementById('toast').textContent === '📣 CI: verde'`, 'the notice');
         deck.model.pushPanel('goto', { page: 'power' });
         await page.waitFor(`document.querySelector('#tabs .tab[aria-selected="true"]').dataset.section === 'power'`, 'the page switch', 6000);
+        // a rule's goto remembers the page it left, and its back returns there
+        await page.eval(`document.querySelector('#tabs .tab[data-section="sound"]').click()`);
+        await page.waitFor(`document.querySelector('#tabs .tab[aria-selected="true"]').dataset.section === 'sound'`, 'on Som');
+        deck.model.pushPanel('goto', { page: 'pc', rule: 'r1' });
+        await page.waitFor(`document.querySelector('#tabs .tab[aria-selected="true"]').dataset.section === 'pc'`, 'the rule switched to PC', 6000);
+        deck.model.pushPanel('back', { rule: 'r1' });
+        await page.waitFor(`document.querySelector('#tabs .tab[aria-selected="true"]').dataset.section === 'sound'`, 'back to Som', 6000);
+        deck.model.pushPanel('goto', { page: 'power' });
+        await page.waitFor(`document.querySelector('#tabs .tab[aria-selected="true"]').dataset.section === 'power'`, 'power again', 6000);
         deck.model.pushPanel('goto', { page: 'nao-existe' });
         await sleep(500);
         assert.strictEqual(await page.eval(`document.querySelector('#tabs .tab[aria-selected="true"]').dataset.section`), 'power', 'an unknown page is ignored');
@@ -187,6 +196,23 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
         await page.waitFor(`![...document.querySelectorAll('.pc-page .seg-btn')].some((b) => b.textContent === 'Painel') && document.querySelector('.pc-page .seg-btn[aria-selected="true"]').dataset.seg === 'monitor'`, 'back to Desempenho when the values are gone');
         assert.ok(!page.errors.length, JSON.stringify(page.errors));
       } finally { deck.model.pushed = { values: {}, version: 0 }; close(); }
+    });
+
+    await test('rules: the Painel pane shows them, says which hold, and pauses and resumes them', async () => {
+      deck.model.rulesStatus = { rules: ['som', 'noite'], active: ['som'], pausedUntil: null, error: null };
+      const { page, close } = await open(411, 914);
+      try {
+        await tapTab(page, 'pc');
+        await page.waitFor(`[...document.querySelectorAll('.pc-page .seg-btn')].some((b) => b.textContent === 'Painel')`, 'the pane appears');
+        await tapUntil(page, '.pc-page .seg-btn[data-seg="push"]', `document.querySelector('.pc-page .seg-btn[data-seg="push"]').getAttribute('aria-selected') === 'true'`, 'the Painel pane');
+        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.rules-card dd')].map((d) => d.textContent)`), ['som', '2']);
+        await page.tap('.rules-card [data-rules-pause]');
+        await page.waitFor(`document.querySelector('.rules-card [data-rules-pause]').textContent === 'Retomar regras'`, 'paused', 8000);
+        assert.ok(deck.model.calls.some((c) => c.path === '/api/rules/pause' && c.body && c.body.minutes === 30));
+        await page.tap('.rules-card [data-rules-pause]');
+        await page.waitFor(`document.querySelector('.rules-card [data-rules-pause]').textContent === 'Pausar 30 min'`, 'resumed', 8000);
+        assert.ok(!page.errors.length, JSON.stringify(page.errors));
+      } finally { deck.model.rulesStatus = { rules: [], active: [], pausedUntil: null, error: null }; close(); }
     });
 
     await test('self-update: when the interface version changes on the PC the page reloads, once nobody is touching it', async () => {

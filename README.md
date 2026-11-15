@@ -39,7 +39,7 @@ Também: notificações do Windows no painel (mesmo com "Não incomodar"), um re
 ```
 ┌──────────────────┐   HTTP (USB, adb reverse)  ou  HTTPS (Wi-Fi)   ┌───────────────────────────┐
 │ Celular          │ ─────────────────────────────────────────────▶ │ ssd.exe (Rust, no PC)     │
-│  app Android /   │ ◀── interface, ícones, dados, eventos (SSE) ── │  • API (59 operações)     │
+│  app Android /   │ ◀── interface, ícones, dados, eventos (SSE) ── │  • API (61 operações)     │
 │  Safari (iPhone) │                                                │  • APIs diretas do Windows│
 └──────────────────┘                                                └───────────────────────────┘
 ```

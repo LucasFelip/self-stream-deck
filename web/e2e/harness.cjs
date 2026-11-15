@@ -114,6 +114,8 @@ data: ${JSON.stringify(value)}
     model.pushed = { values, version: model.pushed.version + 1 };
     for (const [res, topics] of hookStreams) if (topics.includes('push')) sendHooks(res, 'push', model.pushed);
   };
+  // the automation rules (ADR 0011): where they stand, and the pauses the panel asked for
+  model.rulesStatus = { rules: [], active: [], pausedUntil: null, error: null };
   // a test can replace them (before opening a page) to get several pages of Atalhos or macros on the pages
   model.shortcuts = [{ id: 'copy', label: 'Copiar', keys: 'ctrl+c', display: 'Ctrl+C' }, { id: 'paste', label: 'Colar', keys: 'ctrl+v', display: 'Ctrl+V' }];
   model.macros = [];
@@ -185,6 +187,11 @@ data: ${JSON.stringify(value)}
     if (key === 'GET /api/monitor/info') return model.infoFails ? sendJson(res, 500, { error: 'sem leitura' }) : sendJson(res, 200, infoReply());
     if (key === 'GET /api/power') return sendJson(res, 200, model.power);
     if (key === 'GET /api/hook/push') return sendJson(res, 200, model.pushed);
+    if (key === 'GET /api/rules') return sendJson(res, 200, model.rulesStatus);
+    if (key === 'POST /api/rules/pause') {
+      model.rulesStatus = { ...model.rulesStatus, pausedUntil: body.minutes ? Date.now() + body.minutes * 60000 : null };
+      return sendJson(res, 200, { ok: true, pausedUntil: model.rulesStatus.pausedUntil });
+    }
     if (key === 'GET /api/audio') return sendJson(res, 200, model.audio);
     if (key === 'GET /api/media') return sendJson(res, 200, model.media);
     if (key === 'GET /api/volume') return sendJson(res, 200, model.state.volume);

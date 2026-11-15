@@ -5,7 +5,7 @@ import { vibrate } from '../../lib/haptics';
 import { usePager } from '../../shell/PagerContext';
 import { SECTIONS, type SectionId } from '../../shell/sections';
 import { useToast } from '../../ui/Toast';
-import { newEvents, noticeText, pageOf, type PanelCursor, type PanelFrame } from './panelQueue';
+import { newEvents, noticeText, pageOf, ruleOf, type PanelCursor, type PanelFrame } from './panelQueue';
 
 const SHOW_MS = 6000;
 const isSection = (page: string): page is SectionId => SECTIONS.some((section) => section.id === page);
@@ -19,6 +19,8 @@ export function PanelEvents() {
   const queryClient = useQueryClient();
   const pager = usePager();
   const cursor = useRef<PanelCursor>(null);
+  // where the person was when a rule switched the page, so `back` (the rule ended) can return there
+  const before = useRef(new Map<string, string>());
   // the pager changes with every swipe: the subscription reads the latest one instead of resubscribing
   const pagerRef = useRef(pager);
   pagerRef.current = pager;
@@ -35,7 +37,14 @@ export function PanelEvents() {
     for (const event of result.events) {
       if (event.kind === 'goto') {
         const page = pageOf(event.data);
+        const rule = ruleOf(event.data);
+        if (rule && !before.current.has(rule)) before.current.set(rule, pagerRef.current.activeId);
         if (page) { if (isSection(page)) pagerRef.current.goTo(page); else pagerRef.current.goToPage(page); }
+      } else if (event.kind === 'back') {
+        const rule = ruleOf(event.data);
+        const page = rule ? before.current.get(rule) : undefined;
+        if (rule) before.current.delete(rule);
+        if (page) pagerRef.current.goToPage(page);
       } else if (event.kind === 'refresh') {
         void queryClient.invalidateQueries();
       }

@@ -177,6 +177,7 @@ fn platform(fake: bool, data_dir: &std::path::Path) -> Platform {
             monitor: Some(Arc::new(ssd_core::ports::FakeMonitor)),
             notifications: Some(Arc::new(ssd_core::ports::FakeNotifications)),
             vcam: Some(Arc::new(ssd_core::ports::FakeVcam::default())),
+            clock: Some(Arc::new(ssd_core::ports::FakeClock::default())),
         };
     }
     #[cfg(windows)]
@@ -189,6 +190,7 @@ fn platform(fake: bool, data_dir: &std::path::Path) -> Platform {
         power: Some(Arc::new(ssd_platform_windows::WindowsPower)),
         monitor: Some(Arc::new(ssd_platform_windows::WindowsMonitor)),
         notifications: Some(Arc::new(ssd_platform_windows::WindowsNotifications)),
+        clock: Some(Arc::new(ssd_platform_windows::WindowsClock)),
         vcam: Some(Arc::new(ssd_platform_windows::WindowsVcam::new(
             data_dir.join("vcam"),
         ))),
@@ -328,6 +330,8 @@ async fn run() -> Result<(), String> {
     });
 
     // the home network: HTTPS with the certificate the phone pins, the iPhone side and the firewall rules
+    // the automation rules (ADR 0011): a step a second, and nothing to do while no rule is on
+    ssd_api::spawn_rules(state.clone());
     let app = router(state);
     lan::start(&config, &args.data_dir, app.clone()).await;
     // with "update": { "auto": true } in config.json: look for a newer version a minute from now, then once a day

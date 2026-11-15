@@ -3,6 +3,7 @@
 mod access;
 mod apps;
 mod audio;
+mod automation;
 mod camera;
 mod editor;
 pub mod embedded;
@@ -30,8 +31,8 @@ use ssd_core::config::Config;
 use ssd_core::guard::Guard;
 use ssd_core::media::ArtCache;
 use ssd_core::ports::{
-    AudioPort, InputPort, MediaPort, MonitorPort, NotificationsPort, PowerPort, TaskbarPort,
-    VcamPort, WindowsPort,
+    AudioPort, ClockPort, InputPort, MediaPort, MonitorPort, NotificationsPort, PowerPort,
+    TaskbarPort, VcamPort, WindowsPort,
 };
 use ssd_core::power::Scheduled;
 use ssd_core::push::PushStore;
@@ -57,6 +58,8 @@ pub struct Platform {
     pub monitor: Option<Arc<dyn MonitorPort>>,
     pub notifications: Option<Arc<dyn NotificationsPort>>,
     pub vcam: Option<Arc<dyn VcamPort>>,
+    /// the local time, for the time windows of the rules
+    pub clock: Option<Arc<dyn ClockPort>>,
 }
 
 /// Put on a request that arrived over TLS: the pairing cookie then carries `Secure`.
@@ -81,6 +84,8 @@ pub struct AppState {
     pub camera: Arc<camera::Camera>,
     /// what the webhooks pushed into the panel: values and events (ADR 0010)
     pub push: Mutex<PushStore>,
+    /// the automation rules and where they stand (ADR 0011)
+    pub rules: Mutex<automation::Runtime>,
     /// the shutdown this agent scheduled, for the countdown on the phone
     pub scheduled: Mutex<Option<Scheduled>>,
     /// macros being run (one run of each at a time)
@@ -111,6 +116,7 @@ impl AppState {
             hub: events::Hub::default(),
             camera: Arc::new(camera::Camera::default()),
             push: Mutex::new(push),
+            rules: Mutex::new(automation::Runtime::default()),
             scheduled: Mutex::new(None),
             info_cache: Mutex::new(None),
             running_macros: Mutex::new(Default::default()),
@@ -152,6 +158,11 @@ pub fn router(state: Arc<AppState>) -> Router {
             access::guard,
         ))
         .with_state(state)
+}
+
+/// Starts the task that runs the automation rules (a step a second; with no rule on it does nothing).
+pub fn spawn_rules(state: Arc<AppState>) {
+    automation::spawn(state);
 }
 
 pub(crate) fn with_security(mut response: Response) -> Response {

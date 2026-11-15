@@ -5,7 +5,7 @@
 
 ```
 contracts/
-├─ openapi.yaml            59 operações + os 11 tópicos do SSE (x-events) + esquemas
+├─ openapi.yaml            61 operações + os 11 tópicos do SSE (x-events) + esquemas
 ├─ fixtures/fake-pc.json   apps, janelas, áudio, mídia, monitor, energia... determinísticos
 └─ README.md
 tools/contract-test/       o verificador (Node, 2 dependências: ajv e yaml)

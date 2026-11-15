@@ -9,6 +9,7 @@
 //! - `power`: the power actions and what the Energia page shows
 //! - `notices`: which notifications the deck shows
 //! - `push`: the values and events the webhooks put into the panel (ADR 0010)
+//! - `rules`: the automation rules and the state machine that runs them (ADR 0011)
 //! - `ports`: what the PC offers (audio, media, input...) as traits that `platform-windows` implements and the tests fake
 
 pub mod config;
@@ -21,6 +22,7 @@ pub mod ports;
 pub mod power;
 pub mod push;
 pub mod random;
+pub mod rules;
 pub mod sha1;
 pub mod sha256;
 pub mod sync;
