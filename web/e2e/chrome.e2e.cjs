@@ -137,7 +137,7 @@ const synthDrag = (check, selector) => check.eval(`(async () => {
       try {
         await menuOpen(page);
         await sleep(300);
-        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('#menu-pop button')].filter((b) => !b.hidden).map((b) => b.textContent.trim())`), ['Editar botões', 'Câmera do celular', 'Escurecer após…', 'Endereço do PC…', 'Atualizar']);
+        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('#menu-pop button')].filter((b) => !b.hidden).map((b) => b.textContent.trim())`), ['Editar botões', 'Câmera do celular', 'Aparência…', 'Escurecer após…', 'Endereço do PC…', 'Atualizar']);
         const nav = await rectOf(page, 'nav.nav');
         const menu = await rectOf(page, '#menu-pop');
         assert.ok(menu.l >= nav.r && 387 - menu.b >= 8 && menu.t >= 8 && menu.r < 836 - 8, JSON.stringify({ nav, menu }));
