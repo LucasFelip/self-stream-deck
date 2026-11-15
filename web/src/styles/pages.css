@@ -157,9 +157,12 @@ button.chip:active { background: var(--border); }
 .sound-media { grid-column: 1 / -1; justify-content: center; overflow: hidden; padding: 8px 10px; }
 .sound-media .media-page { height: auto; flex: 1; justify-content: center; }
 /* landscape: [cover] [source / title+artist / timeline] [prev play next] */
-.sound-media .media-body { flex: none; grid-template-columns: 64px minmax(0, 1fr) auto; grid-template-areas: "cover source ctl" "cover text ctl" "cover time ctl"; gap: 2px 12px; align-items: center; }
+.sound-media { --cover: 64px; --title: 0.92rem; --artist: 0.74rem; --play: 52px; }
+/* landscape: the cover and the type grow with the screen's height (the player is the first thing the eye lands on); upright keeps the slim strip */
+@media (orientation: landscape) { .sound-media { --cover: clamp(64px, 17vh, 96px); --title: clamp(0.95rem, 3.4vh, 1.3rem); --artist: clamp(0.76rem, 2.5vh, 0.95rem); --play: clamp(52px, 12vh, 64px); } }
+.sound-media .media-body { flex: none; grid-template-columns: var(--cover) minmax(0, 1fr) auto; grid-template-areas: "cover source ctl" "cover text ctl" "cover time ctl"; gap: 2px 12px; align-items: center; }
 .sound-media .track { display: contents; }
-.sound-media .cover { grid-area: cover; width: 64px; height: 64px; border-radius: 12px; }
+.sound-media .cover { grid-area: cover; width: var(--cover); height: var(--cover); border-radius: 14px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); }
 .sound-media .cover .ico { width: 28px; height: 28px; }
 .sound-media .track-source { grid-area: source; min-height: 20px; }
 .sound-media .track-text { grid-area: text; min-width: 0; }
@@ -167,9 +170,10 @@ button.chip:active { background: var(--border); }
 .sound-media .timeline .range { height: 20px; }
 .sound-media .transport { grid-area: ctl; gap: 8px; }
 .sound-media .transport button { width: 48px; height: 48px; border-radius: 14px; }
-.sound-media .transport button.primary { width: 52px; height: 52px; }
-.sound-media .track-title { font-size: 0.92rem; -webkit-line-clamp: 1; line-clamp: 1; overflow: hidden; text-overflow: ellipsis; }
-.sound-media .track-artist { margin-top: 1px; font-size: 0.74rem; }
+.sound-media .transport button.primary { width: var(--play); height: var(--play); }
+.sound-media .track-title { font-size: var(--title); -webkit-line-clamp: 1; line-clamp: 1; overflow: hidden; text-overflow: ellipsis; }
+.sound-media .track-artist { margin-top: 1px; font-size: var(--artist); }
+.sound-media .track-source .chip { color: var(--accent); }
 .sound-media .chip { padding: 2px 8px; }
 
 /* nothing playing: one thin line with the note and "Nada tocando" */
