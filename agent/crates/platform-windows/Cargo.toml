@@ -14,11 +14,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 
 [target.'cfg(windows)'.dependencies]
-png = "0.17"
+png = "0.18"
 jpeg-decoder = "0.3"
 wmi = "0.18"
-windows-core = "0.58"
-windows = { version = "0.58", features = [
+windows-core = "0.62"
+windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Security",
   "Win32_Media_Audio",
