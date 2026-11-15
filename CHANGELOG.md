@@ -23,6 +23,7 @@ Como publicar uma versão: [docs/desenvolvimento.md](docs/desenvolvimento.md#pub
 
 ### Adicionado
 
+- **Visual: tom nos botões**: cada botão de app ganha um tom suave tirado da cor do seu ícone (e o de atalho, de uma cor fixa feita do seu nome); nas ações de Energia, as que terminam a sessão ou desligam o PC ganham um fundo amarelo ou vermelho suave.
 - **Visual: cor por leitura** (plano em [docs/plano-visual.md](docs/plano-visual.md)): CPU, memória, GPU, disco e rede ganham cada uma a sua cor (título, barra, gráfico e núcleos; o amarelo e o vermelho de alerta continuam vencendo), números maiores em PC e os percentuais de Som mais legíveis, e linhas-guia nos gráficos. Um teste confere o contraste das cores.
 - **Demonstração no navegador**: o painel de verdade com dados de mentira, sem PC, publicada pelo GitHub Pages (`pages.yml`); uma barra no topo experimenta os webhooks. `npm run build:demo`, [docs/desenvolvimento.md](docs/desenvolvimento.md#a-demonstração-no-navegador).
 - **Agente compila para Linux** (spike, [ADR 0013](docs/adr/0013-agente-em-linux-spike.md)): o que é do Windows ficou atrás de `cfg(windows)` e há um monitor do Linux (`/proc`). **Não é suporte**: nada foi executado num Linux e o Wi-Fi com HTTPS não existe lá.

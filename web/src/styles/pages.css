@@ -367,6 +367,8 @@ button.chip:active { background: var(--border); }
 .act-tile[hidden] { display: none; }
 .act-tile:disabled { opacity: 0.4; }
 .actions-grid[data-count="7"] .act-tile:last-child { grid-column: span 2; }
+.act-tile[data-tone="warn"] { background-image: linear-gradient(160deg, rgba(224, 162, 67, 0.1), transparent 70%); border-color: rgba(224, 162, 67, 0.28); }
+.act-tile[data-tone="danger"] { background-image: linear-gradient(160deg, rgba(229, 100, 107, 0.1), transparent 70%); border-color: rgba(229, 100, 107, 0.28); }
 .act-tile[data-tone="warn"] .fallback { background: none; color: var(--warn); }
 .act-tile[data-tone="danger"] .fallback { background: none; color: var(--err); }
 .actions-grid { --icon: 60px; }
