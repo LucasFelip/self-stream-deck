@@ -15,6 +15,7 @@ import { AppsPage, ShortcutsPages } from './features/deck/DeckPages';
 import { PcPage } from './features/pc/PcPage';
 import { PowerPage } from './features/power/PowerPage';
 import { SoundPage } from './features/sound/SoundPage';
+import { PanelEvents } from './features/webhooks/PanelEvents';
 import { WindowsPage } from './features/windows/WindowsPage';
 import { android } from './lib/android';
 import { runBack } from './lib/back';
@@ -76,7 +77,7 @@ function Shell() {
         </>
       )}
       nav={(pager) => <Nav pager={pager} menuOpen={menuOpen} onMenu={() => setMenuOpen((open) => !open)} />}
-      aboveMain={<><GameWatcher /><Offline connection={connection} /><EditMode /></>}
+      aboveMain={<><GameWatcher /><PanelEvents /><Offline connection={connection} /><EditMode /></>}
     >
       <Menu open={menuOpen} onClose={() => setMenuOpen(false)} items={items} />
       <IdleDimmer open={idleOpen} onClose={() => setIdleOpen(false)} blocked={Boolean(state.data?.scheduled) || transmitting} />

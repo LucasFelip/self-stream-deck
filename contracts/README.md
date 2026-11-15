@@ -5,7 +5,7 @@
 
 ```
 contracts/
-├─ openapi.yaml            51 operações + os 9 tópicos do SSE (x-events) + esquemas
+├─ openapi.yaml            59 operações + os 11 tópicos do SSE (x-events) + esquemas
 ├─ fixtures/fake-pc.json   apps, janelas, áudio, mídia, monitor, energia... determinísticos
 └─ README.md
 tools/contract-test/       o verificador (Node, 2 dependências: ajv e yaml)
@@ -26,7 +26,7 @@ O que o `npm test` confere (hoje 167 verificações):
 |---|---|
 | spec | o YAML é válido; todo `$ref` resolve; todo esquema compila; toda operação tem `operationId`, tag e 401; as fixtures obedecem aos esquemas; **a lista de rotas do código e a do contrato são a mesma** (rota nova sem contrato quebra o teste) |
 | comportamento | ~110 casos: cada rota com entrada boa e entradas ruins (400/403/404/409/413), a resposta validada contra o esquema do status devolvido, o corpo do pedido validado contra o esquema do contrato nos casos 2xx, cabeçalhos documentados presentes |
-| eventos | os 9 tópicos do SSE entregam o primeiro valor na hora, no formato documentado, e o fluxo começa com `retry:` |
+| eventos | os 11 tópicos do SSE entregam o primeiro valor na hora, no formato documentado, e o fluxo começa com `retry:` |
 | segurança | token (cabeçalho, query, cookie), `Host` estranho (421), `Origin` de outro site (403), página de pareamento sem token, cookie `HttpOnly; SameSite=Lax`, cabeçalhos de proteção, corpo inválido (400) e grande demais, caminhos fora de `public/`, bloqueio após 10 falhas (429) |
 | cobertura | toda operação tem ao menos um caso de sucesso (as que executam programas do SO ficam de fora do teste em processo e são listadas) |
 

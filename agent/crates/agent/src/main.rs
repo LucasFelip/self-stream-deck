@@ -3,6 +3,7 @@
 //!   ssd [--data-dir DIR] [--web-dir DIR] [--port N] [--no-tray] [--migrate-from DIR] [--fake-platform]
 //!   ssd diagnose [--out FILE]      one report to read (or send) when something does not work
 //!   ssd pair                       the links (with the pairing code) that connect a phone
+//!   ssd webhook [--rotate]         the key of the webhooks and how to call them (`--rotate` makes a new key; restart the agent after)
 //!   ssd update [--apply] [--no-install] [--channel NAME] [--url ADDRESS]    look for (and install) a newer version
 //!   ssd --version
 //!
@@ -30,6 +31,8 @@ struct Args {
     migrate_from: Option<PathBuf>,
     diagnose: bool,
     pair: bool,
+    webhook: bool,
+    rotate: bool,
     out: Option<PathBuf>,
     /// `ssd update …`: what follows the word
     update: Option<Vec<String>>,
@@ -49,6 +52,8 @@ fn parse_args() -> Result<Args, String> {
         migrate_from: None,
         diagnose: false,
         pair: false,
+        webhook: false,
+        rotate: false,
         out: None,
         update: None,
     };
@@ -59,6 +64,10 @@ fn parse_args() -> Result<Args, String> {
     }
     if it.peek().is_some_and(|first| first == "pair") {
         args.pair = true;
+        it.next();
+    }
+    if it.peek().is_some_and(|first| first == "webhook") {
+        args.webhook = true;
         it.next();
     }
     if it.peek().is_some_and(|first| first == "update") {
@@ -90,6 +99,7 @@ fn parse_args() -> Result<Args, String> {
             "--migrate-from" => args.migrate_from = Some(value("--migrate-from")?.into()),
             "--out" => args.out = Some(value("--out")?.into()),
             "--no-tray" => args.no_tray = true,
+            "--rotate" => args.rotate = true,
             "--fake-platform" => args.fake_platform = true,
             "--version" | "-V" => {
                 return Err(format!("Self Stream Deck {}", env!("CARGO_PKG_VERSION")))
@@ -99,6 +109,29 @@ fn parse_args() -> Result<Args, String> {
         }
     }
     Ok(args)
+}
+
+/// `ssd webhook`: the key of the webhooks and a `curl` that uses it. The key opens `/api/hook/*` and nothing else (ADR 0010).
+fn print_webhook(mut config: Config, port: u16, rotate: bool) -> Result<(), String> {
+    if rotate {
+        config.rotate_webhook_key().map_err(|e| e.to_string())?;
+        println!("A new webhook key was made. Restart the agent (Sair on the tray icon, it starts again by itself) for it to count.
+");
+    }
+    let key = config.webhook_key();
+    println!(
+        "Webhook key: {key}
+"
+    );
+    println!("It opens the webhooks only (notices, page switches, values for the panel), never the rest of the PC.
+");
+    println!("  curl -H \"Authorization: Bearer {key}\" -d \"build done\" http://127.0.0.1:{port}/api/hook/notify");
+    println!("  curl -H \"Authorization: Bearer {key}\" -d 21.5 \"http://127.0.0.1:{port}/api/hook/push/temp?ttl=300\"");
+    println!(
+        "
+A sender that cannot set a header may use ?key={key} on these addresses."
+    );
+    Ok(())
 }
 
 /// Puts this process in a job that ends with it: whatever it started (PowerShell for the firewall, the notification helpers) dies when this process does, however it ends
@@ -248,6 +281,9 @@ async fn run() -> Result<(), String> {
         return update::command(&config, rest).map_err(|e| e.to_string());
     }
     let port = args.port.unwrap_or_else(|| config.port());
+    if args.webhook {
+        return print_webhook(config, port, args.rotate);
+    }
     if args.pair {
         #[cfg(windows)]
         lan::print_pairing(&config, port, &args.data_dir);
@@ -280,6 +316,7 @@ async fn run() -> Result<(), String> {
         tray::start(tray::Info {
             port,
             token: config.token().to_owned(),
+            webhook_key: config.webhook_key().to_owned(),
             log: args.data_dir.join("server.log"),
         });
     }

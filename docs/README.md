@@ -8,6 +8,7 @@ Comece pelo [README](../README.md) para a visão geral e o início rápido. Aqui
 |---|---|
 | [Instalação](instalacao.md) | instalar, atualizar e remover o agente; onde ficam os arquivos; trazer o pareamento de uma versão anterior |
 | [Guia de uso](guia-de-uso.md) | as páginas do painel, o editor de botões, as macros e os controles de energia |
+| [Webhooks](webhooks.md) | avisos, troca de página e valores no painel por `curl`, CI ou Home Assistant |
 | [Rede e segurança](rede-e-seguranca.md) | USB, Wi-Fi, iPhone, certificados, firewall e o modelo de segurança |
 | [Câmera](camera.md) | usar o celular como webcam, a câmera virtual, o OBS e como melhorar o desempenho |
 | [Configuração](configuracao.md) | todas as chaves do `config.json`, as portas, os argumentos e as variáveis de ambiente |

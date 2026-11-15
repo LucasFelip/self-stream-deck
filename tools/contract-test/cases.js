@@ -148,6 +148,27 @@ const cases = [
   { name: 'virtual camera uninstall needs confirm', method: 'POST', path: '/api/camera/direct/uninstall', body: {}, status: 400 },
   { name: 'virtual camera uninstall', method: 'POST', path: '/api/camera/direct/uninstall', body: { confirm: true }, status: 200, check: (r, e) => e.assert.strictEqual(r.json.installed, false) },
 
+  // ---- webhooks (ADR 0010): the phone's token opens them too; the webhook key itself is exercised in run.js (security)
+  { name: 'hook notify: a plain text notice', method: 'POST', path: '/api/hook/notify', rawBody: 'build done', contentType: 'text/plain', status: 200, check: (r, e) => e.assert.ok(r.json.seq >= 1) },
+  { name: 'hook notify: JSON with a title', method: 'POST', path: '/api/hook/notify', body: { title: 'CI', text: 'verde' }, status: 200 },
+  { name: 'hook notify: no text is 400', method: 'POST', path: '/api/hook/notify', body: { title: 'CI' }, status: 400 },
+  { name: 'hook notify: a text over 500 characters is 400', method: 'POST', path: '/api/hook/notify', body: { text: 'x'.repeat(501) }, status: 400 },
+  { name: 'hook notify: a body over 8 KB is 413', method: 'POST', path: '/api/hook/notify', rawBody: big(9000), contentType: 'text/plain', status: 413, orClosed: true },
+  { name: 'hook goto', method: 'POST', path: '/api/hook/goto/som', status: 200 },
+  { name: 'hook goto: a page with capitals is 400', method: 'POST', path: '/api/hook/goto/Som', status: 400 },
+  { name: 'hook refresh', method: 'POST', path: '/api/hook/refresh', status: 200 },
+  { name: 'hook push: set a value with a time to live', method: 'PUT', path: '/api/hook/push/temp.cpu?ttl=300', rawBody: '21.5', contentType: 'text/plain', status: 200, check: (r, e) => e.assert.strictEqual(r.json.key, 'temp.cpu') },
+  { name: 'hook push: POST does the same', method: 'POST', path: '/api/hook/push/nota', body: { a: [1, 2] }, status: 200 },
+  { name: 'hook push: read one', method: 'GET', path: '/api/hook/push/temp.cpu', status: 200, check: (r, e) => { e.assert.strictEqual(r.json.data, 21.5); e.assert.strictEqual(typeof r.json.expiresAt, 'number'); } },
+  { name: 'hook push: list them', method: 'GET', path: '/api/hook/push', status: 200, check: (r, e) => e.assert.deepStrictEqual(Object.keys(r.json.values).sort(), ['nota', 'temp.cpu']) },
+  { name: 'hook push: an empty value is 400', method: 'PUT', path: '/api/hook/push/vazio', rawBody: '', contentType: 'text/plain', status: 400 },
+  { name: 'hook push: a key with a space is 400', method: 'PUT', path: '/api/hook/push/a%20b', rawBody: '1', contentType: 'text/plain', status: 400 },
+  { name: 'hook push: a ttl that is not a number is 400', method: 'PUT', path: '/api/hook/push/x?ttl=abc', rawBody: '1', contentType: 'text/plain', status: 400 },
+  { name: 'hook push: a missing value is 404', method: 'GET', path: '/api/hook/push/ghost', status: 404 },
+  { name: 'hook push: remove one', method: 'DELETE', path: '/api/hook/push/nota', status: 200 },
+  { name: 'hook push: removing it again is 404', method: 'DELETE', path: '/api/hook/push/nota', status: 404 },
+  { name: 'hook push: put back', method: 'DELETE', path: '/api/hook/push/temp.cpu', status: 200 },
+
   // ---- events (the stream itself is tested apart: see sse in run.js)
   { name: 'events: topics are required', method: 'GET', path: '/api/events', status: 400 },
   { name: 'events: an unknown topic is 400', method: 'GET', path: '/api/events?topics=state,secrets', status: 400 },

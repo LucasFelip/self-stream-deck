@@ -856,6 +856,107 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/hook/notify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Show a notice on the panel
+         * @description Opens with the **webhook key** (or the phone's token). The body is `{ "title"?, "text" }` or just the text. It only shows a notice:
+         *     it never runs anything on the PC. Delivered to the phones through the `panel` topic.
+         */
+        post: operations["hookNotify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/hook/goto/{page}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Switch the panel to a page
+         * @description A page is 1-32 characters of `a-z`, `0-9` and `-`. A page the panel does not have is ignored by the panel.
+         */
+        post: operations["hookGoto"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/hook/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Make the panel reload what it shows */
+        post: operations["hookRefresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/hook/push": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every pushed value, and the version they belong to */
+        get: operations["hookListValues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/hook/push/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        /** One pushed value */
+        get: operations["hookGetValue"];
+        /**
+         * Keep a value for the panel (POST does the same)
+         * @description The body is JSON or plain text. `ttl` (seconds, up to 30 days) makes the value disappear by itself; without it the value stays until it is
+         *     deleted. At most 200 values; the body is up to 8 KB.
+         */
+        put: operations["hookSetValue"];
+        /** Keep a value for the panel (the same as PUT) */
+        post: operations["hookSetValuePost"];
+        /** Remove a value */
+        delete: operations["hookDeleteValue"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/events": {
         parameters: {
             query?: never;
@@ -1326,6 +1427,49 @@ export interface components {
             link: string;
             direct: components["schemas"]["VirtualCamera"];
         };
+        HookNotice: {
+            title?: string;
+            text: string;
+        };
+        HookQueued: {
+            /** @constant */
+            ok: true;
+            /** @description the number of the event; the `panel` topic carries it */
+            seq: number;
+        };
+        HookStored: {
+            /** @constant */
+            ok: true;
+            key: string;
+            version: number;
+        };
+        PushValue: {
+            /** @description whatever was pushed: JSON or text */
+            data: unknown;
+            /** @description unix ms of the last write */
+            at: number;
+            /** @description unix ms after which the value is gone; null keeps it */
+            expiresAt: number | null;
+        };
+        /** @description The values the webhooks pushed, and a version that changes whenever one is set, removed or expires. Also the `push` topic of the event stream. */
+        PushValues: {
+            values: {
+                [key: string]: components["schemas"]["PushValue"];
+            };
+            version: number;
+        };
+        /** @description The queue of events for the phones (the last 50) and the number of the last one. A phone that has just started takes `seq` as its starting point and acts only on newer events. Only a topic of the event stream. */
+        PanelEvents: {
+            seq: number;
+            events: {
+                seq: number;
+                /** @enum {unknown} */
+                kind: "notify" | "goto" | "refresh";
+                /** @description notify: { title, text }; goto: { page }; refresh: null */
+                data: unknown;
+                at: number;
+            }[];
+        };
         /** @description What Windows kept quiet from the apps listed in config.notifications.apps, newest last. Only a topic of the event stream (no GET route). */
         Notifications: {
             /**
@@ -1342,7 +1486,7 @@ export interface components {
             }[];
         };
         /** @enum {unknown} */
-        EventTopic: "windows" | "state" | "audio" | "media" | "notifications" | "monitor" | "game" | "processes" | "power";
+        EventTopic: "windows" | "state" | "audio" | "media" | "notifications" | "monitor" | "game" | "processes" | "power" | "push" | "panel";
     };
     responses: {
         /** @description invalid input */
@@ -2773,6 +2917,226 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["CrossOrigin"];
+        };
+    };
+    hookNotify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HookNotice"];
+                "text/plain": string;
+            };
+        };
+        responses: {
+            /** @description queued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HookQueued"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["CrossOrigin"];
+            413: components["responses"]["TooLarge"];
+            429: components["responses"]["LockedOut"];
+        };
+    };
+    hookGoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description queued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HookQueued"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["CrossOrigin"];
+            429: components["responses"]["LockedOut"];
+        };
+    };
+    hookRefresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description queued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HookQueued"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["CrossOrigin"];
+            429: components["responses"]["LockedOut"];
+        };
+    };
+    hookListValues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the values */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushValues"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            429: components["responses"]["LockedOut"];
+        };
+    };
+    hookGetValue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the value */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushValue"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["LockedOut"];
+        };
+    };
+    hookSetValue: {
+        parameters: {
+            query?: {
+                ttl?: number;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": unknown;
+                "text/plain": string;
+            };
+        };
+        responses: {
+            /** @description stored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HookStored"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["CrossOrigin"];
+            413: components["responses"]["TooLarge"];
+            429: components["responses"]["LockedOut"];
+        };
+    };
+    hookSetValuePost: {
+        parameters: {
+            query?: {
+                ttl?: number;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": unknown;
+                "text/plain": string;
+            };
+        };
+        responses: {
+            /** @description stored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HookStored"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["CrossOrigin"];
+            413: components["responses"]["TooLarge"];
+            429: components["responses"]["LockedOut"];
+        };
+    };
+    hookDeleteValue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description removed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ok"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["CrossOrigin"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["LockedOut"];
         };
     };
     subscribeEvents: {

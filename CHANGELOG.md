@@ -19,9 +19,11 @@ Como publicar uma versão: [docs/desenvolvimento.md](docs/desenvolvimento.md#pub
   certificados não passam por `%TEMP%`, a atualização é baixada e instalada a partir de `update\` ao lado do `ssd.exe`, e a atualização automática
   só aceita o certificado do próprio agente (`update.signer` vale apenas para `ssd update --apply`).
 - A DLL da câmera virtual fica travada contra troca entre a conferência e o registro.
+- O `?token=` no endereço só vale no link de pareamento, nos arquivos do painel e no `/api/ping`. Em qualquer outra rota o token vai no cabeçalho ou no cookie (endereços vão para logs).
 
 ### Adicionado
 
+- **Webhooks** (`/api/hook/*`, [docs/webhooks.md](docs/webhooks.md)): scripts, CI e Home Assistant mostram um aviso no painel, trocam a página, recarregam e deixam valores (com tempo de vida) que aparecem em PC › Painel. Têm uma chave própria (`webhookKey`, `ssd webhook`, e a bandeja), que não abre nada fora deles.
 - Apps da Microsoft Store e empacotados (MSIX), como o Claude, aparecem com o ícone certo e o painel sabe quando estão abertos.
 - O painel avisa quando uma tela para de funcionar, em vez de ficar preto, e oferece recarregar.
 - O editor de botões pergunta antes de descartar alterações não salvas.

@@ -7,6 +7,7 @@ mod camera;
 mod editor;
 pub mod embedded;
 mod events;
+mod hooks;
 mod media;
 mod monitorroutes;
 mod powerroutes;
@@ -33,6 +34,7 @@ use ssd_core::ports::{
     VcamPort, WindowsPort,
 };
 use ssd_core::power::Scheduled;
+use ssd_core::push::PushStore;
 
 /// Sent with every response: the page only ever loads its own files, cannot be framed, and nothing is sniffed or leaked.
 pub const SECURITY_HEADERS: [(&str, &str); 5] = [
@@ -77,6 +79,8 @@ pub struct AppState {
     pub hub: events::Hub,
     /// the phone's camera as a webcam
     pub camera: Arc<camera::Camera>,
+    /// what the webhooks pushed into the panel: values and events (ADR 0010)
+    pub push: Mutex<PushStore>,
     /// the shutdown this agent scheduled, for the countdown on the phone
     pub scheduled: Mutex<Option<Scheduled>>,
     /// macros being run (one run of each at a time)
@@ -98,13 +102,15 @@ impl AppState {
         web_dir: PathBuf,
         platform: Platform,
     ) -> Arc<Self> {
-        let guard = Guard::new(config.token(), machine_name);
+        let guard = Guard::new(config.token(), machine_name).with_webhook_key(config.webhook_key());
+        let push = PushStore::load(config.dir().join("data.json"));
         let state = Arc::new(Self {
             guard,
             host: machine_name.to_owned(),
             apps: Mutex::new(apps::AppsState::default()),
             hub: events::Hub::default(),
             camera: Arc::new(camera::Camera::default()),
+            push: Mutex::new(push),
             scheduled: Mutex::new(None),
             info_cache: Mutex::new(None),
             running_macros: Mutex::new(Default::default()),

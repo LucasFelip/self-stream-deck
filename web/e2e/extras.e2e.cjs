@@ -155,6 +155,40 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       } finally { deck.model.notifications = { access: 'allowed', notifications: [] }; close(); }
     });
 
+    await test('webhooks: a notice shows as a toast, a goto switches the page, and what was queued before the page opened is not replayed', async () => {
+      deck.model.pushPanel('notify', { title: 'Antigo', text: 'já estava na fila' });
+      const { page, close } = await open(411, 914);
+      try {
+        await sleep(600);
+        assert.strictEqual(await page.eval(`document.getElementById('toast').classList.contains('show')`), false, 'an old event is not replayed');
+        deck.model.pushPanel('notify', { title: 'CI', text: 'verde' });
+        await page.waitFor(`document.getElementById('toast').classList.contains('show') && document.getElementById('toast').textContent === '📣 CI: verde'`, 'the notice');
+        deck.model.pushPanel('goto', { page: 'power' });
+        await page.waitFor(`document.querySelector('#tabs .tab[aria-selected="true"]').dataset.section === 'power'`, 'the page switch', 6000);
+        deck.model.pushPanel('goto', { page: 'nao-existe' });
+        await sleep(500);
+        assert.strictEqual(await page.eval(`document.querySelector('#tabs .tab[aria-selected="true"]').dataset.section`), 'power', 'an unknown page is ignored');
+        assert.ok(!page.errors.length, JSON.stringify(page.errors));
+      } finally { close(); }
+    });
+
+    await test('webhooks: the Painel pane of PC exists only while there are pushed values, and lists them', async () => {
+      deck.model.pushed = { values: {}, version: 0 };
+      const { page, close } = await open(411, 914);
+      try {
+        await tapTab(page, 'pc');
+        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.pc-page .seg-btn')].map((b) => b.textContent)`), ['Desempenho', 'Processos', 'Sistema']);
+        deck.model.pushValues({ 'temp.cpu': { data: 21.5, at: 1, expiresAt: null }, nota: { data: { a: 1 }, at: 1, expiresAt: null } });
+        await page.waitFor(`[...document.querySelectorAll('.pc-page .seg-btn')].some((b) => b.textContent === 'Painel')`, 'the pane appears');
+        await tapUntil(page, '.pc-page .seg-btn[data-seg="push"]', `document.querySelector('.pc-page .seg-btn[data-seg="push"]').getAttribute('aria-selected') === 'true'`, 'the Painel pane');
+        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.push-pane dt')].map((d) => d.textContent)`), ['nota', 'temp.cpu']);
+        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.push-pane dd')].map((d) => d.textContent)`), ['{"a":1}', '21.5']);
+        deck.model.pushValues({});
+        await page.waitFor(`![...document.querySelectorAll('.pc-page .seg-btn')].some((b) => b.textContent === 'Painel') && document.querySelector('.pc-page .seg-btn[aria-selected="true"]').dataset.seg === 'monitor'`, 'back to Desempenho when the values are gone');
+        assert.ok(!page.errors.length, JSON.stringify(page.errors));
+      } finally { deck.model.pushed = { values: {}, version: 0 }; close(); }
+    });
+
     await test('self-update: when the interface version changes on the PC the page reloads, once nobody is touching it', async () => {
       const { page, close } = await open(411, 914);
       try {

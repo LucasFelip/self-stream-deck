@@ -113,16 +113,17 @@ const os = require('node:os');
 const EXE = process.env.SSD_AGENT_EXE || path.join(ROOT, 'agent', 'target', 'release', process.platform === 'win32' ? 'ssd.exe' : 'ssd');
 const WEB = path.join(ROOT, 'web', 'dist');
 const JPEG = fs.readFileSync(path.join(ROOT, 'agent', 'crates', 'api', 'assets', 'nosignal.jpg'));
+const WEBHOOK_KEY = 'contract-webhook-key-0123456789ab';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function startAgent(port, overrides) {
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'ssd-contract-'));
-  fs.writeFileSync(path.join(data, 'config.json'), JSON.stringify({ ...clone(fixture.config), token: fixture.token, ...overrides, port }));
+  fs.writeFileSync(path.join(data, 'config.json'), JSON.stringify({ ...clone(fixture.config), token: fixture.token, webhookKey: WEBHOOK_KEY, ...overrides, port }));
   const child = spawn(EXE, ['--data-dir', data, '--web-dir', WEB, '--port', String(port), '--fake-platform', '--no-tray'], { stdio: 'ignore', env: { ...process.env, SSD_NO_FIREWALL: '1' } });
   const url = `http://127.0.0.1:${port}`;
   for (let attempt = 0; attempt < 60; attempt += 1) {
     const up = await request(url, fixture.token, { method: 'GET', path: '/api/ping' }).then((r) => r.status === 200, () => false);
-    if (up) return { url, token: fixture.token, calls: [], external: true, close: () => { child.kill(); fs.rmSync(data, { recursive: true, force: true }); } };
+    if (up) return { url, token: fixture.token, webhookKey: WEBHOOK_KEY, calls: [], external: true, close: () => { child.kill(); fs.rmSync(data, { recursive: true, force: true }); } };
     await sleep(250);
   }
   child.kill();
@@ -309,6 +310,28 @@ async function securityCases(target, makeFresh, runLockout) {
     assert.strictEqual((await get({})).status, 200);
     assert.strictEqual((await get({ auth: 'none', path: `/api/ping?token=${target.token}` })).status, 200);
     assert.strictEqual((await get({ auth: 'none', headers: { Cookie: `ssd_token=${target.token}` } })).status, 200);
+  });
+  // These two make wrong attempts on purpose (each one counts toward the lock-out), so they run on an agent of their own.
+  await step('security: the token in the address is for pairing and ping only; the webhook key opens /api/hook/* and nothing else', async () => {
+    if (!runLockout) return;
+    const fresh = await makeFresh();
+    try {
+      const at = (extra) => request(fresh.url, null, { auth: 'none', method: 'GET', path: '/api/ping', ...extra });
+      for (const p of ['/api/volume', '/api/events?topics=state']) {
+        const sep = p.includes('?') ? '&' : '?';
+        assert.strictEqual((await at({ path: `${p}${sep}token=${fresh.token}` })).status, 401, `${p} must not take the token in the address`);
+      }
+      const hook = (extra) => at({ method: 'POST', path: '/api/hook/refresh', ...extra });
+      assert.strictEqual((await hook({ headers: { Authorization: `Bearer ${fresh.webhookKey}` } })).status, 200);
+      assert.strictEqual((await hook({ headers: { 'X-Token': fresh.webhookKey } })).status, 200);
+      assert.strictEqual((await hook({ path: `/api/hook/refresh?key=${fresh.webhookKey}` })).status, 200);
+      assert.strictEqual((await hook({ headers: { Authorization: `Bearer ${fresh.webhookKey}`, Origin: 'https://evil.example.com' } })).status, 403);
+      for (const p of ['/api/ping', '/api/volume']) {
+        assert.strictEqual((await at({ path: p, headers: { Authorization: `Bearer ${fresh.webhookKey}` } })).status, 401, `${p} must not open with the webhook key`);
+        assert.strictEqual((await at({ path: p, headers: { 'X-Token': fresh.webhookKey } })).status, 401, p);
+      }
+      assert.strictEqual((await hook({ headers: { Authorization: 'Bearer wrong' } })).status, 401);
+    } finally { fresh.close(); }
   });
   await step('security: a Host that is not an IP, localhost or this PC is 421 (DNS rebinding)', async () => {
     const r = await get({ headers: { Host: 'evil.example.com' } });

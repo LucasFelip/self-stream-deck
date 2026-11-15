@@ -1,12 +1,15 @@
 import { useSyncExternalStore } from 'react';
 
-export type Pane = 'monitor' | 'processes' | 'system';
+export type Pane = 'monitor' | 'processes' | 'system' | 'push';
 
 export const PANES: ReadonlyArray<{ id: Pane; label: string }> = [
   { id: 'monitor', label: 'Desempenho' },
   { id: 'processes', label: 'Processos' },
   { id: 'system', label: 'Sistema' },
 ];
+
+/** Shown only while webhooks have values to show (ADR 0010). */
+export const PUSH_PANE = { id: 'push', label: 'Painel' } as const;
 
 let current: Pane = 'monitor';
 const listeners = new Set<() => void>();

@@ -37,6 +37,7 @@ tags:
   - { name: windows, description: Windows and screens }
   - { name: pc, description: System monitor and power }
   - { name: camera, description: The phone camera as a webcam }
+  - { name: hooks, description: 'Webhooks that put notices, page switches and values into the panel (own key, ADR 0010)' }
   - { name: events, description: Live updates (server-sent events) }
   - { name: system, description: Health, pairing and diagnostics }
 
@@ -839,6 +840,130 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/CrossOrigin' }
 
+  /api/hook/notify:
+    post:
+      tags: [hooks]
+      operationId: hookNotify
+      summary: Show a notice on the panel
+      description: |
+        Opens with the **webhook key** (or the phone's token). The body is `{ "title"?, "text" }` or just the text. It only shows a notice:
+        it never runs anything on the PC. Delivered to the phones through the `panel` topic.
+      security: [{ webhookBearer: [] }, { webhookKeyQuery: [] }, { tokenHeader: [] }, { tokenCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/HookNotice' } }
+          text/plain: { schema: { type: string, minLength: 1, maxLength: 500 } }
+      responses:
+        '200': { description: queued, content: { application/json: { schema: { $ref: '#/components/schemas/HookQueued' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '429': { $ref: '#/components/responses/LockedOut' }
+
+  /api/hook/goto/{page}:
+    post:
+      tags: [hooks]
+      operationId: hookGoto
+      summary: Switch the panel to a page
+      description: A page is 1-32 characters of `a-z`, `0-9` and `-`. A page the panel does not have is ignored by the panel.
+      security: [{ webhookBearer: [] }, { webhookKeyQuery: [] }, { tokenHeader: [] }, { tokenCookie: [] }]
+      parameters:
+        - { name: page, in: path, required: true, schema: { type: string, pattern: '^[a-z0-9-]{1,32}$' } }
+      responses:
+        '200': { description: queued, content: { application/json: { schema: { $ref: '#/components/schemas/HookQueued' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+        '429': { $ref: '#/components/responses/LockedOut' }
+
+  /api/hook/refresh:
+    post:
+      tags: [hooks]
+      operationId: hookRefresh
+      summary: Make the panel reload what it shows
+      security: [{ webhookBearer: [] }, { webhookKeyQuery: [] }, { tokenHeader: [] }, { tokenCookie: [] }]
+      responses:
+        '200': { description: queued, content: { application/json: { schema: { $ref: '#/components/schemas/HookQueued' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+        '429': { $ref: '#/components/responses/LockedOut' }
+
+  /api/hook/push:
+    get:
+      tags: [hooks]
+      operationId: hookListValues
+      summary: Every pushed value, and the version they belong to
+      security: [{ webhookBearer: [] }, { webhookKeyQuery: [] }, { tokenHeader: [] }, { tokenCookie: [] }]
+      responses:
+        '200': { description: the values, content: { application/json: { schema: { $ref: '#/components/schemas/PushValues' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/LockedOut' }
+
+  /api/hook/push/{key}:
+    parameters:
+      - { name: key, in: path, required: true, schema: { type: string, pattern: '^[A-Za-z0-9._-]{1,64}$' } }
+    get:
+      tags: [hooks]
+      operationId: hookGetValue
+      summary: One pushed value
+      security: [{ webhookBearer: [] }, { webhookKeyQuery: [] }, { tokenHeader: [] }, { tokenCookie: [] }]
+      responses:
+        '200': { description: the value, content: { application/json: { schema: { $ref: '#/components/schemas/PushValue' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/LockedOut' }
+    put:
+      tags: [hooks]
+      operationId: hookSetValue
+      summary: Keep a value for the panel (POST does the same)
+      description: |
+        The body is JSON or plain text. `ttl` (seconds, up to 30 days) makes the value disappear by itself; without it the value stays until it is
+        deleted. At most 200 values; the body is up to 8 KB.
+      security: [{ webhookBearer: [] }, { webhookKeyQuery: [] }, { tokenHeader: [] }, { tokenCookie: [] }]
+      parameters:
+        - { name: ttl, in: query, required: false, schema: { type: integer, minimum: 0, maximum: 2592000 } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: {} }, text/plain: { schema: { type: string } } }
+      responses:
+        '200': { description: stored, content: { application/json: { schema: { $ref: '#/components/schemas/HookStored' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '429': { $ref: '#/components/responses/LockedOut' }
+    post:
+      tags: [hooks]
+      operationId: hookSetValuePost
+      summary: Keep a value for the panel (the same as PUT)
+      security: [{ webhookBearer: [] }, { webhookKeyQuery: [] }, { tokenHeader: [] }, { tokenCookie: [] }]
+      parameters:
+        - { name: ttl, in: query, required: false, schema: { type: integer, minimum: 0, maximum: 2592000 } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: {} }, text/plain: { schema: { type: string } } }
+      responses:
+        '200': { description: stored, content: { application/json: { schema: { $ref: '#/components/schemas/HookStored' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+        '413': { $ref: '#/components/responses/TooLarge' }
+        '429': { $ref: '#/components/responses/LockedOut' }
+    delete:
+      tags: [hooks]
+      operationId: hookDeleteValue
+      summary: Remove a value
+      security: [{ webhookBearer: [] }, { webhookKeyQuery: [] }, { tokenHeader: [] }, { tokenCookie: [] }]
+      responses:
+        '200': { description: removed, content: { application/json: { schema: { $ref: '#/components/schemas/Ok' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/CrossOrigin' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/LockedOut' }
+
+
   /api/events:
     get:
       tags: [events]
@@ -874,12 +999,16 @@ x-events:
   processes: { $ref: '#/components/schemas/Processes' }
   game: { $ref: '#/components/schemas/GameFps' }
   notifications: { $ref: '#/components/schemas/Notifications' }
+  push: { $ref: '#/components/schemas/PushValues' }
+  panel: { $ref: '#/components/schemas/PanelEvents' }
 
 components:
   securitySchemes:
     tokenQuery: { type: apiKey, in: query, name: token, description: 'the pairing token (`/?token=...` sets the cookie and drops it from the URL)' }
     tokenHeader: { type: apiKey, in: header, name: X-Token }
     tokenCookie: { type: apiKey, in: cookie, name: ssd_token, description: 'set by the pairing link; HttpOnly, SameSite=Lax' }
+    webhookBearer: { type: http, scheme: bearer, description: 'the webhook key (`ssd webhook`): opens /api/hook/* and nothing else; `X-Token` carries it too' }
+    webhookKeyQuery: { type: apiKey, in: query, name: key, description: 'the webhook key, for senders that cannot set a header; only on /api/hook/*' }
 
   responses:
     BadRequest:
@@ -1361,6 +1490,55 @@ components:
         link: { type: string, description: 'the OBS Browser Source link' }
         direct: { $ref: '#/components/schemas/VirtualCamera' }
 
+    HookNotice:
+      type: object
+      required: [text]
+      properties:
+        title: { type: string, maxLength: 120 }
+        text: { type: string, minLength: 1, maxLength: 500 }
+    HookQueued:
+      type: object
+      required: [ok, seq]
+      properties:
+        ok: { const: true }
+        seq: { type: integer, minimum: 1, description: 'the number of the event; the `panel` topic carries it' }
+    HookStored:
+      type: object
+      required: [ok, key, version]
+      properties:
+        ok: { const: true }
+        key: { type: string }
+        version: { type: integer, minimum: 0 }
+    PushValue:
+      type: object
+      required: [data, at, expiresAt]
+      properties:
+        data: { description: 'whatever was pushed: JSON or text' }
+        at: { type: integer, description: unix ms of the last write }
+        expiresAt: { type: [integer, 'null'], description: unix ms after which the value is gone; null keeps it }
+    PushValues:
+      description: The values the webhooks pushed, and a version that changes whenever one is set, removed or expires. Also the `push` topic of the event stream.
+      type: object
+      required: [values, version]
+      properties:
+        values: { type: object, additionalProperties: { $ref: '#/components/schemas/PushValue' } }
+        version: { type: integer, minimum: 0 }
+    PanelEvents:
+      description: The queue of events for the phones (the last 50) and the number of the last one. A phone that has just started takes `seq` as its starting point and acts only on newer events. Only a topic of the event stream.
+      type: object
+      required: [seq, events]
+      properties:
+        seq: { type: integer, minimum: 0 }
+        events:
+          type: array
+          items:
+            type: object
+            required: [seq, kind, data, at]
+            properties:
+              seq: { type: integer, minimum: 1 }
+              kind: { enum: [notify, goto, refresh] }
+              data: { description: 'notify: { title, text }; goto: { page }; refresh: null' }
+              at: { type: integer }
     Notifications:
       description: What Windows kept quiet from the apps listed in config.notifications.apps, newest last. Only a topic of the event stream (no GET route).
       type: object
@@ -1380,4 +1558,4 @@ components:
               time: { type: [string, integer] }
 
     EventTopic:
-      enum: [windows, state, audio, media, notifications, monitor, game, processes, power]
+      enum: [windows, state, audio, media, notifications, monitor, game, processes, power, push, panel]
