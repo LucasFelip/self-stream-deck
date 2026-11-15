@@ -126,7 +126,14 @@ data: ${JSON.stringify(value)}
   model.cameraWanted = true;
   model.frames = 0;
 
-  const sampleReply = () => ({
+  // the pictures and the live numbers a test (or the screenshots) can give the deck: model.icons[id] = svg text, model.sampleHook = (sample) => sample
+  model.icons = {};
+  const monitorStreams = new Set();
+  model.pushMonitor = () => { for (const res of monitorStreams) res.write(`event: monitor
+data: ${JSON.stringify(sampleReply())}
+
+`); };
+  const sampleReply = () => (model.sampleHook || ((sample) => sample))({
     cpu: { usage: 23, freqMHz: 4200, temp: 51, tempSource: 'fake', power: 40, processes: 210, threads: 3100, cores: [10, 20, 30, 40] },
     memory: { usedPct: 48, usedMB: 15000, totalMB: 32000, commitUsedMB: 20000, commitLimitMB: 40000 },
     gpu: model.noGpu ? null : { name: 'NVIDIA GeForce RTX 4070', usage: 35, memUsedMB: 4000, memTotalMB: 12000, temp: 60, power: 120, powerLimit: 200, fan: 40, clock: 2100 },
@@ -158,6 +165,10 @@ data: ${JSON.stringify(value)}
     const body = req.method === 'POST' ? await readJson(req, 64 * 1024).catch(() => ({})) : undefined;
     model.calls.push({ method: req.method, path: url.pathname, body, topics: url.searchParams.get('topics') });
     const key = `${req.method} ${url.pathname}`;
+    if (req.method === 'GET' && url.pathname.startsWith('/api/icon/') && model.icons[url.pathname.slice('/api/icon/'.length)]) {
+      res.writeHead(200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'no-store' });
+      return res.end(model.icons[url.pathname.slice('/api/icon/'.length)]);
+    }
     if (key === 'GET /api/apps') return sendJson(res, 200, { host: 'PC-TESTE', apps: model.apps.filter((app) => !model.hidden.includes(app.id)) });
     if (key === 'GET /api/state') return model.down ? sendJson(res, 503, { error: 'down' }) : sendJson(res, 200, model.state);
     if (key === 'GET /api/shortcuts') return sendJson(res, 200, { shortcuts: model.shortcuts.map(({ id, label, display }) => ({ id, label, display })) });
@@ -208,7 +219,11 @@ data: ${JSON.stringify(value)}
       if (topics.includes('audio')) push('audio', model.audio);
       if (topics.includes('media')) push('media', model.media);
       if (topics.includes('windows')) push('windows', { windows: model.windows });
-      if (topics.includes('monitor')) push('monitor', sampleReply());
+      if (topics.includes('monitor')) {
+        monitorStreams.add(res);
+        res.on('close', () => monitorStreams.delete(res));
+        push('monitor', sampleReply());
+      }
       if (topics.includes('processes')) push('processes', processesReply());
       if (topics.includes('notifications')) {
         noticeStreams.add(res);

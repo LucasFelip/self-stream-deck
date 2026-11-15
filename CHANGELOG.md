@@ -23,6 +23,7 @@ Como publicar uma versão: [docs/desenvolvimento.md](docs/desenvolvimento.md#pub
 
 ### Adicionado
 
+- **Imagens do README**: a capa e as capturas foram refeitas com o visual novo (ícones coloridos nas teclas, gráficos com histórico); `node tools/screenshots/run.cjs` gera tudo, inclusive a capa. Na paisagem o ícone de uma tecla alta pode chegar a 96 px (era 64). O GIF do tour ficou de fora: não há como gerá-lo sem uma ferramenta de vídeo.
 - **Visual: aparência escolhível**: menu › *Aparência…* troca a cor de destaque (seis, todas com contraste de leitura conferido por teste) e o tamanho do texto (pequeno, normal, grande); vale na hora, fica guardado no aparelho e vale só nele.
 - **Visual: tela de descanso**: ao escurecer (menu › Escurecer após…) o painel mostra um relógio grande, o dia, o que está tocando e até três valores dos webhooks, em cinza apagado sobre o preto e deslocado alguns pixels a cada minuto (para não marcar a tela AMOLED); o primeiro toque continua só acordando a tela.
 - **Visual: player de Som maior**: na paisagem a capa, o título e o botão de tocar crescem com a altura da tela (a capa vai de 64 a 96 px), com sombra na capa e o nome do app em destaque; em pé o player continua fino.

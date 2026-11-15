@@ -82,7 +82,8 @@ export function appsLayout(count: number, base: Base, landscape: boolean): AppsF
   const w = (base.width - (cols - 1) * FIT_GAP) / cols;
   const h = (base.height - (rows - 1) * FIT_GAP) / rows;
   if (w >= FIT_MIN_W && h >= FIT_MIN_H) {
-    return { mode: 'fit', cols, rows, icon: Math.max(24, Math.min(64, w - 12, h - 28)), w: Math.floor(w), h: Math.floor(h) };
+    // landscape keys are tall (two rows): the icon may grow past the 64 px of a small key, up to 96
+    return { mode: 'fit', cols, rows, icon: Math.max(24, Math.min(96, w - 12, h - 28)), w: Math.floor(w), h: Math.floor(h) };
   }
   return { mode: 'scroll', cols, rows, icon: Math.max(24, Math.min(base.icon, w - 12)) };
 }
