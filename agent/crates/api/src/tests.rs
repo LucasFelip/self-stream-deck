@@ -1470,3 +1470,55 @@ async fn the_hook_topics_stream_the_values_and_the_events() {
         "{all}"
     );
 }
+
+#[tokio::test]
+async fn the_token_in_the_address_works_for_pairing_and_ping_only() {
+    let (app, _) = app();
+    assert_eq!(
+        call(&app, "GET", "/api/ping?token=tok", &[]).await.status(),
+        StatusCode::OK
+    );
+    let paired = call(&app, "GET", "/?token=tok", &[("accept", "text/html")]).await;
+    assert_eq!(paired.status(), StatusCode::FOUND);
+    // the camera page link keeps working: it is one of the interface's own files
+    assert_eq!(
+        call(&app, "GET", "/app.js?token=tok", &[]).await.status(),
+        StatusCode::FOUND
+    );
+    // anywhere else the address does not carry the token
+    for uri in [
+        "/api/volume?token=tok",
+        "/api/events?topics=state&token=tok",
+        "/api/pair-code?token=tok",
+    ] {
+        assert_eq!(
+            call(&app, "GET", uri, &[]).await.status(),
+            StatusCode::UNAUTHORIZED,
+            "{uri}"
+        );
+    }
+    assert_eq!(
+        send(&app, "POST", "/api/mic?token=tok", &[], "{}")
+            .await
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    // the header and the cookie still open everything
+    assert_eq!(
+        call(&app, "GET", "/api/pair-code", &[("x-token", "tok")])
+            .await
+            .status(),
+        StatusCode::OK
+    );
+    assert_eq!(
+        call(
+            &app,
+            "GET",
+            "/api/pair-code",
+            &[("cookie", "ssd_token=tok")]
+        )
+        .await
+        .status(),
+        StatusCode::OK
+    );
+}

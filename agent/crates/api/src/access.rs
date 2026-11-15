@@ -48,6 +48,11 @@ pub(crate) fn is_public_asset(path: &str) -> bool {
             })
 }
 
+/// Where the phone's token may travel in the query string (ADR 0010).
+fn query_token_allowed(method: &Method, path: &str) -> bool {
+    method == Method::GET && (path == "/api/ping" || statics::is_static_path(path))
+}
+
 fn header_of(request: &Request, name: &str) -> Option<String> {
     request
         .headers()
@@ -112,7 +117,10 @@ pub(crate) async fn guard(
     }
 
     let query = request.uri().query().unwrap_or("");
-    let token_in_query = query_param(query, "token");
+    // The phone's token in the address is for pairing only: the link `/?token=` (it becomes a cookie), the interface's own files and `/api/ping`
+    // (the app asks it before it loads the page). On any other route it must come as a header or the cookie: an address ends up in logs.
+    let token_in_query =
+        query_param(query, "token").filter(|_| query_token_allowed(&method, &path));
     let x_token = header_of(&request, "x-token");
     // The webhooks (ADR 0010) also open with their own key: a bearer token, the x-token header or ?key= (for senders that cannot set headers).
     // That key opens nothing else, and the phone's token keeps opening everything.
