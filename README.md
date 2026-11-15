@@ -17,7 +17,7 @@ Transforma um celular em um painel de controle do seu PC com Windows: abrir prog
 
 ## O que ele faz
 
-> Quer ver antes de instalar? O painel roda no navegador, com dados de mentira: veja [a demonstração](docs/desenvolvimento.md#a-demonstração-no-navegador) (publicada pelo GitHub Pages, quando ligado no repositório).
+> Quer ver antes de instalar? **[Experimente a demonstração no navegador](https://lucasfelip.github.io/self-stream-deck/)**: o painel de verdade, com dados de mentira, sem PC nem celular. Como ela é feita: [docs/desenvolvimento.md](docs/desenvolvimento.md#a-demonstração-no-navegador).
 
 <table>
 <tr>
