@@ -12,8 +12,14 @@
 //! `--web-dir` serves the interface from a folder instead (while it is being worked on).
 mod adb;
 mod data;
+#[cfg(windows)]
 mod diagnose;
+#[cfg(not(windows))]
+#[path = "diagnose_unix.rs"]
+mod diagnose;
+#[cfg(windows)]
 mod lan;
+#[cfg(windows)]
 mod tray;
 mod update;
 
@@ -204,7 +210,17 @@ fn platform(fake: bool, data_dir: &std::path::Path) -> Platform {
         ))),
     };
     #[cfg(not(windows))]
-    Platform::default()
+    {
+        let _ = data_dir;
+        // Linux (ADR 0013): the monitor is real; everything else answers 404 until its port exists
+        #[cfg(target_os = "linux")]
+        return Platform {
+            monitor: Some(Arc::new(ssd_platform_linux::LinuxMonitor::default())),
+            ..Platform::default()
+        };
+        #[cfg(not(target_os = "linux"))]
+        Platform::default()
+    }
 }
 
 #[tokio::main]
@@ -300,6 +316,12 @@ async fn run() -> Result<(), String> {
     if args.pair {
         #[cfg(windows)]
         lan::print_pairing(&config, port, &args.data_dir);
+        // without the home-network HTTPS only the cable's address exists
+        #[cfg(not(windows))]
+        println!(
+            "Pairing code: {token}\n\nOn this computer (and a phone on the USB cable):\n  http://127.0.0.1:{port}/?token={token}",
+            token = config.token()
+        );
         return Ok(());
     }
     let machine = std::env::var("COMPUTERNAME").unwrap_or_default();
@@ -344,6 +366,7 @@ async fn run() -> Result<(), String> {
     // the automation rules (ADR 0011): a step a second, and nothing to do while no rule is on
     ssd_api::spawn_rules(state.clone());
     let app = router(state);
+    #[cfg(windows)]
     lan::start(&config, &args.data_dir, app.clone()).await;
     // with "update": { "auto": true } in config.json: look for a newer version a minute from now, then once a day
     update::forget_old_packages();

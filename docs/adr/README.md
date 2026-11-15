@@ -17,3 +17,4 @@ a substitua (e marque o antigo como "Substituído por NNNN"); não reescreva o h
 | [0010](0010-webhooks-e-eventos-do-painel.md) | Webhooks e eventos do painel, com chave própria | Aceito |
 | [0011](0011-regras-de-automacao.md) | Regras de automação | Aceito |
 | [0012](0012-agente-e-o-adb.md) | O agente fala com o `adb` | Aceito |
+| [0013](0013-agente-em-linux-spike.md) | Agente em Linux: o que o spike mostrou | Aceito (resultado de um spike) |
