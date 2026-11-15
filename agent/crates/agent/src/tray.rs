@@ -24,12 +24,14 @@ const OPEN: usize = 1;
 const CODE: usize = 2;
 const LOG: usize = 3;
 const QUIT: usize = 4;
+const WEBHOOK: usize = 5;
 
 /// What the menu needs to know.
 #[derive(Clone)]
 pub struct Info {
     pub port: u16,
     pub token: String,
+    pub webhook_key: String,
     pub log: PathBuf,
 }
 
@@ -49,6 +51,30 @@ fn open(target: &str) {
             PCWSTR::null(),
             PCWSTR::null(),
             SW_SHOWNORMAL,
+        );
+    }
+}
+
+fn show_webhook(info: &Info, owner: HWND) {
+    let text = wide(&format!(
+        "Chave dos webhooks:
+
+{}
+
+Ela abre só /api/hook/* (avisos, troca de página e valores no painel), nunca o resto do PC.
+
+Exemplo:
+curl -H \"Authorization: Bearer {}\" -d \"oi\" http://127.0.0.1:{}/api/hook/notify
+
+Para trocar a chave: \"ssd.exe webhook --rotate\" e depois Sair (o agente volta sozinho).",
+        info.webhook_key, info.webhook_key, info.port
+    ));
+    unsafe {
+        MessageBoxW(
+            owner,
+            PCWSTR(text.as_ptr()),
+            w!("Self Stream Deck"),
+            MB_OK | MB_ICONINFORMATION,
         );
     }
 }
@@ -89,6 +115,7 @@ unsafe extern "system" fn procedure(
                 let menu = CreatePopupMenu().unwrap_or_default();
                 let _ = AppendMenuW(menu, MF_STRING, OPEN, w!("Abrir painel"));
                 let _ = AppendMenuW(menu, MF_STRING, CODE, w!("Mostrar código de pareamento"));
+                let _ = AppendMenuW(menu, MF_STRING, WEBHOOK, w!("Mostrar chave de webhook"));
                 let _ = AppendMenuW(menu, MF_STRING, LOG, w!("Abrir registro (log)"));
                 let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
                 let _ = AppendMenuW(menu, MF_STRING, QUIT, w!("Sair"));
@@ -114,6 +141,7 @@ unsafe extern "system" fn procedure(
                         info.port, info.token
                     )),
                     CODE => show_code(info, window),
+                    WEBHOOK => show_webhook(info, window),
                     LOG => open(&info.log.to_string_lossy()),
                     QUIT => std::process::exit(0), // the job object takes whatever the agent started with it
                     _ => {}
