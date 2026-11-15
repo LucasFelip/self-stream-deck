@@ -213,7 +213,7 @@ button.chip:active { background: var(--border); }
 .vol-row.labeled .label { grid-area: label; max-width: none; }
 .vol-row.labeled .value { grid-area: value; }
 .vol-row.labeled .range { grid-area: range; height: 26px; }
-.vol-row .value { flex: none; min-width: 2.8em; text-align: right; font-size: 0.74rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.vol-row .value { flex: none; min-width: 2.8em; text-align: right; font-size: 0.95rem; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
 .vol-row .icon-btn { width: 44px; height: 44px; background: var(--surface-2); color: var(--text); border-radius: 12px; }
 .vol-row .icon-btn[aria-pressed="true"] { color: var(--err); }
 .vol-row[data-muted="true"] .range, .vol-row[data-muted="true"] .value { opacity: 0.4; }
@@ -236,7 +236,22 @@ button.chip:active { background: var(--border); }
 .monitor-page .c-dsk .stats { grid-column: 1; grid-row: 3; grid-template-columns: 1fr; align-self: start; }
 .monitor-page .c-dsk > .scroll { grid-column: 2; grid-row: 2 / span 2; }
 .monitor-page .c-cpu .spark, .monitor-page .c-net .spark { flex: 1; height: auto; min-height: 16px; }
-.monitor-page .big { font-size: 1.4rem; }
+.monitor-page .big { font-size: clamp(1.5rem, 5vh, 2.2rem); }
+/* the color of each reading (--c-* in style.css): title, bar, chart and cores; an alert level still wins */
+.monitor-page .card { --metric: var(--accent); }
+.monitor-page .c-cpu { --metric: var(--c-cpu); }
+.monitor-page .c-mem { --metric: var(--c-mem); }
+.monitor-page .c-gpu { --metric: var(--c-gpu); }
+.monitor-page .c-dsk { --metric: var(--c-disk); }
+.monitor-page .c-net { --metric: var(--c-net); }
+.monitor-page .card .head h3 { color: var(--metric); letter-spacing: 0.06em; }
+.monitor-page .bar > i, .monitor-page .cores i b { background: var(--metric); }
+.monitor-page .bar[data-level="warn"] > i { background: var(--warn); }
+.monitor-page .bar[data-level="crit"] > i { background: var(--err); }
+.monitor-page .spark path.fill { fill: var(--metric); fill-opacity: 0.16; }
+.monitor-page .spark path.line { stroke: var(--metric); stroke-width: 1.6; }
+.monitor-page .c-net .big { color: var(--c-net); }
+.monitor-page .c-net .stats > div:first-child span:last-child { color: var(--c-net-up); }
 .monitor-page .c-mem .stats, .monitor-page .c-gpu .stats { grid-template-columns: 1fr; }
 .monitor-page .c-gpu .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .monitor-page .c-gpu .stats > :nth-child(-n + 3) { grid-column: 1 / -1; }
@@ -276,7 +291,8 @@ button.chip:active { background: var(--border); }
 .bar[data-level="warn"] > i { background: var(--warn); }
 .bar[data-level="crit"] > i { background: var(--err); }
 
-.spark { width: 100%; height: 26px; flex: none; }
+.spark { width: 100%; height: 26px; flex: none; border-radius: 4px; /* three faint guide lines, like a chart paper */
+  background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(25% - 1px), rgba(255, 255, 255, 0.05) calc(25% - 1px), rgba(255, 255, 255, 0.05) 25%); }
 .spark path.fill { fill: rgba(124, 156, 255, 0.14); stroke: none; }
 .spark path.line { fill: none; stroke: var(--accent); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
 .spark path.line.alt { stroke: var(--ok); }
