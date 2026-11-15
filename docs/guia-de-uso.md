@@ -9,6 +9,12 @@ O painel é dividido em **páginas**, agrupadas em **seis abas** fixas (uma faix
 - O botão **⚙** abre o menu: nome do PC, *Editar botões*, *Câmera do celular*, *Escurecer após…*, *Endereço do PC…* e *Atualizar*.
 - Quando o PC não responde, uma barra vermelha aparece no topo com **Tentar agora** (e, dentro do app Android, **Bloquear tela**).
 
+## Vários PCs
+
+O app Android guarda **todos** os PCs que você já pareou. No menu ⚙ → *Endereço do PC…* aparece a lista **Meus PCs**: o que está em uso vem marcado (●), *Usar* troca para outro e *Esquecer* o tira da lista. Para acrescentar mais um, cole o endereço de pareamento dele no campo de cima e toque em *Conectar*.
+
+Com o **cabo USB** plugado, o PC do cabo vence: o app testa o endereço de cabo de cada PC pareado (o ativo primeiro) e, se um responde, ele vira o ativo. Sem cabo, o app só tenta o Wi-Fi do PC ativo: o painel nunca pula para outro PC sozinho. Quem pareou antes dessa versão não precisa fazer nada: o PC de antes vira o primeiro da lista.
+
 ## Apps
 
 Os aplicativos **fixados na barra de tarefas** do Windows, na ordem em que você os arrumar.

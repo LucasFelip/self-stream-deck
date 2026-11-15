@@ -60,7 +60,7 @@ class MainActivity : Activity() {
     private var showingSetup = false
     private var pendingCamera: PermissionRequest? = null // a page asked for the camera while the system permission was still unknown
 
-    private var candidates: List<String> = emptyList()
+    private var candidates: List<Candidate> = emptyList()
     private var candidateIndex = 0
 
     // What stands between the person and the page while the PC is being looked for: "Conectando…", or "Sem conexão com o PC". The WebView is
@@ -140,6 +140,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        migrateLegacyPairing()
         savePairingFromIntent(intent)
 
         if (buildCandidates().isEmpty()) showSetup() else showDeck()
@@ -164,18 +165,32 @@ class MainActivity : Activity() {
         return true
     }
 
+    /** Pairs a computer (one address or two) and makes it the active one. A second address of a computer already paired joins its entry. */
     private fun savePairing(url: String?, wifi: String?) {
-        val editor = prefs.edit()
-        if (url != null) editor.putString(KEY_URL, url)
-        if (wifi != null) {
-            editor.putString(KEY_WIFI, wifi)
-            Pairing.fingerprintOf(wifi)?.let { editor.putString(KEY_FP, it) }
-        }
-        editor.apply()
+        val pc = Pcs.pcOf(url, wifi) ?: return
+        savePcs(Pcs.upsert(loadPcs(), pc), pc.id)
     }
 
-    /** The addresses to try, in order: this PC / USB first, then the home network. */
-    private fun buildCandidates(): List<String> = Pairing.candidates(prefs.getString(KEY_URL, null), prefs.getString(KEY_WIFI, null))
+    // --- the computers this phone is paired with (Pcs.kt) -----------------------
+
+    private fun loadPcs(): List<Pc> = Pcs.decode(prefs.getString(KEY_PCS, null))
+
+    private fun savePcs(list: List<Pc>, active: String?) {
+        prefs.edit().putString(KEY_PCS, Pcs.encode(list)).putString(KEY_ACTIVE, active).apply()
+    }
+
+    private fun activePc(): Pc? = Pcs.active(loadPcs(), prefs.getString(KEY_ACTIVE, null))
+
+    /** The first versions kept one `url` and one `wifi` address: they become the first computer of the list (once). */
+    private fun migrateLegacyPairing() {
+        if (prefs.contains(KEY_PCS)) return
+        val list = Pcs.fromLegacy(prefs.getString(KEY_URL, null), prefs.getString(KEY_WIFI, null))
+        val active = (list.firstOrNull { it.wifi != null } ?: list.firstOrNull())?.id
+        prefs.edit().putString(KEY_PCS, Pcs.encode(list)).putString(KEY_ACTIVE, active).remove(KEY_URL).remove(KEY_WIFI).remove(KEY_FP).apply()
+    }
+
+    /** The addresses to try, in order: the cable of every computer (the active one first), then the active computer's home network. */
+    private fun buildCandidates(): List<Candidate> = Pcs.candidates(loadPcs(), prefs.getString(KEY_ACTIVE, null))
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
@@ -289,15 +304,16 @@ class MainActivity : Activity() {
         val mine = ++round
         if (!quiet) showOverlay(connectingScreen(this))
         val list = candidates
-        val pinned = prefs.getString(KEY_FP, null)
         Thread {
-            val found = list.indexOfFirst { Probe.answers(it, pinned) }
+            val found = list.indexOfFirst { Probe.answers(it.address, it.pin) }
             runOnUiThread {
                 if (mine != round || web !== view) return@runOnUiThread
                 if (found >= 0) {
                     candidateIndex = found
                     connecting = true
-                    view.loadUrl(list[found])
+                    // the cable wins: the computer that answered becomes the active one
+                    if (list[found].pcId != activePc()?.id) prefs.edit().putString(KEY_ACTIVE, list[found].pcId).apply()
+                    view.loadUrl(list[found].address)
                 } else {
                     showNoConnection()
                 }
@@ -346,14 +362,14 @@ class MainActivity : Activity() {
         if (certificate == null) return false
         return try {
             // saveState keeps the DER bytes of the certificate under this key on every Android version
-            Pairing.matchesPin(SslCertificate.saveState(certificate).getByteArray("x509-certificate"), prefs.getString(KEY_FP, null))
+            Pairing.matchesPin(SslCertificate.saveState(certificate).getByteArray("x509-certificate"), activePc()?.pin)
         } catch (e: Exception) {
             false
         }
     }
 
     private fun isDeckOrigin(origin: Uri?): Boolean {
-        return Pairing.isDeckOrigin(origin?.host, origin?.port ?: -1, buildCandidates())
+        return Pairing.isDeckOrigin(origin?.host, origin?.port ?: -1, buildCandidates().map { it.address })
     }
 
     private fun answerCameraRequest(request: PermissionRequest) {
@@ -436,14 +452,14 @@ class MainActivity : Activity() {
                 val view = web ?: return@runOnUiThread
                 if (candidates.size < 2) return@runOnUiThread
                 val next = (candidateIndex + 1) % candidates.size
-                val address = candidates[next]
-                val pinned = prefs.getString(KEY_FP, null)
+                val target = candidates[next]
                 Thread {
-                    if (Probe.answers(address, pinned)) {
+                    if (Probe.answers(target.address, target.pin)) {
                         runOnUiThread {
                             if (web === view) {
                                 candidateIndex = next
-                                view.loadUrl(address)
+                                if (target.pcId != activePc()?.id) prefs.edit().putString(KEY_ACTIVE, target.pcId).apply()
+                                view.loadUrl(target.address)
                             }
                         }
                     }
@@ -512,7 +528,7 @@ class MainActivity : Activity() {
             setTextColor(Color.WHITE)
             setHintTextColor(Color.parseColor("#555A6B"))
             this.hint = "https://192.168.0.10:7879/?token=...&fp=..."
-            setText(prefs.getString(KEY_WIFI, prefs.getString(KEY_URL, "")))
+            setText(activePc()?.let { it.wifi ?: it.url }.orEmpty())
         }
 
         val error = TextView(this).apply { setTextColor(Color.parseColor("#FF6B6B")) }
@@ -540,18 +556,75 @@ class MainActivity : Activity() {
 
         val wide = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         for (child in listOf(title, hint, input, error, connect)) root.addView(child, wide)
+        for (row in pcRows()) root.addView(row, wide)
 
-        setContentView(root)
+        // with a few computers on the list the screen is taller than the phone: it scrolls
+        setContentView(android.widget.ScrollView(this).apply {
+            setBackgroundColor(BACKGROUND)
+            isFillViewport = true
+            addView(root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        })
         hideSystemBars()
+    }
+
+    /** "Meus PCs": every computer this phone is paired with, the one in use marked, each with "Usar" and "Esquecer". */
+    private fun pcRows(): List<View> {
+        val pcs = loadPcs()
+        if (pcs.isEmpty()) return emptyList()
+        val active = activePc()?.id
+        val header = TextView(this).apply {
+            text = "Meus PCs"
+            setTextColor(Color.WHITE)
+            textSize = 16f
+            setPadding(0, dp(20), 0, dp(4))
+        }
+        val rows = pcs.map { pc ->
+            val how = when {
+                pc.url != null && pc.wifi != null -> "USB + Wi-Fi"
+                pc.wifi != null -> "Wi-Fi"
+                else -> "USB"
+            }
+            LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(
+                    TextView(this@MainActivity).apply {
+                        text = (if (pc.id == active) "● " else "○ ") + pc.name + "  ($how)"
+                        setTextColor(Color.WHITE)
+                    },
+                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+                )
+                addView(
+                    Button(this@MainActivity).apply {
+                        text = "Usar"
+                        isEnabled = pc.id != active
+                        setOnClickListener { savePcs(loadPcs(), pc.id); showDeck() }
+                    },
+                )
+                addView(
+                    Button(this@MainActivity).apply {
+                        text = "Esquecer"
+                        setOnClickListener {
+                            val rest = Pcs.forget(loadPcs(), pc.id)
+                            savePcs(rest, if (pc.id == active) rest.firstOrNull()?.id else active)
+                            showSetup()
+                        }
+                    },
+                )
+            }
+        }
+        return listOf(header) + rows
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
 
     private companion object {
         const val PREFS = "deck"
-        const val KEY_URL = "url" // this PC / USB tunnel
-        const val KEY_WIFI = "wifi" // home network (https)
-        const val KEY_FP = "fp" // the certificate's SHA-256, lower-case hex
+        const val KEY_URL = "url" // this PC / USB tunnel: the intent extra of `adb shell am start`, and where the first versions kept it
+        const val KEY_WIFI = "wifi" // home network (https): the same
+        const val KEY_FP = "fp" // the first versions kept the certificate's SHA-256 here; now it is part of the Wi-Fi address
+        const val KEY_PCS = "pcs" // the paired computers (Pcs.encode)
+        const val KEY_ACTIVE = "active" // the id of the one in use
         const val REQUEST_CAMERA = 7
         const val REQUEST_ADMIN = 8
         const val RETRY_MS = 5000L // how often the "no connection" screen looks for the PC again
