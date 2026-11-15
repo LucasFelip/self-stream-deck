@@ -10,5 +10,6 @@ export default defineConfig(({ mode }) => ({
   plugins: [react()],
   server: { host: '127.0.0.1', port: 5173, proxy: { '/api': 'http://127.0.0.1:7878' } },
   build: { outDir: mode === 'demo' ? 'dist-demo' : 'dist', sourcemap: mode !== 'demo', target: 'es2022' },
-  test: { environment: 'jsdom', globals: false, include: ['src/**/*.test.{ts,tsx}'] },
+  // css: the styles are read as text by styles/contrast.test.ts (vitest would otherwise give an empty string)
+  test: { environment: 'jsdom', globals: false, include: ['src/**/*.test.{ts,tsx}'], css: true },
 }));

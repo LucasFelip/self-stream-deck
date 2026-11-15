@@ -8,6 +8,13 @@
   --accent: #7c9cff;
   --ok: #4cc38a;
   --err: #e5646b;
+  /* one color per reading, used wherever that reading shows (title, bar, chart, cores); an alert (warn, crit) beats it. Checked by styles/contrast.test.ts */
+  --c-cpu: #2dd4bf;
+  --c-mem: #a78bfa;
+  --c-gpu: #84cc16;
+  --c-disk: #94a3b8;
+  --c-net: #fb923c;
+  --c-net-up: #60a5fa;
   --icon: 44px; /* set by app.js from the real tile size */
   --touch: 48px; /* smallest target for anything in the navigation */
   --rail-w: 72px; /* the navigation rail (landscape), without the cut-out inset */
