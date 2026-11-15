@@ -58,9 +58,17 @@ pub fn is_refusal(message: &str) -> bool {
     .any(|marker| message.contains(marker))
 }
 
+/// The parts of a path as they compare: without regard to case on Windows, whose file system ignores it, and exactly elsewhere (`/USR` is not `/usr`).
 fn lowered(path: &Path) -> Vec<String> {
     path.components()
-        .map(|c| c.as_os_str().to_string_lossy().to_lowercase())
+        .map(|c| {
+            let part = c.as_os_str().to_string_lossy();
+            if cfg!(windows) {
+                part.to_lowercase()
+            } else {
+                part.into_owned()
+            }
+        })
         .collect()
 }
 
@@ -125,6 +133,28 @@ mod tests {
         assert!(!is_refusal("adb: failed to install: device offline"));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn only_a_path_inside_an_admin_only_root_is_trusted_unix() {
+        let roots = [PathBuf::from("/usr"), PathBuf::from("/opt/ssd")];
+        for ok in ["/usr/bin/adb", "/opt/ssd/adb/adb"] {
+            assert!(trusted(Path::new(ok), &roots), "{ok}");
+        }
+        for bad in [
+            "/USR/lib/adb",
+            "/home/ana/Android/platform-tools/adb",
+            "/usr",
+            "/usr/../home/ana/adb",
+            "/usrx/adb",
+            "adb",
+            "platform-tools/adb",
+        ] {
+            assert!(!trusted(Path::new(bad), &roots), "{bad}");
+        }
+        assert!(!trusted(Path::new("/usr/bin/adb"), &[]));
+    }
+
+    #[cfg(windows)]
     #[test]
     fn only_a_path_inside_an_admin_only_root_is_trusted() {
         let roots = [
