@@ -7,6 +7,7 @@ import { EditMode } from './features/editor/EditMode';
 import { EditorOverlay } from './features/editor/EditorOverlay';
 import { editStore } from './features/editor/editStore';
 import { GameWatcher } from './features/game/GameWatcher';
+import { AppearanceSheet } from './features/appearance/AppearanceSheet';
 import { IdleDimmer } from './features/idle/IdleDimmer';
 import { copyPairingCode } from './features/notices/pairing';
 import { useNotifications, useUiReload } from './features/notices/useNotices';
@@ -31,6 +32,7 @@ import { ToastProvider, useToast } from './ui/Toast';
 function Shell() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [idleOpen, setIdleOpen] = useState(false);
+  const [lookOpen, setLookOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const transmitting = useSyncExternalStore(camera.subscribe, () => camera.getState().sending);
   const toast = useToast();
@@ -46,6 +48,7 @@ function Shell() {
     { label: 'Editar botões', onClick: () => editStore.enter() },
     { label: 'Câmera do celular', onClick: () => setCameraOpen(true) },
     ...(isIOS() && !android() ? [{ label: 'Código de pareamento', onClick: () => void copyPairingCode(toast) }] : []),
+    { label: 'Aparência…', onClick: () => setLookOpen(true) },
     { label: 'Escurecer após…', onClick: () => setIdleOpen(true) },
   ];
 
@@ -80,6 +83,7 @@ function Shell() {
       aboveMain={<><GameWatcher /><PanelEvents /><Offline connection={connection} /><EditMode /></>}
     >
       <Menu open={menuOpen} onClose={() => setMenuOpen(false)} items={items} />
+      <AppearanceSheet open={lookOpen} onClose={() => setLookOpen(false)} />
       <IdleDimmer open={idleOpen} onClose={() => setIdleOpen(false)} blocked={Boolean(state.data?.scheduled) || transmitting} />
       <Arranger />
       <EditorOverlay />
