@@ -65,6 +65,20 @@ jobs:
       - run: npm audit --omit=dev --audit-level=high
         working-directory: tools/contract-test
 
+  # O agente compila e passa nos testes no Linux (docs/adr/0013): só a lógica e o monitor, sem Windows. Informativo: ainda não rodou num Linux real
+  # antes deste job, então uma falha aqui não bloqueia o resto.
+  linux:
+    name: agente no Linux (informativo)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with: { workspaces: agent, key: linux }
+      - run: cargo test -p ssd-core -p ssd-api -p ssd-platform-linux -p ssd-agent
+        working-directory: agent
+
   msi:
     name: MSI (WiX 3.14)
     runs-on: windows-latest

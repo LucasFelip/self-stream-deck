@@ -19,8 +19,6 @@ axum = { version = "0.7", default-features = false, features = ["http1", "tokio"
 hyper = { version = "1", features = ["server", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 tower = { version = "0.5", features = ["util"] }
-native-tls = "0.2"
-tokio-native-tls = "0.3"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "process", "signal", "time"] }
 thiserror = "1"
 tracing = "0.1"
@@ -28,5 +26,11 @@ serde_json = { version = "1", features = ["preserve_order"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [target.'cfg(windows)'.dependencies]
+# the Wi-Fi HTTPS (lan.rs) is Windows-only for now: Schannel and the certificates made by PowerShell (docs/adr/0013)
+native-tls = "0.2"
+tokio-native-tls = "0.3"
 ssd-platform-windows = { path = "../platform-windows" }
 windows = { version = "0.58", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+ssd-platform-linux = { path = "../platform-linux" }

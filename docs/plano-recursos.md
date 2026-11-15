@@ -124,6 +124,8 @@ Ordem de valor: 1, 3, 4, 2, 6, 5, 7. As fases 3, 4 e 6 são independentes e pode
 
 ## Fase 7: spike de agente Linux (S)
 
+> **Feito:** veja o [ADR 0013](adr/0013-agente-em-linux-spike.md). O agente compila e o monitor do `/proc` existe, com testes dos leitores em qualquer sistema; **nada foi executado num Linux** e não há Wi-Fi com HTTPS lá.
+
 - Só um spike, no estilo de `agent/spike`: `core` e `api` compilando em Linux com `--fake-platform` e um `platform-linux` com um subconjunto.
 - Mapa provável: áudio por `wpctl`/`pactl`, mídia por MPRIS (`playerctl`), monitor por `/proc` e sysfs, energia por `loginctl`.
 - Janelas, barra de tarefas, câmera virtual e notificações do Windows não têm equivalente direto e ficam desligadas por design (módulo sem porta responde 404).

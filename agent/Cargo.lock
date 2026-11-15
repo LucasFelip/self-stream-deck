@@ -1092,6 +1092,7 @@ dependencies = [
  "serde_json",
  "ssd-api",
  "ssd-core",
+ "ssd-platform-linux",
  "ssd-platform-windows",
  "thiserror 1.0.69",
  "tokio",
@@ -1125,6 +1126,14 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "ssd-platform-linux"
+version = "0.1.7"
+dependencies = [
+ "serde_json",
+ "ssd-core",
 ]
 
 [[package]]

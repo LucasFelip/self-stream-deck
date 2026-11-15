@@ -5,4 +5,5 @@ channel = "1.99.1"
 components = ["rustfmt", "clippy"]
 # The agent builds for both Windows targets. This line makes sure the MSVC one is there; the host's own comes with the toolchain:
 # the CI runner builds with MSVC, and a PC set up with MinGW (`rustup default stable-x86_64-pc-windows-gnu`) builds with GNU.
-targets = ["x86_64-pc-windows-msvc"]
+# The Linux one (the standard library only) is for `cargo check --target x86_64-unknown-linux-gnu`: what is Windows-only must stay behind cfg(windows) (docs/adr/0013).
+targets = ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"]
