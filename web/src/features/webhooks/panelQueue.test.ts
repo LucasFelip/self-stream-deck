@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { newEvents, noticeText, pageOf, type PanelEvent } from './panelQueue';
+import { newEvents, noticeText, pageOf, ruleOf, type PanelEvent } from './panelQueue';
 
 const event = (seq: number, kind: PanelEvent['kind'] = 'notify', data: unknown = { text: `n${seq}` }): PanelEvent => ({ seq, kind, data, at: 0 });
 
@@ -29,6 +29,11 @@ describe('noticeText and pageOf', () => {
     expect(noticeText({ title: '', text: 'a\n b' })).toBe('📣 a b');
     expect(noticeText({ text: 'x'.repeat(300) })).toHaveLength('📣 '.length + 160);
     expect(noticeText(null)).toBe('📣 ');
+  });
+
+  it('a rule is named by a non-empty text', () => {
+    expect(ruleOf({ page: 'som', rule: 'tocando' })).toBe('tocando');
+    for (const none of [null, {}, { rule: '' }, { rule: 3 }]) expect(ruleOf(none)).toBeNull();
   });
 
   it('only a plain page name is a page', () => {

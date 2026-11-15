@@ -85,6 +85,7 @@ fn is_audited(path: &str) -> bool {
             "/api/launch/",
             "/api/shortcut/",
             ssd_core::guard::HOOK_PREFIX,
+            "/api/rules/",
         ]
         .iter()
         .any(|prefix| path.starts_with(prefix))

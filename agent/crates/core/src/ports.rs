@@ -594,6 +594,33 @@ impl MonitorPort for FakeMonitor {
 }
 
 /// The notifications the Windows Action Center holds (also what Do Not Disturb or a game kept from popping up).
+/// The PC's clock in the person's time zone (the automation rules' time windows).
+pub trait ClockPort: Send + Sync {
+    /// Minutes since local midnight, 0 to 1439.
+    fn minute_of_day(&self) -> u16;
+}
+
+/// A clock that always says 12:00, or the minute a test sets.
+pub struct FakeClock(pub std::sync::atomic::AtomicU16);
+
+impl Default for FakeClock {
+    fn default() -> Self {
+        Self(std::sync::atomic::AtomicU16::new(12 * 60))
+    }
+}
+
+impl FakeClock {
+    pub fn set(&self, minute: u16) {
+        self.0.store(minute, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+impl ClockPort for FakeClock {
+    fn minute_of_day(&self) -> u16 {
+        self.0.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
 pub trait NotificationsPort: Send + Sync {
     /// `{ access, notifications: [{ id, aumid, app, title, body, time }] }`, newest last.
     fn list(&self) -> PortResult<serde_json::Value>;

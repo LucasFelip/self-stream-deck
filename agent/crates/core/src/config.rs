@@ -38,6 +38,7 @@ fn defaults() -> Map<String, Value> {
         "iosPort": 7880,
         "iosCaPort": 7881,
         "powerControls": true,
+        "rules": [],
         "miniPlayer": true,
         "notifications": { "enabled": true, "apps": ["whatsapp"] },
         "editor": true,
@@ -181,11 +182,16 @@ impl Config {
 
     /// What the in-app editor may change; the token and every other key stay as they are. Nothing is written when the change is refused.
     pub fn update(&mut self, patch: &Map<String, Value>) -> Result<(), ConfigError> {
-        const EDITABLE: [&str; 4] = ["shortcuts", "macros", "hidden", "tileOrder"];
+        const EDITABLE: [&str; 5] = ["shortcuts", "macros", "hidden", "tileOrder", "rules"];
         let mut next = self.values.clone();
         for key in EDITABLE {
             if let Some(value) = patch.get(key) {
                 match (key, value) {
+                    ("rules", Value::Array(_)) => {
+                        crate::rules::parse(value)
+                            .map_err(|e| ConfigError::Invalid(e.to_string()))?;
+                        next.insert(key.into(), value.clone());
+                    }
                     ("shortcuts" | "macros" | "hidden", Value::Array(_))
                     | ("tileOrder", Value::Object(_)) => {
                         next.insert(key.into(), value.clone());
@@ -221,6 +227,27 @@ mod tests {
             Config::load(&dir).unwrap().token(),
             config.token(),
             "the token survives a restart"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rules_can_be_saved_when_they_are_valid_and_are_refused_when_they_are_not() {
+        let dir = temp("rules");
+        let mut config = Config::load(&dir).unwrap();
+        let mut good = Map::new();
+        good.insert(
+            "rules".into(),
+            json!([{ "id": "som", "when": { "type": "media-playing" }, "do": { "type": "goto", "page": "sound" } }]),
+        );
+        config.update(&good).unwrap();
+        let mut bad = Map::new();
+        bad.insert("rules".into(), json!([{ "id": "x" }]));
+        assert!(config.update(&bad).is_err());
+        assert_eq!(
+            config.get("rules").unwrap().as_array().unwrap().len(),
+            1,
+            "the refused list changed nothing"
         );
         let _ = fs::remove_dir_all(&dir);
     }

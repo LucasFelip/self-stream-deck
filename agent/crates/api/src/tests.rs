@@ -21,6 +21,7 @@ fn app_with(audio: Option<Arc<dyn AudioPort>>) -> (Router, PathBuf) {
         monitor: None,
         notifications: None,
         vcam: None,
+        clock: None,
     })
 }
 
@@ -368,6 +369,7 @@ async fn now_playing_state_control_and_art_work_through_the_media_port() {
         monitor: None,
         notifications: None,
         vcam: None,
+        clock: None,
     });
     let auth = [("x-token", "tok")];
     let media = body_of(call(&app, "GET", "/api/media", &auth).await).await;
@@ -458,6 +460,7 @@ async fn shortcuts_and_media_keys_press_the_right_virtual_keys() {
             monitor: None,
             notifications: None,
             vcam: None,
+            clock: None,
         },
         r#"{"token":"tok","shortcuts":[{"id":"tm","label":"Gerenciador","keys":"ctrl+shift+esc"},{"keys":"alt+f4"},{"id":"bad","keys":"ctrl+nope"}]}"#,
     );
@@ -815,6 +818,7 @@ fn everything() -> Platform {
         monitor: Some(Arc::new(ssd_core::ports::FakeMonitor)),
         notifications: Some(Arc::new(ssd_core::ports::FakeNotifications)),
         vcam: Some(Arc::new(ssd_core::ports::FakeVcam::default())),
+        clock: None,
     }
 }
 
@@ -1520,5 +1524,181 @@ async fn the_token_in_the_address_works_for_pairing_and_ping_only() {
         .await
         .status(),
         StatusCode::OK
+    );
+}
+
+// ---- automation rules (ADR 0011)
+
+/// A state (not only a router) with this config and these ports, to step the rules by hand.
+fn rules_state(rules: &str, platform: Platform) -> Arc<AppState> {
+    static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let dir = std::env::temp_dir().join(format!(
+        "ssd-api-rules-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("config.json"),
+        format!(r#"{{"token":"tok","rules":{rules}}}"#),
+    )
+    .unwrap();
+    AppState::new(Config::load(&dir).unwrap(), "PC", dir, platform)
+}
+
+fn events(state: &AppState) -> Vec<(String, serde_json::Value)> {
+    let json = state.push.locked().events_json();
+    json["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| (e["kind"].as_str().unwrap().to_owned(), e["data"].clone()))
+        .collect()
+}
+
+#[tokio::test]
+async fn a_rule_switches_the_page_while_the_player_plays_and_takes_it_back_after() {
+    let media = Arc::new(ssd_core::ports::FakeMedia::default());
+    let state = rules_state(
+        r#"[{"id":"som","whileActive":true,"when":{"type":"media-playing"},"do":{"type":"goto","page":"sound"}}]"#,
+        Platform {
+            media: Some(media.clone()),
+            ..Platform::default()
+        },
+    );
+    crate::automation::tick(&state, 1_000).await;
+    assert_eq!(
+        events(&state),
+        [(
+            "goto".to_owned(),
+            serde_json::json!({ "page": "sound", "rule": "som" })
+        )]
+    );
+    // pause the player: the rule ends once the condition has been off for a few seconds
+    media
+        .control("s1", ssd_core::ports::MediaAction::Pause)
+        .unwrap();
+    crate::automation::tick(&state, 2_000).await;
+    assert_eq!(events(&state).len(), 1);
+    crate::automation::tick(&state, 7_000).await;
+    assert_eq!(
+        events(&state)[1],
+        ("back".to_owned(), serde_json::json!({ "rule": "som" }))
+    );
+}
+
+#[tokio::test]
+async fn a_cpu_rule_notifies_after_the_time_and_a_push_rule_keeps_a_value_then_removes_it() {
+    let state = rules_state(
+        r#"[{"id":"cpu","for":3,"when":{"type":"cpu-above","percent":10},"do":{"type":"notify","title":"PC","text":"CPU alta"}},
+            {"id":"marca","whileActive":true,"when":{"type":"cpu-above","percent":10},"for":0,"do":{"type":"push","key":"cpu.alta","value":"sim"}}]"#,
+        Platform {
+            monitor: Some(Arc::new(ssd_core::ports::FakeMonitor)),
+            ..Platform::default()
+        },
+    );
+    crate::automation::tick(&state, 1_000).await;
+    assert!(
+        state.push.locked().get("cpu.alta", 1_000).is_some(),
+        "the push rule has no wait"
+    );
+    assert!(events(&state).is_empty(), "the notice waits 3 s");
+    crate::automation::tick(&state, 4_000).await;
+    assert_eq!(
+        events(&state),
+        [(
+            "notify".to_owned(),
+            serde_json::json!({ "title": "PC", "text": "CPU alta" })
+        )]
+    );
+    // editing the rules ends the push rule: its value goes away
+    state
+        .config
+        .locked()
+        .update(&serde_json::Map::new())
+        .unwrap();
+    let mut patch = serde_json::Map::new();
+    patch.insert("rules".into(), serde_json::json!([]));
+    state.config.locked().update(&patch).unwrap();
+    crate::automation::tick(&state, 5_000).await;
+    assert!(state.push.locked().get("cpu.alta", 5_000).is_none());
+}
+
+#[tokio::test]
+async fn a_time_window_rule_follows_the_clock() {
+    let clock = Arc::new(ssd_core::ports::FakeClock::default());
+    let state = rules_state(
+        r#"[{"id":"noite","when":{"type":"time-window","from":"22:00","to":"06:00"},"do":{"type":"notify","text":"boa noite"}}]"#,
+        Platform {
+            clock: Some(clock.clone()),
+            ..Platform::default()
+        },
+    );
+    crate::automation::tick(&state, 1_000).await;
+    assert!(events(&state).is_empty(), "noon is outside the window");
+    clock.set(23 * 60);
+    crate::automation::tick(&state, 2_000).await;
+    assert_eq!(events(&state).len(), 1);
+}
+
+#[tokio::test]
+async fn an_invalid_list_is_refused_whole_and_the_status_says_why() {
+    let state = rules_state(
+        r#"[{"id":"ok","when":{"type":"media-playing"},"do":{"type":"goto","page":"pc"}},{"id":"mau","when":{"type":"nope"},"do":{"type":"goto","page":"pc"}}]"#,
+        Platform::default(),
+    );
+    crate::automation::tick(&state, 1_000).await;
+    let app = router(state);
+    let status = body_of(call(&app, "GET", "/api/rules", &[("x-token", "tok")]).await).await;
+    assert_eq!(status["rules"], serde_json::json!([]));
+    assert!(
+        status["error"].as_str().unwrap().contains("rule 2"),
+        "{status}"
+    );
+}
+
+#[tokio::test]
+async fn the_rules_can_be_paused_from_the_phone_and_the_webhook_key_cannot_do_it() {
+    let state = rules_state("[]", Platform::default());
+    let app = router(state.clone());
+    let auth = [("x-token", "tok")];
+    let paused =
+        body_of(send(&app, "POST", "/api/rules/pause", &auth, r#"{"minutes":10}"#).await).await;
+    assert!(paused["pausedUntil"].as_u64().is_some());
+    assert!(body_of(call(&app, "GET", "/api/rules", &auth).await).await["pausedUntil"].is_u64());
+    let resumed =
+        body_of(send(&app, "POST", "/api/rules/pause", &auth, r#"{"minutes":0}"#).await).await;
+    assert!(resumed["pausedUntil"].is_null());
+    for bad in [
+        r#"{"minutes":-1}"#,
+        r#"{"minutes":1441}"#,
+        r#"{"minutes":"x"}"#,
+        "{}",
+        "nope",
+    ] {
+        assert_eq!(
+            send(&app, "POST", "/api/rules/pause", &auth, bad)
+                .await
+                .status(),
+            StatusCode::BAD_REQUEST,
+            "{bad}"
+        );
+    }
+    let key = [("authorization", "Bearer hookkey")];
+    let (hook_app, _) = app_configured(
+        Platform::default(),
+        r#"{"token":"tok","webhookKey":"hookkey"}"#,
+    );
+    assert_eq!(
+        send(
+            &hook_app,
+            "POST",
+            "/api/rules/pause",
+            &key,
+            r#"{"minutes":5}"#
+        )
+        .await
+        .status(),
+        StatusCode::UNAUTHORIZED
     );
 }

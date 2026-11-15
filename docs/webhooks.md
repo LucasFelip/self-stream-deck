@@ -43,7 +43,7 @@ Em qualquer uma destas formas:
 
 A chave de um valor tem de 1 a 64 caracteres: letras, números, `.`, `_` e `-`. Os valores sobrevivem a um reinício (`data.json`, ao lado do `config.json`); os avisos não.
 
-No painel, os valores aparecem em **PC › Painel**, que só existe enquanto houver algum valor.
+No painel, os valores aparecem em **PC › Painel**, que só existe enquanto houver algum valor (ou alguma [regra](regras.md)).
 
 ## Exemplos
 

@@ -3,6 +3,8 @@
 #[cfg(windows)]
 mod audio;
 #[cfg(windows)]
+mod clock;
+#[cfg(windows)]
 mod elevation;
 #[cfg(windows)]
 mod input;
@@ -27,6 +29,8 @@ mod windows_mgmt;
 
 #[cfg(windows)]
 pub use audio::WindowsAudio;
+#[cfg(windows)]
+pub use clock::WindowsClock;
 #[cfg(windows)]
 pub use elevation::is_elevated;
 #[cfg(windows)]

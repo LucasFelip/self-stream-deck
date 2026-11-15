@@ -9,6 +9,7 @@ O arquivo aceita BOM e é conferido ao iniciar: valores de tipo errado, ids repe
 | Chave | Padrão | Descrição |
 |---|---|---|
 | `token` | gerado | O código de pareamento. Apague a chave e reinicie para gerar outro (todos os celulares precisarão parear de novo). |
+| `rules` | `[]` | As [regras de automação](regras.md): quando algo acontece no PC, o painel troca de página, mostra um aviso ou guarda um valor. |
 | `webhookKey` | gerado | A chave dos [webhooks](webhooks.md): abre só `/api/hook/*`. `ssd webhook` a mostra e `ssd webhook --rotate` faz outra. |
 | `port` | `7878` | Porta HTTP, **só em `127.0.0.1`**. |
 | `lan` | `false` | `true` liga o HTTPS do Wi-Fi na `httpsPort`. |

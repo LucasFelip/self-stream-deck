@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { call, client } from '../../api/client';
 import { useLiveQuery } from '../../api/events';
 import { Page } from '../../shell/Page';
@@ -23,8 +23,11 @@ export function PcPage() {
   const pane = usePane();
   // what scripts pushed through the webhooks; the pane exists only while there is something to show
   const pushed = useLiveQuery('push', ['push'], () => call(client.GET('/api/hook/push')), { pollMs: onScreen ? PUSH_MS : false });
-  const hasPushed = Object.keys(pushed.data?.values ?? {}).length > 0;
+  const queryClient = useQueryClient();
+  const rules = useQuery({ queryKey: ['rules'], queryFn: () => call(client.GET('/api/rules')), refetchInterval: onScreen ? PUSH_MS : false, staleTime: PUSH_MS, retry: false });
+  const hasPushed = Object.keys(pushed.data?.values ?? {}).length > 0 || (rules.data?.rules.length ?? 0) > 0 || Boolean(rules.data?.error);
   const shownPane = pane === 'push' && !hasPushed ? 'monitor' : pane;
+  const pauseRules = (minutes: number) => { void call(client.POST('/api/rules/pause', { body: { minutes } })).then(() => queryClient.invalidateQueries({ queryKey: ['rules'] })); };
 
   // every sample is new (the numbers always move): the agent pushes each one and there is no slowing down
   const sample = useLiveQuery('monitor', ['monitor'], () => call(client.GET('/api/monitor/sample')), { enabled: onScreen && shownPane === 'monitor', pollMs: SAMPLE_MS });
@@ -37,7 +40,7 @@ export function PcPage() {
       <Segmented items={hasPushed ? [...PANES, PUSH_PANE] : PANES} value={shownPane} onChange={(id) => paneStore.set(id)} label="PC" />
       <PerformancePane hidden={shownPane !== 'monitor'} sample={sample.data} stamp={sample.dataUpdatedAt} loading={!sample.data && onScreen && shownPane === 'monitor'} />
       <ProcessesPane hidden={shownPane !== 'processes'} processes={processes.data} />
-      <PushPane hidden={shownPane !== 'push'} data={pushed.data} />
+      <PushPane hidden={shownPane !== 'push'} data={pushed.data} rules={rules.data} onPause={pauseRules} />
       <SystemPane hidden={shownPane !== 'system'} active={onScreen && shownPane === 'system'} info={info.data} error={info.error} />
     </Page>
   );

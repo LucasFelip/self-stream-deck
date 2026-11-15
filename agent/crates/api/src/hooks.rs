@@ -66,7 +66,7 @@ fn too_long(text: &str, limit: usize) -> bool {
     text.chars().count() > limit
 }
 
-fn persist(state: &AppState) {
+pub(crate) fn persist(state: &AppState) {
     if let Err(problem) = state.push.locked().persist() {
         tracing::warn!("could not save the pushed values: {problem}");
     }
@@ -111,12 +111,7 @@ async fn goto(State(state): State<Arc<AppState>>, request: Request) -> Response 
         .path()
         .strip_prefix("/api/hook/goto/")
         .unwrap_or_default();
-    if page.is_empty()
-        || page.len() > 32
-        || !page
-            .bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-    {
+    if !ssd_core::push::valid_page(page) {
         return error(
             StatusCode::BAD_REQUEST,
             "the page is 1-32 characters: a-z, 0-9 and '-'",

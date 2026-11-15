@@ -2,7 +2,7 @@
 
 export interface PanelEvent {
   seq: number;
-  kind: 'notify' | 'goto' | 'refresh';
+  kind: 'notify' | 'goto' | 'refresh' | 'back';
   data: unknown;
   at: number;
 }
@@ -34,6 +34,12 @@ export function noticeText(data: unknown): string {
   const line = `${head}${typeof text === 'string' ? text : ''}`.replace(/\s+/g, ' ').trim();
   const clipped = line.length > MAX_LINE ? `${line.slice(0, MAX_LINE - 1)}…` : line;
   return `📣 ${clipped}`;
+}
+
+/** The rule a `goto` or a `back` belongs to (the agent's rules, ADR 0011), or `null` when it comes from a plain webhook. */
+export function ruleOf(data: unknown): string | null {
+  const rule = (data as { rule?: unknown } | null)?.rule;
+  return typeof rule === 'string' && rule ? rule : null;
 }
 
 /** The page a `goto` asks for, or `null` when the event does not carry one. */

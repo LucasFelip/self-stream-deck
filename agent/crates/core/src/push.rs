@@ -32,6 +32,14 @@ pub fn valid_key(key: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
 }
 
+/// A page a `goto` may name: 1 to 32 characters of `a-z`, `0-9` and `-`.
+pub fn valid_page(page: &str) -> bool {
+    (1..=32).contains(&page.len())
+        && page
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Item {
     pub data: Value,
@@ -231,6 +239,16 @@ mod tests {
         }
         for bad in ["", "a b", "a/b", "ação", &"x".repeat(65), "../x"] {
             assert!(!valid_key(bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_page_is_a_short_plain_name() {
+        for ok in ["pc", "shortcuts-1", &"a".repeat(32)] {
+            assert!(valid_page(ok), "{ok}");
+        }
+        for bad in ["", "Pc", "a b", "a/b", &"a".repeat(33)] {
+            assert!(!valid_page(bad), "{bad}");
         }
     }
 

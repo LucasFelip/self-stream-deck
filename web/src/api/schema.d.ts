@@ -957,6 +957,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where the automation rules stand
+         * @description The rules come from the `rules` key of `config.json` (ADR 0011). A list with one wrong rule is refused as a whole and `error` says which.
+         *     Rules only ever touch the panel: switch the page, show a notice, keep a value.
+         */
+        get: operations["getRules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rules/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause every rule for a while (0 resumes)
+         * @description A rule that holds ends at once (and takes its effect back if it is a "while active" one); it may fire again after the pause. Only the phone's token opens this, not the webhook key.
+         */
+        post: operations["pauseRules"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/events": {
         parameters: {
             query?: never;
@@ -1464,11 +1505,29 @@ export interface components {
             events: {
                 seq: number;
                 /** @enum {unknown} */
-                kind: "notify" | "goto" | "refresh";
-                /** @description notify: { title, text }; goto: { page }; refresh: null */
+                kind: "notify" | "goto" | "refresh" | "back";
+                /** @description notify: { title, text }; goto: { page, rule? }; refresh: null; back: { rule } (the rule that switched the page ended) */
                 data: unknown;
                 at: number;
             }[];
+        };
+        RulesStatus: {
+            /** @description the ids of the enabled rules */
+            rules: string[];
+            /** @description the ids of the rules that hold now */
+            active: string[];
+            /** @description unix ms when the pause ends; null when the rules run */
+            pausedUntil: number | null;
+            /** @description why the list was refused */
+            error: string | null;
+        };
+        RulesPause: {
+            minutes: number;
+        };
+        RulesPaused: {
+            /** @constant */
+            ok: true;
+            pausedUntil: number | null;
         };
         /** @description What Windows kept quiet from the apps listed in config.notifications.apps, newest last. Only a topic of the event stream (no GET route). */
         Notifications: {
@@ -3137,6 +3196,54 @@ export interface operations {
             403: components["responses"]["CrossOrigin"];
             404: components["responses"]["NotFound"];
             429: components["responses"]["LockedOut"];
+        };
+    };
+    getRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the rules */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    pauseRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RulesPause"];
+            };
+        };
+        responses: {
+            /** @description paused or resumed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulesPaused"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["CrossOrigin"];
         };
     };
     subscribeEvents: {

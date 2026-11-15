@@ -169,6 +169,14 @@ const cases = [
   { name: 'hook push: removing it again is 404', method: 'DELETE', path: '/api/hook/push/nota', status: 404 },
   { name: 'hook push: put back', method: 'DELETE', path: '/api/hook/push/temp.cpu', status: 200 },
 
+  // ---- automation rules (ADR 0011)
+  { name: 'rules: none configured', method: 'GET', path: '/api/rules', status: 200, check: (r, e) => { e.assert.deepStrictEqual(r.json.rules, []); e.assert.strictEqual(r.json.error, null); e.assert.strictEqual(r.json.pausedUntil, null); } },
+  { name: 'rules: pause for ten minutes', method: 'POST', path: '/api/rules/pause', body: { minutes: 10 }, status: 200, check: (r, e) => e.assert.strictEqual(typeof r.json.pausedUntil, 'number') },
+  { name: 'rules: the status shows the pause', method: 'GET', path: '/api/rules', status: 200, check: (r, e) => e.assert.strictEqual(typeof r.json.pausedUntil, 'number') },
+  { name: 'rules: zero resumes', method: 'POST', path: '/api/rules/pause', body: { minutes: 0 }, status: 200, check: (r, e) => e.assert.strictEqual(r.json.pausedUntil, null) },
+  { name: 'rules: more than a day is 400', method: 'POST', path: '/api/rules/pause', body: { minutes: 1441 }, status: 400 },
+  { name: 'rules: minutes must be a number', method: 'POST', path: '/api/rules/pause', body: { minutes: 'x' }, status: 400 },
+
   // ---- events (the stream itself is tested apart: see sse in run.js)
   { name: 'events: topics are required', method: 'GET', path: '/api/events', status: 400 },
   { name: 'events: an unknown topic is 400', method: 'GET', path: '/api/events?topics=state,secrets', status: 400 },
