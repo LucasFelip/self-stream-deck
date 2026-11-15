@@ -1,0 +1,436 @@
+{
+  "/api/state": {
+    "running": [
+      "e212dee9d5"
+    ],
+    "open": [
+      "e212dee9d5"
+    ],
+    "scheduled": null,
+    "mic": {
+      "available": true,
+      "muted": false
+    },
+    "volume": {
+      "level": 30,
+      "muted": false
+    },
+    "playing": {
+      "session": "s1",
+      "title": "Uma faixa",
+      "artist": "Banda",
+      "app": "Spotify",
+      "status": "playing",
+      "canToggle": true
+    },
+    "miniPlayer": true,
+    "ui": 1794763710000,
+    "appsRev": 1
+  },
+  "/api/apps": {
+    "host": "PC-DEMO",
+    "apps": [
+      {
+        "id": "e212dee9d5",
+        "name": "Brave",
+        "hasIcon": true,
+        "iconVersion": "d318b25e"
+      },
+      {
+        "id": "70ec04bcc0",
+        "name": "Code",
+        "hasIcon": true,
+        "iconVersion": "eee526e2"
+      },
+      {
+        "id": "0c789ae878",
+        "name": "Terminal",
+        "hasIcon": true,
+        "iconVersion": "ff380435"
+      }
+    ]
+  },
+  "/api/shortcuts": {
+    "shortcuts": [
+      {
+        "id": "copy",
+        "label": "Copiar",
+        "display": "Ctrl+C"
+      },
+      {
+        "id": "paste",
+        "label": "Colar",
+        "display": "Ctrl+V"
+      }
+    ]
+  },
+  "/api/macros": {
+    "macros": [
+      {
+        "id": "foco",
+        "label": "Foco",
+        "page": "shortcuts",
+        "steps": 2
+      },
+      {
+        "id": "lento",
+        "label": "Lento",
+        "page": "shortcuts",
+        "steps": 1
+      }
+    ]
+  },
+  "/api/layout": {
+    "apps": [],
+    "shortcuts": []
+  },
+  "/api/windows": {
+    "windows": [
+      {
+        "handle": 101,
+        "title": "Nova guia - Brave",
+        "app": "Brave",
+        "appId": "e212dee9d5",
+        "iconVersion": "d318b25e",
+        "state": 0,
+        "monitor": 0,
+        "x": 100,
+        "y": 100,
+        "w": 800,
+        "h": 600
+      },
+      {
+        "handle": 102,
+        "title": "a.txt - Bloco de Notas",
+        "app": "Notepad",
+        "appId": null,
+        "iconVersion": "",
+        "state": 0,
+        "monitor": 1,
+        "x": 100,
+        "y": 100,
+        "w": 800,
+        "h": 600
+      }
+    ]
+  },
+  "/api/screens": {
+    "monitors": [
+      {
+        "device": "\\\\.\\DISPLAY1",
+        "left": 0,
+        "top": 0,
+        "width": 1920,
+        "height": 1080,
+        "primary": true,
+        "brightness": 60
+      },
+      {
+        "device": "\\\\.\\DISPLAY2",
+        "left": 1920,
+        "top": 0,
+        "width": 1920,
+        "height": 1080,
+        "primary": false,
+        "brightness": 60
+      }
+    ]
+  },
+  "/api/audio": {
+    "playback": [
+      {
+        "id": "out1",
+        "name": "Alto-falantes",
+        "adapter": "Fake",
+        "default": true,
+        "level": 40,
+        "muted": false
+      },
+      {
+        "id": "out2",
+        "name": "Fone Bluetooth",
+        "adapter": "Fake",
+        "default": false,
+        "level": 70,
+        "muted": false
+      }
+    ],
+    "capture": [
+      {
+        "id": "in1",
+        "name": "Microfone",
+        "adapter": "Fake",
+        "default": true,
+        "level": 80,
+        "muted": false
+      }
+    ],
+    "sessions": [
+      {
+        "pid": 0,
+        "system": true,
+        "label": "Sons do sistema",
+        "active": false,
+        "level": 100,
+        "muted": false
+      },
+      {
+        "pid": 11,
+        "system": false,
+        "label": "Spotify",
+        "active": true,
+        "level": 100,
+        "muted": false
+      }
+    ]
+  },
+  "/api/volume": {
+    "level": 30,
+    "muted": false
+  },
+  "/api/media": {
+    "current": "s1",
+    "sessions": [
+      {
+        "id": "s1",
+        "app": "Spotify",
+        "status": "playing",
+        "title": "Uma faixa",
+        "artist": "Banda",
+        "album": "Disco",
+        "duration": 215,
+        "position": 42,
+        "canPlay": true,
+        "canPause": true,
+        "canPrev": true,
+        "canNext": true,
+        "canSeek": true,
+        "hasArt": true,
+        "artKey": "0123456789ab"
+      }
+    ]
+  },
+  "/api/monitor/sample": {
+    "cpu": {
+      "usage": 12.5,
+      "cores": [
+        10,
+        15
+      ],
+      "freqMHz": 3600,
+      "temp": 50,
+      "power": 40,
+      "tempSource": "fake",
+      "processes": 200,
+      "threads": 2500
+    },
+    "memory": {
+      "totalMB": 16384,
+      "usedMB": 8192,
+      "usedPct": 50,
+      "commitUsedMB": 9000,
+      "commitLimitMB": 20000
+    },
+    "gpu": null,
+    "fps": null,
+    "disk": {
+      "disks": [],
+      "total": {
+        "active": 5,
+        "readBps": 1000,
+        "writeBps": 2000
+      },
+      "drives": [
+        {
+          "name": "C:",
+          "label": "",
+          "totalGB": 500,
+          "freeGB": 250.5
+        }
+      ]
+    },
+    "network": [],
+    "uptime": 3600
+  },
+  "/api/monitor/processes": {
+    "cpu": [
+      {
+        "name": "game",
+        "cpu": 40.5,
+        "memMB": 4096,
+        "count": 1
+      }
+    ],
+    "mem": [
+      {
+        "name": "brave",
+        "cpu": 3,
+        "memMB": 2048,
+        "count": 12
+      }
+    ]
+  },
+  "/api/monitor/info": {
+    "host": "FAKE-PC",
+    "user": "fake",
+    "os": {
+      "name": "Windows",
+      "version": "10",
+      "build": "1",
+      "arch": "64-bit",
+      "installed": "2024-01-01T00:00:00",
+      "lastBoot": "2024-06-01T08:00:00"
+    },
+    "cpu": {
+      "name": "Fake CPU",
+      "cores": 2,
+      "threads": 4,
+      "maxMHz": 3600,
+      "l2KB": 512,
+      "l3KB": 4096,
+      "socket": "AM5"
+    },
+    "memory": {
+      "totalGB": 16,
+      "modules": []
+    },
+    "gpus": [],
+    "board": {
+      "maker": "Fake",
+      "model": "Board",
+      "bios": "1",
+      "biosDate": "2024-01-01"
+    },
+    "storage": [],
+    "drives": [],
+    "network": [],
+    "monitors": []
+  },
+  "/api/monitor/fps": null,
+  "/api/power": {
+    "enabled": true,
+    "uptimeSec": 3600,
+    "lastBoot": "2026-11-15T16:41:04.155Z",
+    "hibernate": true,
+    "fastStartup": true,
+    "rebootPending": false,
+    "openApps": [
+      {
+        "name": "Brave",
+        "count": 1
+      },
+      {
+        "name": "Notepad",
+        "count": 1
+      }
+    ],
+    "scheduled": null
+  },
+  "/api/camera/status": {
+    "live": false,
+    "fps": 0,
+    "kbps": 0,
+    "viewers": 0,
+    "wanted": false,
+    "ageMs": null,
+    "link": "http://127.0.0.1:7999/camera.html?token=contract-token-0123456789abcdef",
+    "direct": {
+      "name": "Stream Deck Camera",
+      "installed": false,
+      "inUse": false,
+      "busy": false
+    }
+  },
+  "/api/editor": {
+    "shortcuts": [
+      {
+        "id": "copy",
+        "label": "Copiar",
+        "keys": "ctrl+c",
+        "display": "Ctrl+C"
+      },
+      {
+        "id": "paste",
+        "label": "Colar",
+        "keys": "ctrl+v",
+        "display": "Ctrl+V"
+      }
+    ],
+    "macros": [
+      {
+        "id": "foco",
+        "label": "Foco",
+        "page": "shortcuts",
+        "steps": [
+          {
+            "type": "volume",
+            "level": 20
+          },
+          {
+            "type": "mute",
+            "muted": false
+          }
+        ]
+      },
+      {
+        "id": "lento",
+        "label": "Lento",
+        "page": "shortcuts",
+        "steps": [
+          {
+            "type": "wait",
+            "ms": 400
+          }
+        ]
+      }
+    ],
+    "apps": [
+      {
+        "id": "e212dee9d5",
+        "name": "Brave",
+        "hasIcon": true,
+        "iconVersion": "d318b25e",
+        "hidden": false,
+        "canPlace": true
+      },
+      {
+        "id": "70ec04bcc0",
+        "name": "Code",
+        "hasIcon": true,
+        "iconVersion": "eee526e2",
+        "hidden": false,
+        "canPlace": true
+      },
+      {
+        "id": "0c789ae878",
+        "name": "Terminal",
+        "hasIcon": true,
+        "iconVersion": "ff380435",
+        "hidden": false,
+        "canPlace": true
+      }
+    ],
+    "devices": {
+      "playback": [
+        {
+          "id": "out1",
+          "name": "Alto-falantes"
+        },
+        {
+          "id": "out2",
+          "name": "Fone Bluetooth"
+        }
+      ],
+      "capture": [
+        {
+          "id": "in1",
+          "name": "Microfone"
+        }
+      ]
+    },
+    "screens": 2
+  },
+  "/api/pair-code": {
+    "code": "demo"
+  }
+}

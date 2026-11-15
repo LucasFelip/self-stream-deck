@@ -8,13 +8,14 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:demo": "tsc --noEmit && vite build --mode demo",
     "preview": "vite preview",
     "gen:api": "openapi-typescript ../contracts/openapi.yaml -o src/api/schema.d.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "npm run gen:api && npm run typecheck && npm run lint && vitest run",
     "test:unit": "vitest run",
-    "test:e2e": "vite build && node e2e/shell.e2e.cjs && node e2e/apps.e2e.cjs && node e2e/sound.e2e.cjs && node e2e/pc.e2e.cjs && node e2e/windows.e2e.cjs && node e2e/extras.e2e.cjs && node e2e/editor.e2e.cjs && node e2e/camera.e2e.cjs && node e2e/chrome.e2e.cjs && node e2e/layout.e2e.cjs"
+    "test:e2e": "vite build && node e2e/shell.e2e.cjs && node e2e/apps.e2e.cjs && node e2e/sound.e2e.cjs && node e2e/pc.e2e.cjs && node e2e/windows.e2e.cjs && node e2e/extras.e2e.cjs && node e2e/editor.e2e.cjs && node e2e/camera.e2e.cjs && node e2e/chrome.e2e.cjs && node e2e/layout.e2e.cjs && npm run build:demo && node e2e/demo.e2e.cjs"
   },
   "engines": {
     "node": ">=20"

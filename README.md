@@ -17,6 +17,8 @@ Transforma um celular em um painel de controle do seu PC com Windows: abrir prog
 
 ## O que ele faz
 
+> Quer ver antes de instalar? O painel roda no navegador, com dados de mentira: veja [a demonstração](docs/desenvolvimento.md#a-demonstração-no-navegador) (publicada pelo GitHub Pages, quando ligado no repositório).
+
 <table>
 <tr>
 <td width="50%"><img src="docs/img/atalhos.png" alt="Atalhos de teclado"><br><b>Atalhos</b> de teclado e <b>macros</b> (várias ações em um toque), editáveis no próprio celular.</td>

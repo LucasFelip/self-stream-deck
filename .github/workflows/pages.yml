@@ -1,0 +1,55 @@
+# Publica a demonstração (o painel de verdade, com dados de mentira, sem PC) no GitHub Pages: https://<usuário>.github.io/self-stream-deck/
+# É preciso ligar o Pages uma vez: Settings > Pages > Source: GitHub Actions. As actions são referenciadas pelo commit (a versão fica no comentário).
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths: ['web/**', 'contracts/**', 'tools/demo/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: monta a demonstração
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version-file: .nvmrc, cache: npm, cache-dependency-path: web/package-lock.json }
+      - run: npm ci
+        working-directory: web
+      - run: npm run build:demo
+        working-directory: web
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with: { path: web/dist-demo }
+
+  deploy:
+    name: publica
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.retry.outputs.page_url || steps.deployment.outputs.page_url }}
+    steps:
+      # logo depois do envio a lista de artefatos às vezes volta vazia e o deploy falha, embora o envio tenha dado certo: uma segunda tentativa, 30 s depois
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        continue-on-error: true
+      - if: steps.deployment.outcome == 'failure'
+        run: sleep 30
+      - id: retry
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

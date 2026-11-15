@@ -63,6 +63,19 @@ Para o `check.js` rodar sozinho antes de cada `git push`: `git config core.hooks
 
 O `contract-test` e o `agent-check` precisam do agente compilado (`cargo build --release`) e de `web/dist`. Detalhes do contrato em [contracts/README.md](../contracts/README.md).
 
+## A demonstração no navegador
+
+O painel de verdade roda num navegador, sem PC nem celular: `src/demo/shim.ts` responde `/api/*` com uma **gravação** do PC de mentira do agente (`src/demo/snapshot.json`) e faz o papel do fluxo de eventos; uma barrinha no topo dispara os [webhooks](webhooks.md) para quem quer experimentar. Só o build `--mode demo` tem o shim e a gravação; o build normal não.
+
+```bash
+cd web
+npm run build:demo        # web/dist-demo, com endereços relativos: funciona de qualquer pasta
+node e2e/demo.e2e.cjs     # abre a demo num navegador sem tela e confere as páginas e os webhooks
+node ../tools/demo/record.cjs   # grava de novo o snapshot (precisa de agent/target/release/ssd.exe); o nome do PC sai como PC-DEMO
+```
+
+O workflow `pages.yml` publica `web/dist-demo` no GitHub Pages a cada mudança em `web/`, `contracts/` ou `tools/demo/` na `main`. É preciso ligar o Pages uma vez: *Settings › Pages › Source: GitHub Actions*. Depois de mudar o contrato ou o painel, grave o snapshot de novo se uma rota que o painel lê mudou de forma.
+
 ## Empacotar
 
 Todos os scripts ficam em `agent/scripts/`. O build de empacotamento usa `agent\target-pkg` para não brigar com um agente em uso (o `ssd.exe` em execução trava o arquivo).

@@ -19,3 +19,4 @@ agent/target/
 agent/**/target/
 agent/target-pkg/
 dist/
+dist-demo/
