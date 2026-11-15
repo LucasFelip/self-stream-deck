@@ -23,6 +23,7 @@ Como publicar uma versão: [docs/desenvolvimento.md](docs/desenvolvimento.md#pub
 
 ### Adicionado
 
+- **Demonstração no navegador**: o painel de verdade com dados de mentira, sem PC, publicada pelo GitHub Pages (`pages.yml`); uma barra no topo experimenta os webhooks. `npm run build:demo`, [docs/desenvolvimento.md](docs/desenvolvimento.md#a-demonstração-no-navegador).
 - **Regras de automação** ([docs/regras.md](docs/regras.md)): na chave `rules` do `config.json`, "quando a CPU passar de 90 % por 15 s, avise", "enquanto uma música toca, abra a página Som", janelas de horário. Só mexem no painel (trocar de página, avisar, guardar um valor). PC › Painel mostra as regras, quais valem agora e pausa e retoma.
 - **Webhooks** (`/api/hook/*`, [docs/webhooks.md](docs/webhooks.md)): scripts, CI e Home Assistant mostram um aviso no painel, trocam a página, recarregam e deixam valores (com tempo de vida) que aparecem em PC › Painel. Têm uma chave própria (`webhookKey`, `ssd webhook`, e a bandeja), que não abre nada fora deles.
 - Apps da Microsoft Store e empacotados (MSIX), como o Claude, aparecem com o ícone certo e o painel sabe quando estão abertos.

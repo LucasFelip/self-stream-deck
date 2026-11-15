@@ -14,7 +14,8 @@ export class ApiError extends Error {
 
 // Types come from contracts/openapi.yaml (npm run gen:api): a path or a body the contract does not know does not compile.
 // Relative URLs on purpose: the page is served by the agent itself (same origin, so the pairing cookie travels along).
-export const client = createClient<paths>({ baseUrl: '', credentials: 'same-origin' });
+// `fetch` is looked up at each call (not captured when this file loads), so the demonstration (src/demo) can stand in for the PC.
+export const client = createClient<paths>({ baseUrl: '', credentials: 'same-origin', fetch: (request) => globalThis.fetch(request) });
 
 const messageOf = (error: unknown): string | undefined => {
   if (error && typeof error === 'object' && 'error' in error && typeof (error as { error: unknown }).error === 'string') {
