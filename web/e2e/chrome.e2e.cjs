@@ -90,7 +90,7 @@ const synthDrag = (check, selector) => check.eval(`(async () => {
         assert.strictEqual(await page.eval(`document.getElementById('menu').getAttribute('aria-expanded')`), 'true');
         const menu = await page.eval(`(() => { const pop = document.getElementById('menu-pop'); const rows = [...pop.querySelectorAll('button')].filter((b) => !b.hidden); return { host: pop.querySelector('.menu-host').textContent, items: rows.map((b) => b.textContent.trim()), heights: rows.map((b) => Math.round(b.getBoundingClientRect().height)) }; })()`);
         assert.match(menu.host, /PC-TESTE/);
-        assert.deepStrictEqual(menu.items, ['Editar botões', 'Câmera do celular', 'Escurecer após…', 'Atualizar']);
+        assert.deepStrictEqual(menu.items, ['Editar botões', 'Câmera do celular', 'Aparência…', 'Escurecer após…', 'Atualizar']);
         assert.ok(!menu.items.some((item) => /Sobre/.test(item)));
         assert.ok(menu.heights.every((height) => height >= 48), JSON.stringify(menu));
         assert.strictEqual(await page.eval('Deck.back()'), true);
