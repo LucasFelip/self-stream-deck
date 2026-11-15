@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { android } from '../../lib/android';
 import { Overlay } from '../../ui/Overlay';
 import { Segmented } from '../../ui/Segmented';
+import { IdleAmbient } from './IdleAmbient';
 
 // Idle dimmer for the AMOLED screen (menu > Escurecer após…). After N minutes without a touch a black veil covers the deck and, in the
 // Android shell, window.Android.setDim(true) drops the screen brightness. The first touch only wakes it: the veil swallows that tap, so it
@@ -141,7 +142,9 @@ export function IdleDimmer({ open, onClose, blocked }: IdleDimmerProps) {
 
   return (
     <>
-      <div className={`idle-veil${waking ? ' waking' : ''}`} ref={veil} hidden={!veilShown} aria-hidden="true" data-dimmed={String(dimmed)} />
+      <div className={`idle-veil${waking ? ' waking' : ''}`} ref={veil} hidden={!veilShown} aria-hidden="true" data-dimmed={String(dimmed)}>
+        {veilShown ? <IdleAmbient /> : null}
+      </div>
       <Overlay open={open} title="Escurecer após…" onClose={onClose}>
         <section className="idle-page">
           <Segmented items={OPTIONS} value={String(minutes) as (typeof OPTIONS)[number]['id']} onChange={choose} label="Escurecer após" />
