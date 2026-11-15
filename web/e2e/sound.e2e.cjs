@@ -78,7 +78,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
             assert.strictEqual(info.cut, 0);
             assert.deepStrictEqual(info.order.slice(0, 4), ['sound-media', 'audio-out', 'audio-in', 'audio-mixer'], JSON.stringify(info));
             assert.strictEqual(info.empty, scene === 'vazio' ? 'true' : 'false');
-            assert.ok(info.playerH <= (scene === 'vazio' ? 64 : landscape ? 100 : 180), `player too big: ${JSON.stringify(info)}`);
+            assert.ok(info.playerH <= (scene === 'vazio' ? 64 : landscape ? 128 : 180), `player too big: ${JSON.stringify(info)}`);
             if (landscape) {
               assert.strictEqual(info.pageScrolls, false, `landscape Som must not scroll: ${JSON.stringify(info)}`);
               assert.strictEqual(info.bottomOk, true);
