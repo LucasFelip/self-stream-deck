@@ -5,7 +5,7 @@
 
 Transforma um celular em um painel de controle do seu PC com Windows: abrir programas, disparar atalhos, ajustar o som, controlar a mídia, vigiar o desempenho, organizar janelas, desligar o PC e até usar a câmera do celular como webcam.
 
-![O painel de aplicativos, em paisagem](docs/img/apps.png)
+![Self Stream Deck: o painel de desempenho, o de aplicativos e o de som](docs/img/capa.png)
 
 | | |
 |---|---|

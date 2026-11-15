@@ -16,6 +16,15 @@ Convenções: um branch e um PR por lote, empilhados; cada lote termina com `npm
 | 6 | **Aparência escolhível**: cor de destaque e tamanho do texto, guardados no aparelho | `features/appearance` (novo), `styles` | M |
 | 7 | **README com imagem de capa e GIF do tour**, gerados da demonstração | `tools/screenshots`, `docs/img` | P |
 
+## Situação
+
+Os 7 lotes foram feitos, em branches empilhados (`visual-metricas`, `visual-botoes`, `visual-grade`, `visual-som`, `visual-descanso`, `visual-aparencia`, `visual-capa`). Onde o resultado difere do plano:
+
+- **Lote 3:** além de tirar a faixa de espaços vazios (agora só aparecem ao editar), a grade na paisagem passou a ter no mínimo 2 linhas, e o ícone de uma tecla alta pode chegar a 96 px (veio no lote 7, junto das capturas).
+- **Lote 4:** o player maior vale só na paisagem; em pé continua a faixa fina. O limite de altura do teste `sound.e2e` subiu de 100 para 128 px de propósito.
+- **Lote 6:** o texto *Grande* (112 %) é uma escolha da pessoa; os testes de layout continuam rodando no tamanho Normal.
+- **Lote 7:** a capa saiu; o **GIF do tour não**, porque não há ferramenta de vídeo no ambiente de desenvolvimento.
+
 ## Regras do desenho
 
 1. **Cor tem significado.** Cada métrica tem uma cor fixa e a usa em todo lugar onde aparece (título, barra, gráfico). Os alertas continuam amarelo e vermelho e vencem a cor da métrica.
