@@ -26,11 +26,11 @@ const MAX_TITLE: usize = 120;
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/api/hook/notify", post(notify).fallback(not_found))
-        .route("/api/hook/goto/*page", post(goto).fallback(not_found))
+        .route("/api/hook/goto/{*page}", post(goto).fallback(not_found))
         .route("/api/hook/refresh", post(refresh).fallback(not_found))
         .route("/api/hook/push", get(list).fallback(not_found))
         .route(
-            "/api/hook/push/*key",
+            "/api/hook/push/{*key}",
             get(value)
                 .post(set_value)
                 .put(set_value)

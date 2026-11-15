@@ -15,8 +15,8 @@ use crate::{json, AppState};
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/api/shortcuts", get(handle).fallback(not_found))
-        .route("/api/shortcut/*id", post(handle).fallback(not_found))
-        .route("/api/mediakey/*key", post(handle).fallback(not_found))
+        .route("/api/shortcut/{*id}", post(handle).fallback(not_found))
+        .route("/api/mediakey/{*key}", post(handle).fallback(not_found))
 }
 
 async fn handle(call: Call) -> Response {

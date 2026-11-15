@@ -247,7 +247,7 @@ pub(crate) fn routes() -> axum::Router<Arc<AppState>> {
         .route("/api/screens/brightness", post(windows).fallback(not_found))
         .route("/api/screens/off", post(windows).fallback(not_found))
         .route("/api/screens/project", post(windows).fallback(not_found))
-        .route("/api/launch/*id", post(launch_route).fallback(not_found))
+        .route("/api/launch/{*id}", post(launch_route).fallback(not_found))
 }
 
 async fn windows(call: crate::routes::Call) -> Response {

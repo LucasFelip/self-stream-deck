@@ -123,7 +123,7 @@ pub(crate) fn routes() -> axum::Router<Arc<AppState>> {
     axum::Router::new()
         .route("/api/apps", get(apps_list).fallback(not_found))
         .route("/api/refresh", post(apps_refresh).fallback(not_found))
-        .route("/api/icon/*id", get(app_icon).fallback(not_found))
+        .route("/api/icon/{*id}", get(app_icon).fallback(not_found))
 }
 
 async fn apps_list(call: crate::routes::Call) -> Response {
