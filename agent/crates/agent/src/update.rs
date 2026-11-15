@@ -29,6 +29,7 @@ use ssd_core::sha256::sha256_hex;
 
 const MANIFEST_LIMIT: u64 = 64 * 1024;
 const PACKAGE_LIMIT: u64 = 200 * 1024 * 1024;
+const APK_LIMIT: u64 = 100 * 1024 * 1024;
 
 /// Why an update did not happen. The text is what `ssd update` prints and what the log says; the variant is what the code (and a test)
 /// tells apart: a refusal on purpose (`NoSigner`, `WrongSigner`, `WrongHash`) from something that failed (`Download`, `Tool`, `Io`).
@@ -60,6 +61,11 @@ pub enum UpdateError {
     BadSignature(String),
     #[error("the package is signed by {found}, not by {expected}")]
     WrongSigner { found: String, expected: String },
+    /// Android said no to the app (another signing key, a lower version): reported, never forced
+    #[error("Android refused the app: {0}")]
+    ApkRefused(String),
+    #[error("no adb this agent may run: put the Android platform-tools in the adb folder beside ssd.exe")]
+    NoAdb,
     #[error("the path of the file has a quote in it")]
     BadPath,
     #[error("the \"update\" folder beside ssd.exe cannot be written, and an agent running as administrator does not install from a temporary folder")]
@@ -81,6 +87,8 @@ pub struct Settings {
     pub channel: String,
     pub auto: bool,
     pub signer: Option<String>,
+    /// `"apk": true`: the app on a phone on the cable is updated too (ADR 0012)
+    pub apk: bool,
 }
 
 impl Settings {
@@ -102,6 +110,10 @@ impl Settings {
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
             signer: text("signer").map(|s| s.replace(' ', "").to_uppercase()),
+            apk: section
+                .and_then(|o| o.get("apk"))
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
         }
     }
 }
@@ -110,6 +122,15 @@ impl Settings {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Release {
     pub version: String,
+    pub url: String,
+    pub sha256: String,
+    /// the app for the phone, when the channel carries one
+    pub apk: Option<ApkAsset>,
+}
+
+/// The APK of a release: where it is and its SHA-256 (Android checks its signature itself).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApkAsset {
     pub url: String,
     pub sha256: String,
 }
@@ -190,10 +211,30 @@ pub fn pick_release(manifest: &Value, channel: &str) -> Result<Release, UpdateEr
             "channel \"{channel}\": sha256 must be 64 hex digits"
         )));
     }
+    let apk = match entry.get("apk") {
+        None | Some(Value::Null) => None,
+        Some(asset) => {
+            let text = |key: &str| asset.get(key).and_then(Value::as_str).map(str::to_owned);
+            let (Some(url), Some(hash)) = (text("url"), text("sha256")) else {
+                return Err(UpdateError::Manifest(format!(
+                    "channel \"{channel}\": \"apk\" needs \"url\" and \"sha256\""
+                )));
+            };
+            check_url(&url, &format!("channel \"{channel}\" apk"))?;
+            let hash = hash.to_lowercase();
+            if hash.len() != 64 || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err(UpdateError::Manifest(format!(
+                    "channel \"{channel}\": the apk sha256 must be 64 hex digits"
+                )));
+            }
+            Some(ApkAsset { url, sha256: hash })
+        }
+    };
     Ok(Release {
         version,
         url,
         sha256,
+        apk,
     })
 }
 
@@ -351,18 +392,19 @@ pub fn forget_old_packages() {
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.extension().is_some_and(|e| e == "msi") || path.ends_with("manifest.json") {
+        if path.extension().is_some_and(|e| e == "msi" || e == "apk")
+            || path.ends_with("manifest.json")
+        {
             let _ = std::fs::remove_file(path);
         }
     }
 }
 
-/// Asks the manifest for the release of the channel. `None` when this version is the newest.
-pub fn check(
+/// The release of the channel in the manifest, whether or not it is newer than this agent (the app on a phone may be older than the agent).
+pub fn fetch_release(
     settings: &Settings,
-    current: &str,
     url_override: Option<&str>,
-) -> Result<Option<Release>, UpdateError> {
+) -> Result<Release, UpdateError> {
     let url = url_override
         .map(str::to_owned)
         .or_else(|| settings.url.clone())
@@ -374,8 +416,36 @@ pub fn check(
     let text = std::fs::read_to_string(&file)?;
     let manifest: Value = serde_json::from_str(&text)
         .map_err(|e| UpdateError::Manifest(format!("the manifest is not JSON: {e}")))?;
-    let release = pick_release(&manifest, &settings.channel)?;
+    pick_release(&manifest, &settings.channel)
+}
+
+/// Asks the manifest for the release of the channel. `None` when this version is the newest.
+pub fn check(
+    settings: &Settings,
+    current: &str,
+    url_override: Option<&str>,
+) -> Result<Option<Release>, UpdateError> {
+    let release = fetch_release(settings, url_override)?;
     Ok(is_newer(current, &release.version).then_some(release))
+}
+
+/// Downloads the app of a release and checks its size and SHA-256. Returns the file that is safe to give to `adb install`.
+pub fn download_apk(release: &Release) -> Result<PathBuf, UpdateError> {
+    let asset = release.apk.as_ref().ok_or_else(|| {
+        UpdateError::Manifest("the manifest has no \"apk\" for this channel".into())
+    })?;
+    let file = work_dir()?.join(format!("SelfStreamDeck-{}.apk", release.version));
+    let _ = std::fs::remove_file(&file);
+    fetch(&asset.url, &file, APK_LIMIT)?;
+    let hash = sha256_hex(&std::fs::read(&file)?);
+    if hash != asset.sha256 {
+        let _ = std::fs::remove_file(&file);
+        return Err(UpdateError::WrongHash {
+            found: hash,
+            expected: asset.sha256.clone(),
+        });
+    }
+    Ok(file)
 }
 
 /// Who asked for the update: a person at the keyboard (`ssd update --apply`) or the agent by itself.
@@ -457,18 +527,22 @@ pub fn install(_package: &Path) -> Result<(), UpdateError> {
 /// `ssd update [--apply] [--no-install] [--channel NAME] [--url ADDRESS]`
 pub fn command(config: &Config, args: &[String]) -> Result<(), UpdateError> {
     let mut settings = Settings::from_config(config);
-    let (mut apply, mut install_it, mut url) = (false, true, None);
+    let (mut apply, mut install_it, mut url, mut apk) = (false, true, None, false);
     let mut it = args.iter();
     while let Some(flag) = it.next() {
         match flag.as_str() {
             "--apply" => apply = true,
             "--no-install" => install_it = false,
+            "--apk" => apk = true,
             "--channel" => settings.channel = it.next().ok_or_else(|| UpdateError::Usage("--channel needs a name".into()))?.clone(),
             "--url" => url = Some(it.next().ok_or_else(|| UpdateError::Usage("--url needs an address".into()))?.clone()),
-            other => return Err(UpdateError::Usage(format!("unknown option {other}\nusage: ssd update [--apply] [--no-install] [--channel NAME] [--url ADDRESS]"))),
+            other => return Err(UpdateError::Usage(format!("unknown option {other}\nusage: ssd update [--apply] [--no-install] [--apk] [--channel NAME] [--url ADDRESS]"))),
         }
     }
     let current = env!("CARGO_PKG_VERSION");
+    if apk {
+        return apk_command(&settings, url.as_deref(), config);
+    }
     println!(
         "this is Self Stream Deck {current}; looking at channel \"{}\"…",
         settings.channel
@@ -497,6 +571,29 @@ pub fn command(config: &Config, args: &[String]) -> Result<(), UpdateError> {
         println!("not installing (--no-install).");
     }
     Ok(())
+}
+
+/// `ssd update --apk`: updates the app on the phones on the cable, in place (it never installs it for the first time and never uninstalls).
+fn apk_command(settings: &Settings, url: Option<&str>, config: &Config) -> Result<(), UpdateError> {
+    println!("looking at channel \"{}\" for the app…", settings.channel);
+    let release = fetch_release(settings, url)?;
+    crate::adb::release_with_apk(&release)?;
+    let exe = crate::adb::locate(config).ok_or(UpdateError::NoAdb)?;
+    let cli = crate::adb::AdbCli::new(exe);
+    let results = crate::adb::apk_cycle(&cli, &release.version, || download_apk(&release));
+    if results.is_empty() {
+        println!("no phone is ready on the cable (USB debugging on and accepted?).");
+    }
+    for result in &results {
+        println!("{}", result.describe());
+    }
+    match results.iter().find_map(|r| match r {
+        crate::adb::ApkResult::Refused { reason, .. } => Some(reason.clone()),
+        _ => None,
+    }) {
+        Some(reason) => Err(UpdateError::ApkRefused(reason)),
+        None => Ok(()),
+    }
 }
 
 /// The automatic part: one check a minute after the start, then one a day; a newer version is installed right away.
@@ -565,9 +662,31 @@ mod tests {
             Release {
                 version: "0.2.0".into(),
                 url: "https://example.com/a.msi".into(),
-                sha256: HASH.into()
+                sha256: HASH.into(),
+                apk: None,
             }
         );
+        let with_apk = pick_release(
+            &json!({ "channels": { "stable": { "version": "0.2.0", "url": "https://example.com/a.msi", "sha256": HASH,
+                "apk": { "url": "https://example.com/a.apk", "sha256": HASH.to_uppercase() } } } }),
+            "stable",
+        )
+        .unwrap();
+        assert_eq!(
+            with_apk.apk,
+            Some(ApkAsset {
+                url: "https://example.com/a.apk".into(),
+                sha256: HASH.into()
+            })
+        );
+        for bad in [
+            json!({ "url": "https://example.com/a.apk" }),
+            json!({ "url": "http://example.com/a.apk", "sha256": HASH }),
+            json!({ "url": "https://example.com/a.apk", "sha256": "abc" }),
+        ] {
+            let manifest = json!({ "channels": { "stable": { "version": "0.2.0", "url": "https://example.com/a.msi", "sha256": HASH, "apk": bad } } });
+            assert!(pick_release(&manifest, "stable").is_err(), "{bad}");
+        }
         for (url, sha, version, why) in [
             ("http://example.com/a.msi", HASH, "0.2.0", "https"),
             ("ftp://example.com/a.msi", HASH, "0.2.0", "https"),
@@ -679,7 +798,8 @@ mod tests {
                 url: None,
                 channel: "stable".into(),
                 auto: false,
-                signer: None
+                signer: None,
+                apk: false
             }
         );
         std::fs::write(
@@ -694,7 +814,8 @@ mod tests {
                 url: Some("https://x/m.json".into()),
                 channel: "test".into(),
                 auto: true,
-                signer: Some("ABCD".into())
+                signer: Some("ABCD".into()),
+                apk: false
             }
         );
         let _ = std::fs::remove_dir_all(&dir);

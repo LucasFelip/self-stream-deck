@@ -17,7 +17,9 @@ Com a depuração USB ativa no celular (e o `adb`, das *platform-tools* do Andro
 adb reverse tcp:7878 tcp:7878
 ```
 
-Rode uma vez a cada vez que plugar o cabo e abra o app. Em `127.0.0.1` o navegador trata a página como contexto seguro, então ela mantém a tela ligada sozinha. *(O vigia que fazia isso automaticamente era do servidor Node antigo e não foi portado.)*
+Rode uma vez a cada vez que plugar o cabo e abra o app. Em `127.0.0.1` o navegador trata a página como contexto seguro, então ela mantém a tela ligada sozinha.
+
+Para não rodar nada: ligue `"usb": { "auto": true }` no `config.json` e o agente refaz o túnel sozinho quando o celular é plugado. O agente também atualiza o app pelo cabo. Tudo em [USB](usb.md).
 
 ## Wi-Fi (Android)
 

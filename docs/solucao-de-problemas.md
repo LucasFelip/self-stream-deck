@@ -13,7 +13,7 @@ Ele mostra a versão, a configuração (token mascarado), quais portas respondem
 | Confira | Como |
 |---|---|
 | O agente está rodando? | ícone perto do relógio; ou `Get-Process ssd` (o `wscript` ao lado é o vigia que o reinicia). Se não, `Start-ScheduledTask "Self Stream Deck"`. |
-| Por USB | a depuração USB está ativa e você rodou `adb reverse tcp:7878 tcp:7878` **depois** de plugar? Sem isso o app tenta o Wi-Fi. |
+| Por USB | a depuração USB está ativa e você rodou `adb reverse tcp:7878 tcp:7878` **depois** de plugar (ou ligou `"usb": { "auto": true }`, veja [USB](usb.md): `ssd usb` diz o que o agente vê)? Sem isso o app tenta o Wi-Fi. |
 | Por Wi-Fi | `"lan": true` no `config.json` e agente reiniciado; celular e PC na mesma rede; IP do PC igual ao do link (reserve o IP no roteador); a regra "Self Stream Deck (rede local)" existe (`ssd.exe diagnose`). |
 | O token ainda vale? | se o `config.json` perdeu o `token` e o agente gerou outro, o celular precisa parear de novo (menu ⚙ → *Endereço do PC…*). |
 

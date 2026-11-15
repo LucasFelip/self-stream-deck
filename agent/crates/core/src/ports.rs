@@ -594,6 +594,73 @@ impl MonitorPort for FakeMonitor {
 }
 
 /// The notifications the Windows Action Center holds (also what Do Not Disturb or a game kept from popping up).
+/// `adb`, the way to the phone on the USB cable (ADR 0012): the tunnel, and the app on the phone.
+pub trait AdbPort: Send + Sync {
+    /// The phones `adb` knows, ready or not.
+    fn devices(&self) -> PortResult<Vec<crate::adb::Device>>;
+    /// `adb reverse tcp:<phone_port> tcp:<pc_port>`: the phone's `127.0.0.1:<phone_port>` reaches this PC.
+    fn reverse(&self, serial: &str, phone_port: u16, pc_port: u16) -> PortResult<()>;
+    /// The version of the app on that phone, or `None` when it is not installed.
+    fn installed_version(&self, serial: &str, package: &str) -> PortResult<Option<String>>;
+    /// `adb install -r`: an update in place. An Android refusal comes back as `PortError::Failed` with Android's words.
+    fn install(&self, serial: &str, apk: &std::path::Path) -> PortResult<()>;
+}
+
+/// Phones in memory: what `devices` returns, the app version of each, and a log of what was asked.
+#[derive(Default)]
+pub struct FakeAdb {
+    pub devices: std::sync::Mutex<Vec<crate::adb::Device>>,
+    pub versions: std::sync::Mutex<std::collections::HashMap<String, String>>,
+    /// when set, `install` fails with this text (Android's refusal)
+    pub install_error: std::sync::Mutex<Option<String>>,
+    log: std::sync::Mutex<Vec<String>>,
+}
+
+impl FakeAdb {
+    pub fn with(devices: &[(&str, &str)]) -> Self {
+        let fake = Self::default();
+        *fake.devices.lock().unwrap() = devices
+            .iter()
+            .map(|(serial, state)| crate::adb::Device {
+                serial: (*serial).into(),
+                state: (*state).into(),
+            })
+            .collect();
+        fake
+    }
+
+    pub fn log(&self) -> Vec<String> {
+        self.log.lock().unwrap().clone()
+    }
+
+    fn note(&self, line: String) {
+        self.log.lock().unwrap().push(line);
+    }
+}
+
+impl AdbPort for FakeAdb {
+    fn devices(&self) -> PortResult<Vec<crate::adb::Device>> {
+        Ok(self.devices.lock().unwrap().clone())
+    }
+
+    fn reverse(&self, serial: &str, phone_port: u16, pc_port: u16) -> PortResult<()> {
+        self.note(format!("reverse {serial} {phone_port} {pc_port}"));
+        Ok(())
+    }
+
+    fn installed_version(&self, serial: &str, _package: &str) -> PortResult<Option<String>> {
+        Ok(self.versions.lock().unwrap().get(serial).cloned())
+    }
+
+    fn install(&self, serial: &str, apk: &std::path::Path) -> PortResult<()> {
+        self.note(format!("install {serial} {}", apk.display()));
+        match self.install_error.lock().unwrap().clone() {
+            Some(text) => Err(PortError::Failed(text)),
+            None => Ok(()),
+        }
+    }
+}
+
 /// The PC's clock in the person's time zone (the automation rules' time windows).
 pub trait ClockPort: Send + Sync {
     /// Minutes since local midnight, 0 to 1439.

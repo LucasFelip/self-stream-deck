@@ -85,7 +85,7 @@ Todos os scripts ficam em `agent/scripts/`. O build de empacotamento usa `agent\
 | `package.ps1 [-Sign] [-SkipWeb]` | compila o painel e o agente e cria `dist\SelfStreamDeck-<versão>.zip` (+ `.sha256`) com `ssd.exe`, `install.ps1`, `uninstall.ps1` e `launch-hidden.vbs` |
 | `msi\build-msi.ps1 [-Sign] [-SkipBuild]` | cria `dist\SelfStreamDeck-<versão>.msi` (+ `.sha256`) |
 | `sign.ps1 -File ARQ [-Pfx CERT.pfx -Password …] [-Timestamp]` | assina um arquivo com Authenticode |
-| `make-manifest.ps1 -Msi ARQ -BaseUrl https://… [-Channel stable]` | gera o manifesto de atualização |
+| `make-manifest.ps1 -Msi ARQ -BaseUrl https://… [-Channel stable] [-Apk ARQ]` | gera o manifesto de atualização |
 
 **A versão** vem de `agent/Cargo.toml` (`[workspace.package] version`); o MSI e o `ssd --version` a leem de lá.
 
@@ -119,7 +119,8 @@ O agente só contata um endereço se `update.url` estiver configurado. Para publ
 
 1. Aumente a versão em `agent/Cargo.toml` e gere o MSI **assinado**: `build-msi.ps1 -Sign`.
 2. Gere o manifesto: `make-manifest.ps1 -Msi dist\SelfStreamDeck-0.2.0.msi -BaseUrl https://seu-servidor/ssd -Channel stable`. Ele cria `manifest.json` ao lado do MSI, preservando os outros canais (`test`).
-3. Publique o `.msi` e o `manifest.json` num servidor **HTTPS** estático.
+   Para o app Android também: `-Apk dist\SelfStreamDeck-0.2.0.apk` (o APK de **release**, assinado com a chave de sempre) põe o campo `apk` no canal; o agente o instala pelo cabo, veja [USB](usb.md).
+3. Publique o `.msi`, o `.apk` (se for o caso) e o `manifest.json` num servidor **HTTPS** estático.
 4. Nos PCs: `"update": { "url": "https://seu-servidor/ssd/manifest.json" }` no `config.json`. `ssd.exe update` mostra se há versão; `--apply` instala; `"auto": true` faz sozinho, uma vez por dia.
 
 O agente confere, nesta ordem: HTTPS, versão mais nova (`0.2.0-rc1` vale menos que `0.2.0`), tamanho e SHA-256 do manifesto e a assinatura do pacote **pelo mesmo certificado do agente que está rodando** (o `update.signer` vale só para o `ssd update --apply` manual; a atualização automática o ignora). Um agente sem assinatura e sem `signer` recusa atualizar, e nunca se atualiza sozinho. O pacote fica em `update\` ao lado do `ssd.exe`, pasta que só administrador escreve. O instalador é lançado fora do processo do agente para sobreviver a ele, e um gatilho único da tarefa o sobe de novo se o Agendador ignorar o início.

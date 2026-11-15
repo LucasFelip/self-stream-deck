@@ -2,12 +2,14 @@
 # Put the .msi and the manifest.json this prints on any HTTPS server, and set "update": { "url": "https://.../manifest.json" } in the
 # config.json of the PCs that should follow it. Keeps the other channels of an existing manifest.
 #
-#   powershell -File agent/scripts/make-manifest.ps1 -Msi dist\SelfStreamDeck-0.2.0.msi -BaseUrl https://example.com/ssd [-Channel stable] [-Out dist\manifest.json]
+#   powershell -File agent/scripts/make-manifest.ps1 -Msi dist\SelfStreamDeck-0.2.0.msi -BaseUrl https://example.com/ssd [-Channel stable] [-Out dist\manifest.json] [-Apk dist\SelfStreamDeck-0.2.0.apk]
 param(
     [Parameter(Mandatory)][string]$Msi,
     [Parameter(Mandatory)][string]$BaseUrl,
     [string]$Channel = 'stable',
-    [string]$Out = ''
+    [string]$Out = '',
+    # the signed release APK of the same version (SelfStreamDeck-<version>.apk): `ssd update --apk` installs it on phones on the cable
+    [string]$Apk = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -28,6 +30,14 @@ $manifest.channels[$Channel] = [ordered]@{
     version = $version
     url     = "$($BaseUrl.TrimEnd('/'))/$($file.Name)"
     sha256  = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLower()
+}
+if ($Apk) {
+    $app = Get-Item $Apk
+    if ($app.Name -ne "SelfStreamDeck-$version.apk") { throw "the app must be named SelfStreamDeck-$version.apk (got $($app.Name))" }
+    $manifest.channels[$Channel].apk = [ordered]@{
+        url    = "$($BaseUrl.TrimEnd('/'))/$($app.Name)"
+        sha256 = (Get-FileHash $app.FullName -Algorithm SHA256).Hash.ToLower()
+    }
 }
 $manifest | ConvertTo-Json -Depth 6 | Set-Content $Out -Encoding ascii
 Write-Host "Wrote $Out (channel $Channel = $version)."
