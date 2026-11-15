@@ -1,22 +1,35 @@
-# Atualizações de dependências, uma vez por semana, em PRs agrupados por ecossistema (o workflow "build" roda em cada um).
+# Atualizações de dependências, uma vez por semana. Dentro de cada ecossistema, minor e patch vêm agrupados em um PR;
+# majors chegam em PRs separados (um por pacote), para migrar com calma. O workflow "build" roda em cada um.
 version: 2
 updates:
   - package-ecosystem: cargo
     directory: /agent
     schedule: { interval: weekly }
-    groups: { cargo: { patterns: ['*'] } }
+    groups: { cargo: { patterns: ['*'], update-types: [minor, patch] } }
+    ignore:
+      # 0.58 -> 0.62 muda PROPERTYKEY/BOOL e o .get() dos async do WinRT; migrar em PR própria.
+      - { dependency-name: windows, update-types: ['version-update:semver-major', 'version-update:semver-minor'] }
+      - { dependency-name: windows-core, update-types: ['version-update:semver-major', 'version-update:semver-minor'] }
   - package-ecosystem: npm
     directory: /web
     schedule: { interval: weekly }
-    groups: { web: { patterns: ['*'] } }
+    groups: { web: { patterns: ['*'], update-types: [minor, patch] } }
+    ignore:
+      # openapi-typescript exige typescript 5.x como peer.
+      - { dependency-name: typescript, update-types: ['version-update:semver-major'] }
   - package-ecosystem: npm
     directory: /tools/contract-test
     schedule: { interval: weekly }
-    groups: { contract-test: { patterns: ['*'] } }
+    groups: { contract-test: { patterns: ['*'], update-types: [minor, patch] } }
   - package-ecosystem: gradle
     directory: /android
     schedule: { interval: weekly }
-    groups: { android: { patterns: ['*'] } }
+    groups: { android: { patterns: ['*'], update-types: [minor, patch] } }
+    ignore:
+      # AGP 9 embute o Kotlin e não aceita o plugin org.jetbrains.kotlin.android; migrar o build em PR própria.
+      - { dependency-name: com.android.application, update-types: ['version-update:semver-major'] }
+      - { dependency-name: org.jetbrains.kotlin.android, update-types: ['version-update:semver-major'] }
+      - { dependency-name: gradle-wrapper, update-types: ['version-update:semver-major'] }
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
