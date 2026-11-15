@@ -281,7 +281,7 @@ body[data-state="offline"] .offline { display: flex; }
 .page.scroll .grid { height: auto; grid-template-rows: repeat(var(--rows, 2), var(--tile-h, 96px)); }
 
 .slot {
-  border: 1px dashed rgba(255, 255, 255, 0.05);
+  border: 1px dashed transparent; /* invisible until edit mode (body.editing) or a key is over it (.drop-target) */
   border-radius: 14px;
 }
 
@@ -446,6 +446,7 @@ body[data-state="offline"] .offline { display: flex; }
 .edit-done { flex: none; min-width: 96px; height: var(--touch); padding: 0 18px; border: 1px solid var(--accent); border-radius: 999px; background: transparent; color: var(--accent); font: inherit; font-size: 0.85rem; font-weight: 700; touch-action: manipulation; }
 .edit-done:active { background: var(--surface-2); }
 body.editing .tile[data-key] { outline: 1.5px dashed var(--accent); outline-offset: -4px; }
+/* the empty cells keep the grid whole (and take a key that is dropped on them) but only show themselves while editing or when a key is over them */
 body.editing .slot { display: grid; place-items: center; border: 1.5px dashed var(--accent); color: var(--accent); touch-action: manipulation; }
 body.editing .slot::before { content: "+"; font-size: 1.8rem; font-weight: 300; line-height: 1; }
 

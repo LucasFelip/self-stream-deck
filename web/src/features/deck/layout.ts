@@ -38,7 +38,7 @@ const FIT_GAP = 8;
 const FIT_MIN_W = 44;
 const FIT_MIN_H = 60;
 const APPS_COLS = 7;
-const APPS_ROWS = 3;
+const APPS_ROWS = 2;
 
 export interface AppsFit {
   mode: 'normal' | 'fit' | 'scroll';
@@ -71,11 +71,14 @@ export function appsLayoutUpright(count: number, base: Base): AppsFit {
   return { mode: 'scroll', cols: base.cols, rows: Math.max(base.rows, Math.ceil(need / base.cols)), icon: base.icon };
 }
 
-/** Landscape: a fixed 7 columns x 3 rows; more keys than that add rows. Portrait: see appsLayoutUpright. */
+/**
+ * Landscape: 7 columns and as few rows as hold every key and the free slot (at least 2): a deck with a dozen apps fills two rows with big keys
+ * instead of leaving a third of the screen empty. More keys add rows. Portrait: see appsLayoutUpright.
+ */
 export function appsLayout(count: number, base: Base, landscape: boolean): AppsFit {
   if (!landscape) return appsLayoutUpright(count, base);
   const cols = APPS_COLS;
-  const rows = Math.max(APPS_ROWS, Math.ceil(count / cols));
+  const rows = Math.max(APPS_ROWS, Math.ceil((count + 1) / cols));
   const w = (base.width - (cols - 1) * FIT_GAP) / cols;
   const h = (base.height - (rows - 1) * FIT_GAP) / rows;
   if (w >= FIT_MIN_W && h >= FIT_MIN_H) {
