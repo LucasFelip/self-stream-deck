@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { Icon } from '../../ui/Icon';
 import { useToast } from '../../ui/Toast';
 import { camera } from '../camera/controller';
 import { editStore, useEditing } from '../editor/editStore';
 import { arrangeStore, slotId, useIsLifted, useIsTarget } from './arrangeStore';
 import { keycapText, type DeckItem } from './items';
+import { useTint } from './tint';
 
 function Fallback({ name }: { name: string }) {
   return <div className="fallback">{name.charAt(0).toUpperCase()}</div>;
@@ -65,9 +66,12 @@ export function Tile({ item, running, open, onTap }: TileProps) {
     }
   };
 
-  const className = ['tile', live && 'live', running && 'running', open && 'open', launched && 'launched', busy && 'busy', lifting && 'lifting', target && 'drop-target'].filter(Boolean).join(' ');
+  // the tone of the key: from its icon (an app) or from its name (a shortcut); a macro and the camera keep the plain look
+  const icon = item.kind === 'app' && item.hasIcon ? `/api/icon/${item.id}?v=${item.iconVersion || ''}` : null;
+  const tint = useTint(icon, item.kind === 'app' || item.kind === 'shortcut' ? item.label : null);
+  const className = ['tile', tint && 'tinted', live && 'live', running && 'running', open && 'open', launched && 'launched', busy && 'busy', lifting && 'lifting', target && 'drop-target'].filter(Boolean).join(' ');
   return (
-    <button type="button" className={className} data-key={item.key} data-app-id={item.kind === 'app' || item.kind === 'camera' ? item.id : undefined} aria-label={item.kind === 'app' || item.kind === 'camera' ? item.label : undefined} onClick={press}>
+    <button type="button" className={className} style={tint ? ({ '--tint': tint } as CSSProperties) : undefined} data-key={item.key} data-app-id={item.kind === 'app' || item.kind === 'camera' ? item.id : undefined} aria-label={item.kind === 'app' || item.kind === 'camera' ? item.label : undefined} onClick={press}>
       <Visual item={item} />
       <span>{item.label}</span>
     </button>
