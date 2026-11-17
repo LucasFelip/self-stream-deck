@@ -21,7 +21,7 @@ Transforma um celular em um painel de controle do seu PC com Windows: abrir prog
 
 <table>
 <tr>
-<td width="50%"><img src="docs/img/atalhos.png" alt="Atalhos de teclado"><br><b>Atalhos</b> de teclado e <b>macros</b> (várias ações em um toque), editáveis no próprio celular.</td>
+<td width="50%"><img src="docs/img/apps.png" alt="Apps e macros"><br><b>Apps</b> da barra de tarefas e <b>macros</b> (várias ações em um toque), editáveis no próprio celular.</td>
 <td width="50%"><img src="docs/img/janelas.png" alt="Janelas e telas"><br><b>Janelas</b>: um mapa em escala das suas telas, com arrastar, encaixar, minimizar, brilho e projeção.</td>
 </tr>
 <tr>

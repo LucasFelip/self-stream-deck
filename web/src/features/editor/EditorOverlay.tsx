@@ -34,7 +34,7 @@ export function EditorOverlay() {
   const [data, setData] = useState<EditorData | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [lists, setLists] = useState<Lists>({ shortcuts: [], macros: [], apps: [] });
-  const [tab, setTab] = useState<Tab>('shortcuts');
+  const [tab, setTab] = useState<Tab>('macros');
   const [selected, setSelected] = useState({ shortcuts: 0, macros: 0 });
   const [dirty, setDirty] = useState(false);
   const form = useRef<HTMLDivElement | null>(null);
@@ -178,7 +178,7 @@ export function EditorOverlay() {
           <small className="muted">
             {tab === 'shortcuts'
               ? (item as ShortcutDraft).keys || 'sem teclas'
-              : `${stepWord((item as MacroDraft).steps.length)} · ${(item as MacroDraft).page === 'apps' ? 'tela Apps' : 'tela Atalhos'}`}
+              : stepWord((item as MacroDraft).steps.length)}
           </small>
         </span>
       </div>
@@ -237,14 +237,6 @@ export function EditorOverlay() {
     return (
       <>
         <Field text="Nome"><TextInput value={macroAt.label} placeholder="ex.: Call de trabalho" onChange={(label) => change((draft) => { const item = draft.macros[selected.macros]; if (item) item.label = label; })} /></Field>
-        <div className="ed-field">
-          <span>Aparece na tela</span>
-          <div className="chips">
-            {([['shortcuts', 'Atalhos'], ['apps', 'Apps']] as const).map(([page, text]) => (
-              <button key={page} type="button" className="chip big-chip" aria-pressed={(macroAt.page || 'shortcuts') === page} onClick={() => change((draft) => { const item = draft.macros[selected.macros]; if (item) item.page = page; })}>{text}</button>
-            ))}
-          </div>
-        </div>
         <div className="ed-steps">
           {macroAt.steps.map((step, index) => (
             <StepRow
@@ -291,7 +283,7 @@ export function EditorOverlay() {
               const key = tab === 'macros' ? 'macros' : 'shortcuts';
               change((draft) => {
                 if (key === 'shortcuts') draft.shortcuts.push({ label: '', keys: '' });
-                else if (data) draft.macros.push({ label: '', page: 'shortcuts', steps: [makeStep('launch', data)] });
+                else if (data) draft.macros.push({ label: '', page: 'apps', steps: [makeStep('launch', data)] });
               });
               setSelected((previous) => ({ ...previous, [key]: lists[key].length }));
               focusNew.current = true;

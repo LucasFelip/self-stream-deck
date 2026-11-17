@@ -4,7 +4,7 @@ import { usePager } from '../../shell/PagerContext';
 import { useToast } from '../../ui/Toast';
 import { editStore, useEditing } from './editStore';
 
-const GRID_SECTIONS = ['apps', 'shortcuts'];
+const GRID_SECTIONS = ['apps'];
 const HINT_KEY = 'ssd.editHint';
 const HINT = 'Toque numa tecla para editar · segure e arraste para mover';
 

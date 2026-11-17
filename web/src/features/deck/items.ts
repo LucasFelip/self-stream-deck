@@ -21,8 +21,8 @@ export const macroItem = (macro: MacroSummary): DeckItem => ({ kind: 'macro', ke
 /** The phone camera as the PC webcam is one more key on the Apps page: a tap turns it on or off. */
 export const cameraItem = (): DeckItem => ({ kind: 'camera', key: 'c:camera', id: 'camera', label: 'Câmera' });
 
-/** The keys of the Apps page: the taskbar apps, the macros placed on it and the camera. */
-export const appsKeys = (apps: readonly App[], macros: readonly MacroSummary[]): DeckItem[] => [...apps.map(appItem), ...macros.filter((macro) => macro.page === 'apps').map(macroItem), cameraItem()];
+/** The keys of the Apps page: the taskbar apps, every macro and the camera. */
+export const appsKeys = (apps: readonly App[], macros: readonly MacroSummary[]): DeckItem[] => [...apps.map(appItem), ...macros.map(macroItem), cameraItem()];
 
 /** The keys of the Atalhos page: the shortcuts, then the macros that are not on Apps. */
 export const shortcutKeys = (shortcuts: readonly Shortcut[], macros: readonly MacroSummary[]): DeckItem[] => [...shortcuts.map(shortcutItem), ...macros.filter((macro) => macro.page !== 'apps').map(macroItem)];

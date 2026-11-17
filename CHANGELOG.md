@@ -46,7 +46,7 @@ Como publicar uma versão: [docs/desenvolvimento.md](docs/desenvolvimento.md#pub
 - App Android: Gradle Wrapper, build de release (assinado quando a chave está no ambiente), lint e testes da lógica de pareamento.
 
 ### Alterado
-
+- Saiu a aba **Atalhos** do painel e do app Android (a tela não fazia mais sentido). As macros agora aparecem sempre na tela Apps e o editor tem só as abas Macros e Apps. O agente e a API dos atalhos continuam como estavam.
 - Uma versão só para agente, painel e app Android.
 - Os source maps do painel não vão mais dentro do `ssd.exe` (1 MB a menos).
 - CI: actions fixadas por commit, SHA-256 do WiX, tipos do contrato conferidos, auditoria de dependências (`cargo deny`, `npm audit`) e

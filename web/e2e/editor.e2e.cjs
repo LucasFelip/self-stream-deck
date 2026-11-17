@@ -2,7 +2,7 @@
 
 // Edit mode and the button editor of the new interface in a real headless browser against the fake deck server: the old interface's edit mode
 // cases (tap edits instead of launching, the "+" slots, "Concluir", the first-time tip, Back) plus the editor's forms, which the old tests only
-// reached through the entry: a shortcut, a macro with steps, hiding apps, testing an item, deleting with two taps.
+// reached through the entry: a macro with steps, hiding apps, testing an item, deleting with two taps.
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -29,7 +29,6 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
     await sleep(400);
     return { page, close: () => browser.close() };
   };
-  const SHORTCUTS = deck.model.shortcuts;
   const menuEdit = async (page) => {
     await tapUntil(page, '#menu', `!document.getElementById('menu-pop').hidden`, 'the menu');
     await sleep(300);
@@ -80,22 +79,6 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       } finally { close(); }
     });
 
-    await test('edit mode: a shortcut key opens the editor on its own row, 3 touches from the gear', async () => {
-      const { page, close } = await open(411, 914);
-      try {
-        await tapTab(page, 'shortcuts');
-        await menuEdit(page); // touches 1 (gear) and 2 (Editar botões)
-        assert.strictEqual(await page.eval(`document.querySelector('#tabs .tab[aria-selected="true"]').dataset.section`), 'shortcuts', 'the mode works on the Atalhos page too');
-        deck.model.calls.length = 0;
-        await tapUntil(page, '.tile[data-key="s:paste"]', `!document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor'); // touch 3
-        await page.waitFor(`document.querySelector('.ed-form input.ed-input')?.value === 'Colar'`, 'the form of the tapped shortcut');
-        assert.strictEqual(await editorTab(page), 'Atalhos');
-        assert.strictEqual(await page.eval(`document.querySelector('.ed-list .ed-row[aria-pressed="true"] b').textContent`), 'Colar');
-        assert.ok(!deck.model.calls.some((call) => call.path === '/api/shortcut/paste'), 'not fired');
-        await closeEditor(page);
-      } finally { close(); }
-    });
-
     await test('edit mode: empty slots become "+" and open the editor with a new item for that page; outside the mode they are plain', async () => {
       const { page, close } = await open(411, 914);
       try {
@@ -108,13 +91,6 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
         await tapUntil(page, '.page[data-section="apps"] .slot', `!document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor');
         await page.waitFor(`document.querySelector('.ed-form input.ed-input')`, 'the new item form');
         assert.strictEqual(await editorTab(page), 'Macros');
-        assert.strictEqual(await page.eval(`document.querySelector('.ed-form input.ed-input').value`), '');
-        assert.strictEqual(await page.eval(`document.querySelector('.ed-form .chips [aria-pressed="true"]').textContent`), 'Apps', 'the new macro is for the Apps page');
-        await closeEditor(page);
-        // and on the Atalhos page the new item is a shortcut
-        await tapTab(page, 'shortcuts');
-        await tapUntil(page, '.page[data-section="shortcuts"] .slot', `!document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor');
-        await page.waitFor(`document.querySelector('.ed-tabs [aria-pressed="true"]')?.textContent === 'Atalhos'`, 'the Atalhos tab');
         assert.strictEqual(await page.eval(`document.querySelector('.ed-form input.ed-input').value`), '');
         await closeEditor(page);
         await page.tap('#edit-done');
@@ -148,7 +124,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       });
     }
 
-    await test('edit mode ends when you leave Apps / Atalhos for another section, and the menu entry brings you back', async () => {
+    await test('edit mode ends when you leave Apps for another section, and the menu entry brings you back', async () => {
       const { page, close } = await open(411, 914);
       try {
         await menuEdit(page);
@@ -192,61 +168,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       } finally { close(); }
     });
 
-    await test('editor: a new shortcut is built from the modifier chips and a key, previewed, saved with the others, and shows on the deck', async () => {
-      const { page, close } = await open(411, 914);
-      try {
-        await tapTab(page, 'shortcuts');
-        await menuEdit(page);
-        await tapUntil(page, '.tile[data-key="s:copy"]', `!document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor');
-        await page.waitFor(`document.querySelector('.ed-form input.ed-input')`, 'the form');
-        deck.model.calls.length = 0;
-        await tapUntil(page, '.ed-add', `document.querySelectorAll('.ed-list .ed-row').length === 3`, 'a third row');
-        assert.strictEqual(await page.eval(`document.querySelector('.ed-list .ed-row[aria-pressed="true"] b').textContent`), '(sem nome)');
-        await typeInto(page, '.ed-form input.ed-input', 'Mutar');
-        for (const mod of ['Ctrl', 'Shift']) {
-          await page.eval(`[...document.querySelectorAll('.ed-keys .chip')].find((c) => c.textContent === ${JSON.stringify(mod)}).click()`);
-          await page.waitFor(`[...document.querySelectorAll('.ed-keys .chip')].find((c) => c.textContent === ${JSON.stringify(mod)}).getAttribute('aria-pressed') === 'true'`, `${mod} on`);
-        }
-        await typeInto(page, '.ed-keys input.ed-input', 'M');
-        await page.waitFor(`document.querySelector('.ed-preview').textContent === 'Aperta: Ctrl + Shift + M'`, 'the preview');
-        assert.strictEqual(await page.eval(`document.querySelector('.ed-list .ed-row[aria-pressed="true"] small').textContent`), 'ctrl+shift+m');
-        assert.strictEqual(await page.eval(`document.querySelector('.ed-save').dataset.dirty`), 'true');
-        await tapUntil(page, '.ed-save', `document.getElementById('toast').textContent === 'Salvo'`, 'the saved notice');
-        const body = posts(deck, '/api/editor/shortcuts')[0].body;
-        assert.deepStrictEqual(body.items.map((item) => [item.id ?? null, item.label, item.keys]), [['copy', 'Copiar', 'ctrl+c'], ['paste', 'Colar', 'ctrl+v'], [null, 'Mutar', 'ctrl+shift+m']]);
-        assert.strictEqual(await page.eval(`document.querySelector('.ed-save').dataset.dirty`), 'false');
-        await closeEditor(page);
-        await page.waitFor(`document.querySelectorAll('.page[data-section="shortcuts"] .tile[data-key^="s:"]').length === 3`, 'the new key on the deck');
-      } finally { deck.model.shortcuts = SHORTCUTS; close(); }
-    });
-
-    await test('editor: Testar saves and then presses the shortcut; Excluir needs a second tap and saves the list without it', async () => {
-      const { page, close } = await open(411, 914);
-      try {
-        await tapTab(page, 'shortcuts');
-        await menuEdit(page);
-        await tapUntil(page, '.tile[data-key="s:paste"]', `!document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor');
-        await page.waitFor(`document.querySelector('.ed-form input.ed-input')?.value === 'Colar'`, 'the form');
-        deck.model.calls.length = 0;
-        await tapUntil(page, '.ed-test', `document.getElementById('toast').textContent.startsWith('Apertou')`, 'the test notice');
-        assert.strictEqual(posts(deck, '/api/editor/shortcuts').length, 1, 'it saves first');
-        assert.ok(posts(deck, '/api/shortcut/paste').length >= 1, 'then presses it');
-        deck.model.calls.length = 0;
-        await page.tap('.ed-delete');
-        await page.waitFor(`document.querySelector('.ed-delete').dataset.armed === 'true' && document.querySelector('.ed-delete').textContent === 'Toque de novo'`, 'armed');
-        assert.strictEqual(posts(deck, '/api/editor/shortcuts').length, 0, 'one tap does not delete');
-        await page.waitFor(`document.querySelector('.ed-delete').dataset.armed === 'false'`, 'the arming wearing off', 6000);
-        await page.tap('.ed-delete');
-        await page.waitFor(`document.querySelector('.ed-delete').dataset.armed === 'true'`, 'armed again');
-        await page.tap('.ed-delete');
-        await sleep(500);
-        const body = posts(deck, '/api/editor/shortcuts')[0].body;
-        assert.deepStrictEqual(body.items.map((item) => item.id), ['copy']);
-        assert.strictEqual(await page.eval(`document.querySelectorAll('.ed-list .ed-row').length`), 1);
-      } finally { deck.model.shortcuts = SHORTCUTS; close(); }
-    });
-
-    await test('editor: a macro is a list of steps picked from fixed kinds, which can be added, moved and removed, and the page it shows on is chosen', async () => {
+    await test('editor: a macro is a list of steps picked from fixed kinds, which can be added, moved and removed, and the page it shows on is Apps', async () => {
       const { page, close } = await open(411, 914);
       try {
         await menuEdit(page);
@@ -265,18 +187,16 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
         await page.eval(`document.querySelectorAll('.ed-step')[2].querySelector('button[aria-label="Remover passo"]').click()`);
         await page.waitFor(`document.querySelectorAll('.ed-step').length === 2`, 'the wait removed');
         await chooseOption(page, '.ed-step:nth-child(1) select.ed-select', 'app3');
-        await page.eval(`[...document.querySelectorAll('.ed-form .chips .chip')].find((c) => c.textContent === 'Atalhos').click()`);
-        assert.strictEqual(await page.eval(`document.querySelector('.ed-list .ed-row[aria-pressed="true"] small').textContent`), '2 passos · tela Atalhos');
+        assert.strictEqual(await page.eval(`document.querySelector('.ed-list .ed-row[aria-pressed="true"] small').textContent`), '2 passos');
         deck.model.calls.length = 0;
         await tapUntil(page, '.ed-save', `document.getElementById('toast').textContent === 'Salvo'`, 'the saved notice');
         const body = posts(deck, '/api/editor/macros')[0].body;
         assert.deepStrictEqual(body.items.map((item) => ({ id: item.id ?? null, label: item.label, page: item.page, steps: item.steps })), [
-          { id: null, label: 'Modo jogo', page: 'shortcuts', steps: [{ type: 'launch', app: 'app3' }, { type: 'volume', level: 50 }] },
+          { id: null, label: 'Modo jogo', page: 'apps', steps: [{ type: 'launch', app: 'app3' }, { type: 'volume', level: 50 }] },
         ]);
         await closeEditor(page);
         await page.tap('#edit-done');
-        await tapTab(page, 'shortcuts');
-        await page.waitFor(`document.querySelector('.page[data-section="shortcuts"] .tile[data-key^="m:"] small')?.textContent === '2 passos'`, 'the macro key on the deck');
+        await page.waitFor(`document.querySelector('.page[data-section="apps"] .tile[data-key^="m:"] small')?.textContent === '2 passos'`, 'the macro key on the deck');
       } finally { deck.model.macros = []; close(); }
     });
 
@@ -306,15 +226,15 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
     });
 
     await test('editor: closing with unsaved changes asks first; "Continuar editando" keeps the work and "Descartar" closes without saving', async () => {
+      deck.model.macros = [{ id: 'foco', label: 'Foco', page: 'apps', steps: [{ type: 'wait', ms: 100 }] }];
       const { page, close } = await open(411, 914);
       const sheetOpen = `Boolean(document.querySelector('#modal-root .sheet #ed-discard'))`;
       try {
-        await tapTab(page, 'shortcuts');
         await menuEdit(page);
-        await tapUntil(page, '.tile[data-key="s:paste"]', `!document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor');
-        await page.waitFor(`document.querySelector('.ed-form input.ed-input')?.value === 'Colar'`, 'the form');
+        await tapUntil(page, '.tile[data-key="m:foco"]', `!document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor');
+        await page.waitFor(`document.querySelector('.ed-form input.ed-input')?.value === 'Foco'`, 'the form');
         deck.model.calls.length = 0;
-        await typeInto(page, '.ed-form input.ed-input', 'Colar tudo');
+        await typeInto(page, '.ed-form input.ed-input', 'Foco tudo');
         await page.waitFor(`document.querySelector('.ed-save').dataset.dirty === 'true'`, 'a change to save');
         await page.eval('Deck.back()');
         await page.waitFor(sheetOpen, 'the question');
@@ -323,18 +243,18 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
         await page.waitFor(`(() => { const r = document.getElementById('ed-discard').getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.id === 'ed-discard'; })()`, 'the question above the editor');
         await page.eval(`document.getElementById('ed-keep').click()`);
         await page.waitFor(`!(${sheetOpen})`, 'the question gone');
-        assert.strictEqual(await page.eval(`document.querySelector('.ed-form input.ed-input').value`), 'Colar tudo', 'the change is kept');
+        assert.strictEqual(await page.eval(`document.querySelector('.ed-form input.ed-input').value`), 'Foco tudo', 'the change is kept');
         await page.eval('Deck.back()');
         await page.waitFor(sheetOpen, 'the question again');
         await page.eval(`document.getElementById('ed-discard').click()`);
         await page.waitFor(`document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor closed');
-        assert.strictEqual(posts(deck, '/api/editor/shortcuts').length, 0, 'nothing was saved');
+        assert.strictEqual(posts(deck, '/api/editor/macros').length, 0, 'nothing was saved');
         // opened again it shows what the PC has, and with nothing changed it closes without asking
-        await tapUntil(page, '.tile[data-key="s:paste"]', `!document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor again');
-        await page.waitFor(`document.querySelector('.ed-form input.ed-input')?.value === 'Colar'`, 'the saved name');
+        await tapUntil(page, '.tile[data-key="m:foco"]', `!document.querySelector('.editor-page').closest('.overlay').hidden`, 'the editor again');
+        await page.waitFor(`document.querySelector('.ed-form input.ed-input')?.value === 'Foco'`, 'the saved name');
         await closeEditor(page);
         assert.strictEqual(await page.eval(sheetOpen), false);
-      } finally { close(); }
+      } finally { deck.model.macros = []; close(); }
     });
   } finally {
     extra.forEach((browser) => browser.close());

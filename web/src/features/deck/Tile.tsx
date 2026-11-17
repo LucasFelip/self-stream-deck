@@ -79,7 +79,7 @@ export function Tile({ item, running, open, onTap }: TileProps) {
 }
 
 /** An empty cell of the grid: keeps the page's grid whole, and takes a key dropped on it to the end. */
-export function Slot({ section, index }: { section: 'apps' | 'shortcuts'; index: number }) {
+export function Slot({ section, index }: { section: 'apps'; index: number }) {
   const target = useIsTarget(slotId(section, index));
   const editing = useEditing();
   const create = () => { if (editing && !arrangeStore.justDropped) editStore.openEditor({ create: section }); };

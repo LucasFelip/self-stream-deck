@@ -71,7 +71,7 @@ const CAMERA = `
   try {
     // the phone in landscape (the deck's main use): 2400x1080 of the Galaxy A31 is 20:9
     const land = await open(1200, 540);
-    for (const [section, name] of [['apps', 'apps'], ['shortcuts', 'atalhos'], ['windows', 'janelas'], ['sound', 'som'], ['pc', 'pc'], ['power', 'energia']]) {
+    for (const [section, name] of [['apps', 'apps'], ['windows', 'janelas'], ['sound', 'som'], ['pc', 'pc'], ['power', 'energia']]) {
       await tapTab(land, section);
       if (section === 'pc') for (let i = 0; i < 70; i += 1) { deck.model.pushMonitor(); await sleep(70); } // a history for the charts
       await shot(land, name);

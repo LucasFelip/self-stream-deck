@@ -9,7 +9,8 @@ export interface ShortcutDraft { id?: string; label: string; keys: string }
 export interface MacroDraft { id?: string; label: string; page: 'shortcuts' | 'apps'; steps: MacroStep[] }
 
 export type Tab = 'shortcuts' | 'macros' | 'apps';
-export const TABS: ReadonlyArray<readonly [Tab, string]> = [['shortcuts', 'Atalhos'], ['macros', 'Macros'], ['apps', 'Apps']];
+/** The Atalhos tab is gone with its page: the deck has no place for keyboard shortcuts any more, only macros and apps. */
+export const TABS: ReadonlyArray<readonly [Tab, string]> = [['macros', 'Macros'], ['apps', 'Apps']];
 
 export const MODS = [['ctrl', 'Ctrl'], ['shift', 'Shift'], ['alt', 'Alt'], ['win', 'Win']] as const;
 export const MEDIA = [['playpause', 'Play / pausa'], ['next', 'Próxima faixa'], ['prev', 'Faixa anterior']] as const;
@@ -86,15 +87,14 @@ export function moveItem<T>(list: readonly T[], index: number, by: number): T[] 
   return next;
 }
 
-/** Where the editor opens when edit mode taps a key ("a:<app>", "s:<shortcut>", "m:<macro>") or a "+" slot of a page. */
-export type Target = { key: string } | { create: 'apps' | 'shortcuts' } | null;
+/** Where the editor opens when edit mode taps a key ("a:<app>", "m:<macro>") or a "+" slot of a page. */
+export type Target = { key: string } | { create: 'apps' } | null;
 
-export function tabFor(target: Target, lists: { shortcuts: readonly { id?: string }[]; macros: readonly { id?: string }[] }): { tab: Tab; selected?: number } {
-  if (!target) return { tab: 'shortcuts' };
-  if ('create' in target) return { tab: target.create === 'apps' ? 'macros' : 'shortcuts' };
+export function tabFor(target: Target, lists: { macros: readonly { id?: string }[] }): { tab: Tab; selected?: number } {
+  if (!target) return { tab: 'macros' };
+  if ('create' in target) return { tab: 'macros' };
   const kind = target.key.charAt(0);
   const id = target.key.slice(2);
-  if (kind === 's') return { tab: 'shortcuts', selected: Math.max(0, lists.shortcuts.findIndex((item) => item.id === id)) };
   if (kind === 'm') return { tab: 'macros', selected: Math.max(0, lists.macros.findIndex((item) => item.id === id)) };
   return { tab: 'apps' };
 }

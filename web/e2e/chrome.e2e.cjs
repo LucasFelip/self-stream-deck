@@ -52,7 +52,7 @@ const synthDrag = (check, selector) => check.eval(`(async () => {
     extra.push(browser);
     const page = await browser.open(`${deck.url}/`, script ? { script } : undefined);
     await page.waitFor(`document.querySelectorAll('.tile[data-key]').length >= 6`, 'the apps grid');
-    await page.waitFor(`document.querySelectorAll('#tabs .tab').length === 6`, 'the tabs');
+    await page.waitFor(`document.querySelectorAll('#tabs .tab').length === 5`, 'the tabs');
     await page.waitFor(`document.body.dataset.state === 'online'`, 'online', 9000);
     await sleep(500);
     return { page, close: () => browser.close() };
@@ -72,9 +72,9 @@ const synthDrag = (check, selector) => check.eval(`(async () => {
     await test('the tabs are plain: the section name only, no page counter and no dots inside them', async () => {
       const { page, close } = await open();
       try {
-        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('#tabs .tab')].map((t) => t.textContent.trim())`), ['Apps', 'Atalhos', 'Janelas', 'Som', 'PC', 'Energia']);
+        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('#tabs .tab')].map((t) => t.textContent.trim())`), ['Apps', 'Janelas', 'Som', 'PC', 'Energia']);
         assert.strictEqual(await page.eval(`document.querySelectorAll('.tab-dots').length`), 0);
-        assert.strictEqual(await page.eval(`document.querySelectorAll('#tabs[role="tablist"] > .tab[role="tab"]').length`), 6);
+        assert.strictEqual(await page.eval(`document.querySelectorAll('#tabs[role="tablist"] > .tab[role="tab"]').length`), 5);
         assert.strictEqual(await page.eval(`document.querySelector('nav.nav').contains(document.getElementById('menu'))`), true);
         assert.ok(!/PC-TESTE/.test(await page.eval(`[...document.querySelector('nav.nav').children].filter((el) => !el.contains(document.getElementById('menu-pop'))).map((el) => el.textContent).join('')`)), 'the PC name is not in the navigation');
       } finally { close(); }

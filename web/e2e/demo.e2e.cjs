@@ -42,12 +42,12 @@ function serve() {
 
     await test('demo: the panel loads from a sub-folder with no PC and shows the keys', async () => {
       await page.waitFor(`document.querySelectorAll('.tile[data-key]').length >= 1`, 'the keys');
-      assert.strictEqual(await page.eval(`document.querySelectorAll('#tabs .tab').length`), 6);
+      assert.strictEqual(await page.eval(`document.querySelectorAll('#tabs .tab').length`), 5);
       assert.match(await page.eval(`document.body.textContent`), /Demonstração com dados de mentira/);
     });
 
     await test('demo: every page opens', async () => {
-      for (const section of ['windows', 'sound', 'pc', 'power', 'shortcuts', 'apps']) {
+      for (const section of ['windows', 'sound', 'pc', 'power', 'apps']) {
         await tapTab(page, section);
         await page.waitFor(`document.querySelector('#tabs .tab[aria-selected="true"]').dataset.section === '${section}'`, `the ${section} page`);
       }

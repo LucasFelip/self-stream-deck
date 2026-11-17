@@ -4,14 +4,14 @@ import { usePager } from '../../shell/PagerContext';
 import { useDeckData } from './data';
 import { Slot, Tile } from './Tile';
 import type { DeckItem } from './items';
-import { appsLayout, measure, paginate } from './layout';
+import { appsLayout, measure } from './layout';
 import { takeFlip } from './flip';
 import { useDeckActions } from './useDeckActions';
 
 const px = (value: number): string => `${value}px`;
 
 interface GridProps {
-  section: 'apps' | 'shortcuts';
+  section: 'apps';
   items: readonly DeckItem[];
   cols: number;
   rows: number;
@@ -61,33 +61,5 @@ export function AppsPage() {
     <Page section="apps" id="apps-0" title="Aplicativos" className={`generated${fit.mode === 'scroll' ? ' scroll' : ''}`} style={style}>
       {measured ? <Grid section="apps" items={apps} cols={fit.cols} rows={fit.rows} compact={fit.mode === 'fit'} cells={fit.cols * fit.rows} running={running} open={open} firstSlot={0} /> : null}
     </Page>
-  );
-}
-
-/** Atalhos: the same grid as the normal Apps one, paginated; the indicator under the pages says where you are. */
-export function ShortcutsPages() {
-  const { metrics } = usePager();
-  const { shortcuts, running, open } = useDeckData();
-  const base = measure(metrics);
-  const measured = metrics.width > 0;
-  const perPage = base.cols * base.rows;
-
-  if (!shortcuts.length) {
-    return (
-      <Page section="shortcuts" id="shortcuts-0" title="Atalhos" className="generated">
-        <p className="empty">Nenhum atalho configurado.</p>
-      </Page>
-    );
-  }
-  const pages = measured ? paginate(shortcuts, perPage) : [shortcuts];
-  const style = { '--icon': px(base.icon), '--tile-h': px(base.tileH) } as CSSProperties;
-  return (
-    <>
-      {pages.map((items, index) => (
-        <Page key={index} section="shortcuts" id={`shortcuts-${index}`} title="Atalhos" className="generated" style={style} data={pages.length > 1 ? { part: `${index + 1}/${pages.length}` } : {}}>
-          {measured ? <Grid section="shortcuts" items={items} cols={base.cols} rows={base.rows} cells={perPage} running={running} open={open} firstSlot={index * perPage} /> : null}
-        </Page>
-      ))}
-    </>
   );
 }

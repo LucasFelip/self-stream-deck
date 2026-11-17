@@ -12,7 +12,7 @@ import { IdleDimmer } from './features/idle/IdleDimmer';
 import { copyPairingCode } from './features/notices/pairing';
 import { useNotifications, useUiReload } from './features/notices/useNotices';
 import { useAppsRevWatch, useDeckState } from './features/deck/data';
-import { AppsPage, ShortcutsPages } from './features/deck/DeckPages';
+import { AppsPage } from './features/deck/DeckPages';
 import { PcPage } from './features/pc/PcPage';
 import { PowerPage } from './features/power/PowerPage';
 import { SoundPage } from './features/sound/SoundPage';
@@ -72,7 +72,6 @@ function Shell() {
       pages={(
         <>
           <AppsPage />
-          <ShortcutsPages />
           <WindowsPage />
           <SoundPage />
           <PcPage />

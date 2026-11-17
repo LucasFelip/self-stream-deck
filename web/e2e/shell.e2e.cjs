@@ -31,19 +31,19 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
     const page = await browser.open(`${deck.url}/`);
     await page.waitFor(`document.body.dataset.state === 'online'`, 'online', 9000);
 
-    await test('the navigation: six tabs in order, one selected, a gear, the PC name only in the menu', async () => {
+    await test('the navigation: five tabs in order, one selected, a gear, the PC name only in the menu', async () => {
       const tabs = await page.eval(`[...document.querySelectorAll('#tabs .tab')].map((t) => t.dataset.section)`);
-      assert.deepStrictEqual(tabs, ['apps', 'shortcuts', 'windows', 'sound', 'pc', 'power']);
-      assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('#tabs .tab')].map((t) => t.textContent.trim())`), ['Apps', 'Atalhos', 'Janelas', 'Som', 'PC', 'Energia']);
+      assert.deepStrictEqual(tabs, ['apps', 'windows', 'sound', 'pc', 'power']);
+      assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('#tabs .tab')].map((t) => t.textContent.trim())`), ['Apps', 'Janelas', 'Som', 'PC', 'Energia']);
       assert.strictEqual(await page.eval(`document.querySelectorAll('#tabs .tab[aria-selected="true"]').length`), 1);
-      assert.strictEqual(await page.eval(`document.querySelectorAll('#tabs[role="tablist"] > .tab[role="tab"]').length`), 6);
+      assert.strictEqual(await page.eval(`document.querySelectorAll('#tabs[role="tablist"] > .tab[role="tab"]').length`), 5);
       assert.strictEqual(await page.eval(`document.querySelector('nav.nav').contains(document.getElementById('menu'))`), true);
       assert.strictEqual(await page.eval(`document.getElementById('host').textContent`), 'PC-TESTE');
       assert.ok(!/PC-TESTE/.test(await page.eval(`[...document.querySelector('nav.nav').children].filter((el) => !el.contains(document.getElementById('menu-pop'))).map((el) => el.textContent).join('')`)), 'the PC name is not in the navigation');
     });
 
     await test('there is one page per section in the pager, and a tab opens its page', async () => {
-      assert.strictEqual(await page.eval(`document.querySelectorAll('#pager > .page').length`), 6);
+      assert.strictEqual(await page.eval(`document.querySelectorAll('#pager > .page').length`), 5);
       await tapTab(page, 'windows');
       assert.strictEqual(await page.eval(`document.querySelector('#tabs .tab[aria-selected="true"]').dataset.section`), 'windows');
       await tapTab(page, 'apps');

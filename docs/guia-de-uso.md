@@ -26,13 +26,7 @@ Os aplicativos **fixados na barra de tarefas** do Windows, na ordem em que você
 
 ### Reorganizar
 
-Segure uma tecla por meio segundo (ela levanta e o celular vibra), arraste e solte **sobre outra tecla: as duas trocam de lugar**. Soltar num espaço vazio manda a tecla para o fim. Vale para apps, atalhos, macros e a tecla da câmera, e a ordem é guardada ao soltar.
-
-## Atalhos
-
-![Atalhos de teclado](img/atalhos.png)
-
-Atalhos de teclado e macros, em grade. Os atalhos vêm do `config.json` e podem ser criados no próprio celular (veja o editor abaixo). O volume e o mudo ficam na aba Som.
+Segure uma tecla por meio segundo (ela levanta e o celular vibra), arraste e solte **sobre outra tecla: as duas trocam de lugar**. Soltar num espaço vazio manda a tecla para o fim. Vale para apps, macros e a tecla da câmera, e a ordem é guardada ao soltar.
 
 ## Janelas
 
@@ -72,10 +66,9 @@ Teclas para bloquear, suspender, hibernar, sair da conta, reiniciar, desligar e 
 
 ## Editor de botões e macros
 
-Menu **⚙ → Editar botões** (ou direto no `config.json`). Três abas:
+Menu **⚙ → Editar botões** (ou direto no `config.json`). Duas abas:
 
-- **Atalhos:** criar, renomear e excluir atalhos de teclado (modificadores Ctrl, Shift, Alt, Win e uma tecla). **Testar** salva e aperta uma vez.
-- **Macros:** uma lista de passos executados em ordem com um toque (a tecla mostra "n passos" e fica marcada enquanto roda). Passos disponíveis: abrir ou focar um app; posicionar a janela de um app (metade esquerda, direita ou tela cheia, em uma tela); pressionar teclas; tecla de mídia; definir o volume; mudo do som; mudo do microfone; trocar a saída ou a entrada de áudio padrão; esperar (0,5 a 10 s); ligar ou desligar a câmera do celular. Cada macro escolhe em que página aparece (Atalhos ou Apps). Se um passo falha (app fechado, dispositivo ausente), os outros continuam e o aviso diz quantos falharam.
+- **Macros:** uma lista de passos executados em ordem com um toque (a tecla mostra "n passos" e fica marcada enquanto roda). Passos disponíveis: abrir ou focar um app; posicionar a janela de um app (metade esquerda, direita ou tela cheia, em uma tela); pressionar teclas; tecla de mídia; definir o volume; mudo do som; mudo do microfone; trocar a saída ou a entrada de áudio padrão; esperar (0,5 a 10 s); ligar ou desligar a câmera do celular. As macros aparecem na tela Apps, junto dos apps. Se um passo falha (app fechado, dispositivo ausente), os outros continuam e o aviso diz quantos falharam.
 - **Apps:** ocultar ou mostrar os apps da barra de tarefas.
 
 **Segurança:** o agente só aceita passos de uma lista fixa e confere tudo ao salvar (apps por identificador da barra de tarefas, dispositivos pela lista atual, teclas pelos nomes conhecidos). Não existe passo de linha de comando, caminho de arquivo, texto digitado ou energia, e uma tecla que escreve (letra, número, Enter, Espaço) só é aceita junto de Ctrl, Alt ou Win. Mesmo assim, quem tem o token passa a poder montar atalhos de teclado pelo celular; para impedir, ponha `"editor": false` no `config.json`.

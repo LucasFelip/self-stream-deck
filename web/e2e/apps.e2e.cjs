@@ -1,8 +1,8 @@
 'use strict';
 
-// The Apps and Atalhos pages of the new interface in a real headless browser against the fake deck server: the old interface's cases
-// (every app on one page without scrolling in six viewports, the fall back to scrolling, the grid shared by Atalhos, hold-and-drag
-// to swap, the pager's axis per orientation) plus macros, the paginated Atalhos with its page dots, the empty states and the dots of running apps.
+// The Apps page of the new interface in a real headless browser against the fake deck server: the old interface's cases
+// (every app on one page without scrolling in six viewports, the fall back to scrolling, hold-and-drag
+// to swap, the pager's axis per orientation) plus macros, the empty state and the dots of running apps.
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -32,7 +32,6 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
   const DEFAULT_APPS = ['Navegador', 'Terminal', 'Editor', 'Chat', 'Música', 'Jogos'].map((name, i) => ({ id: `app${i}`, name, hasIcon: false, iconVersion: '' }));
   const setApps = (count) => { deck.model.apps = Array.from({ length: count }, (_, i) => ({ id: `big${i}`, name: `Aplicativo numero ${i}`, hasIcon: false, iconVersion: '' })); };
   const resetApps = () => { deck.model.apps = DEFAULT_APPS; };
-  const SHORTCUTS = deck.model.shortcuts;
 
   try {
     await test('Apps: one key per app with its name, the dot of a running app, and a tap launches it and says so', async () => {
@@ -59,35 +58,6 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
         assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.tile.open')].map((t) => t.dataset.appId)`), ['app2']);
         assert.strictEqual(await page.eval(`document.querySelectorAll('.tile.running').length`), 0);
       } finally { deck.model.state = { ...deck.model.state, running: ['app0'], open: [] }; close(); }
-    });
-
-    await test('Atalhos: a tap sends the shortcut, and the first page uses the whole grid, the same one as Apps', async () => {
-      const { page, close } = await open(411, 914);
-      try {
-        await tapTab(page, 'shortcuts');
-        deck.model.calls.length = 0;
-        await tapUntil(page, '.tile[data-key="s:copy"]', `true`, 'the tap');
-        await sleep(300);
-        assert.ok(posts(deck, '/api/shortcut/copy').length >= 1);
-        assert.strictEqual(await page.eval(`document.querySelector('.tile[data-key="s:copy"] .keycap').textContent.replace(/\\u200b/g, '')`), 'Ctrl+C');
-        const info = await page.eval(`(() => {
-          const page = document.querySelector('.page[data-id="shortcuts-0"]');
-          const grid = page.querySelector('.grid');
-          const apps = document.querySelector('.page[data-id="apps-0"] .grid');
-          const g = grid.getBoundingClientRect();
-          const p = page.getBoundingClientRect();
-          const cells = [...grid.children];
-          const rows = new Set(cells.map((c) => Math.round(c.getBoundingClientRect().top))).size;
-          return { split: page.querySelectorAll('.split, .wlist').length, volume: Boolean(page.querySelector('#volume, #vol, .volume-bar')), cols: grid.style.getPropertyValue('--cols'), rows: grid.style.getPropertyValue('--rows'), appsCols: apps.style.getPropertyValue('--cols'), appsRows: apps.style.getPropertyValue('--rows'), cells: cells.length, visibleRows: rows, right: Math.round(p.right - g.right), left: Math.round(g.left - p.left) };
-        })()`);
-        assert.strictEqual(info.split, 0);
-        assert.strictEqual(info.volume, false, 'the volume strip is gone from the shortcuts page');
-        assert.strictEqual(info.cols, info.appsCols, 'the same number of columns as Apps');
-        assert.strictEqual(info.rows, info.appsRows, 'the same number of rows as Apps: the last row is keys, not the volume bar');
-        assert.strictEqual(info.cells, Number(info.cols) * Number(info.rows), 'tiles and slots fill the whole grid');
-        assert.strictEqual(info.visibleRows, Number(info.rows), JSON.stringify(info));
-        assert.ok(info.right <= 20 && info.left <= 20, `the grid fills the page: ${JSON.stringify(info)}`);
-      } finally { close(); }
     });
 
     await test('holding a key and dragging it onto another swaps them, saves the order, and never launches the app', async () => {
@@ -142,29 +112,24 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       } finally { deck.model.layout = { apps: [], shortcuts: [] }; close(); }
     });
 
-    await test('macros are keys: on Atalhos by default, on Apps when placed there; a tap runs them and says so', async () => {
-      deck.model.macros = [{ id: 'foco', label: 'Foco', page: 'shortcuts', steps: 2 }, { id: 'jogo', label: 'Modo jogo', page: 'apps', steps: 1 }];
+    await test('macros are keys: the ones placed on Apps show there; a tap runs them and says so', async () => {
+      deck.model.macros = [{ id: 'jogo', label: 'Modo jogo', page: 'apps', steps: 1 }];
       const { page, close } = await open(411, 914);
       try {
         assert.strictEqual(await page.eval(`document.querySelector('.page[data-section="apps"] .tile[data-key="m:jogo"] small').textContent`), '1 passo');
         deck.model.calls.length = 0;
         await tapUntil(page, '.tile[data-key="m:jogo"]', `document.getElementById('toast').classList.contains('show') && /Modo jogo ✓/.test(document.getElementById('toast').textContent)`, 'the macro notice');
         assert.ok(posts(deck, '/api/macro/jogo').length >= 1);
-        await tapTab(page, 'shortcuts');
-        assert.strictEqual(await page.eval(`document.querySelector('.page[data-section="shortcuts"] .tile[data-key="m:foco"] small').textContent`), '2 passos');
-        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.page[data-section="shortcuts"] .tile[data-key]')].map((t) => t.dataset.key)`), ['s:copy', 's:paste', 'm:foco']);
       } finally { deck.model.macros = []; close(); }
     });
 
-    await test('empty pages: Atalhos says so; Apps always has the camera key, so it is never empty', async () => {
+    await test('empty page: Apps always has the camera key, so it is never empty', async () => {
       deck.model.apps = [];
-      deck.model.shortcuts = [];
-      const { page, close } = await open(411, 914, `document.querySelector('.page[data-section="shortcuts"] .empty')`);
+      const { page, close } = await open(411, 914);
       try {
-        assert.strictEqual(await page.eval(`document.querySelector('.page[data-section="shortcuts"] .empty').textContent`), 'Nenhum atalho configurado.');
         assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.page[data-section="apps"] .tile[data-key]')].map((t) => t.dataset.key)`), ['c:camera']);
-        assert.strictEqual(await page.eval(`document.querySelectorAll('#pager > .page').length`), 6);
-      } finally { resetApps(); deck.model.shortcuts = SHORTCUTS; close(); }
+        assert.strictEqual(await page.eval(`document.querySelectorAll('#pager > .page').length`), 5);
+      } finally { resetApps(); close(); }
     });
 
     await test('a new taskbar list on the PC (appsRev changed) is read again by itself', async () => {
@@ -225,34 +190,8 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       } finally { resetApps(); close(); }
     });
 
-    await test('Atalhos: with more keys than a page holds it paginates, the dots show where you are, and the tab returns to where you were', async () => {
-      deck.model.shortcuts = Array.from({ length: 60 }, (_, i) => ({ id: `sc${i}`, label: `Atalho ${i}`, keys: 'ctrl+c', display: 'Ctrl+C' }));
-      const { page, close } = await open(411, 914);
-      try {
-        await tapTab(page, 'shortcuts');
-        const info = await page.eval(`(() => ({ pages: [...document.querySelectorAll('.page[data-section="shortcuts"]')].map((p) => [p.dataset.id, p.dataset.part, p.querySelectorAll('.tile').length]), dots: document.getElementById('page-dots').hidden, dotCount: document.querySelectorAll('#page-dots i').length, on: [...document.querySelectorAll('#page-dots i')].findIndex((i) => i.classList.contains('on')) }))()`);
-        assert.ok(info.pages.length >= 3, JSON.stringify(info));
-        assert.deepStrictEqual(info.pages.map((p) => p[0]), info.pages.map((_, i) => `shortcuts-${i}`));
-        assert.deepStrictEqual(info.pages.map((p) => p[1]), info.pages.map((_, i) => `${i + 1}/${info.pages.length}`));
-        assert.strictEqual(info.pages.reduce((sum, p) => sum + p[2], 0), 60, 'every shortcut is on some page');
-        assert.strictEqual(info.dots, false);
-        assert.strictEqual(info.dotCount, info.pages.length);
-        assert.strictEqual(info.on, 0);
-        // swipe to the next page: the dot follows
-        await page.eval(`document.getElementById('pager').scrollTo({ left: document.getElementById('pager').clientWidth * 2, behavior: 'instant' })`);
-        await page.waitFor(`[...document.querySelectorAll('#page-dots i')].findIndex((i) => i.classList.contains('on')) === 1`, 'the dot on the second page');
-        // another section and back: the page you left; the tab of the section you are in: its first page
-        await tapTab(page, 'apps');
-        assert.strictEqual(await page.eval(`document.getElementById('page-dots').hidden`), true, 'Apps has one page: no dots');
-        await tapTab(page, 'shortcuts');
-        await page.waitFor(`[...document.querySelectorAll('#page-dots i')].findIndex((i) => i.classList.contains('on')) === 1`, 'back on the page that was open');
-        await page.tap('#tabs .tab[data-section="shortcuts"]');
-        await page.waitFor(`[...document.querySelectorAll('#page-dots i')].findIndex((i) => i.classList.contains('on')) === 0`, 'the section tab returns to its first page');
-      } finally { deck.model.shortcuts = SHORTCUTS; close(); }
-    });
-
     await test('landscape pages are stacked and swipe up / down in the rail order; portrait stays sideways; rotating keeps the page', async () => {
-      const { page: wide, close } = await open(836, 387, `document.querySelectorAll('#tabs .tab').length === 6 && document.querySelectorAll('.tile[data-key]').length >= 6`);
+      const { page: wide, close } = await open(836, 387, `document.querySelectorAll('#tabs .tab').length === 5 && document.querySelectorAll('.tile[data-key]').length >= 6`);
       try {
         const axes = () => wide.eval(`(() => { const p = document.getElementById('pager'); const cs = getComputedStyle(p); return { snap: cs.scrollSnapType, top: Math.round(p.scrollTop), left: Math.round(p.scrollLeft), section: document.querySelector('#tabs .tab[aria-selected="true"]').dataset.section, dots: getComputedStyle(document.getElementById('page-dots')).flexDirection }; })()`);
         let now = await axes();
@@ -260,14 +199,14 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
         assert.deepStrictEqual({ top: now.top, left: now.left, section: now.section }, { top: 0, left: 0, section: 'apps' });
         // the pages sit one under the other in the order of the rail, top to bottom
         const order = await wide.eval(`(() => { const tabs = [...document.querySelectorAll('#tabs .tab')].map((t) => t.dataset.section); const tops = tabs.map((id) => document.querySelector('.page[data-section="' + id + '"]').offsetTop); return { tabs, sorted: tops.every((v, i) => i === 0 || v > tops[i - 1]), x: [...document.querySelectorAll('.page')].every((p) => p.offsetLeft === 0) }; })()`);
-        assert.deepStrictEqual(order.tabs, ['apps', 'shortcuts', 'windows', 'sound', 'pc', 'power']);
+        assert.deepStrictEqual(order.tabs, ['apps', 'windows', 'sound', 'pc', 'power']);
         assert.strictEqual(order.sorted && order.x, true);
         // a tab moves on Y only
         await tapTab(wide, 'sound');
         await sleep(600);
         now = await axes();
         assert.ok(now.top > 0 && now.left === 0, JSON.stringify(now));
-        // a real swipe up on Apps goes to the next page in the rail order (Atalhos)
+        // a real swipe up on Apps goes to the next page in the rail order (Janelas)
         await tapTab(wide, 'apps');
         await sleep(700);
         const from = await wide.eval(`(() => { const r = document.getElementById('pager').getBoundingClientRect(); return { x: r.left + 6, y: r.top + r.height * 0.85 }; })()`);
@@ -277,20 +216,20 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
           await sleep(25);
         }
         await wide.touch('touchEnd', from.x, from.y - 250);
-        await wide.waitFor(`document.querySelector('#tabs .tab[aria-selected="true"]').dataset.section === 'shortcuts'`, 'the swipe to Atalhos', 4000);
+        await wide.waitFor(`document.querySelector('#tabs .tab[aria-selected="true"]').dataset.section === 'windows'`, 'the swipe to Janelas', 4000);
         assert.strictEqual((await axes()).left, 0);
         // rotating keeps the page: portrait goes sideways on the same page
         await wide.setViewport(411, 914);
         await sleep(900);
         now = await axes();
         assert.match(now.snap, /^x /);
-        assert.deepStrictEqual({ top: now.top, section: now.section }, { top: 0, section: 'shortcuts' });
+        assert.deepStrictEqual({ top: now.top, section: now.section }, { top: 0, section: 'windows' });
         assert.ok(now.left > 0, JSON.stringify(now));
         await wide.setViewport(740, 360);
         await sleep(900);
         now = await axes();
         assert.match(now.snap, /^y /);
-        assert.deepStrictEqual({ left: now.left, section: now.section }, { left: 0, section: 'shortcuts' });
+        assert.deepStrictEqual({ left: now.left, section: now.section }, { left: 0, section: 'windows' });
         assert.ok(now.top > 0, JSON.stringify(now));
       } finally { close(); }
     });

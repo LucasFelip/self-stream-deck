@@ -26,7 +26,7 @@ const VIEWPORTS = [
   { name: 'iphone retrato', width: 390, height: 844, landscape: false },
   { name: 'iphone paisagem', width: 844, height: 390, landscape: true },
 ];
-const SECTIONS = ['apps', 'shortcuts', 'windows', 'sound', 'pc', 'power'];
+const SECTIONS = ['apps', 'windows', 'sound', 'pc', 'power'];
 const TOUCH = 48;
 const LIVE_TOUCH = 44; // the menu button
 

@@ -53,18 +53,15 @@ describe('steps', () => {
 });
 
 describe('where the editor opens', () => {
-  const lists = { shortcuts: [{ id: 'copy' }, { id: 'paste' }], macros: [{ id: 'foco' }] };
+  const lists = { macros: [{ id: 'foco' }] };
 
   it('a tapped key selects its row on its tab', () => {
-    expect(tabFor({ key: 's:paste' }, lists)).toEqual({ tab: 'shortcuts', selected: 1 });
     expect(tabFor({ key: 'm:foco' }, lists)).toEqual({ tab: 'macros', selected: 0 });
     expect(tabFor({ key: 'a:app0' }, lists)).toEqual({ tab: 'apps' });
-    expect(tabFor({ key: 's:gone' }, lists)).toEqual({ tab: 'shortcuts', selected: 0 });
   });
 
-  it('a "+" slot starts a new item: a macro on Apps, a shortcut on Atalhos', () => {
+  it('a "+" slot starts a new item: always a macro', () => {
     expect(tabFor({ create: 'apps' }, lists)).toEqual({ tab: 'macros' });
-    expect(tabFor({ create: 'shortcuts' }, lists)).toEqual({ tab: 'shortcuts' });
-    expect(tabFor(null, lists)).toEqual({ tab: 'shortcuts' });
+    expect(tabFor(null, lists)).toEqual({ tab: 'macros' });
   });
 });
