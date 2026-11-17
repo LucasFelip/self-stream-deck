@@ -50,7 +50,7 @@ Um **mapa em escala das suas telas**, com cada janela desenhada onde ela está.
 
 ![Desempenho](img/pc.png)
 
-Três painéis: **Desempenho** (CPU total e por núcleo, clock, temperatura e potência, memória, GPU, disco e rede, ao vivo), **Processos** (os que mais usam CPU e memória) e **Sistema** (hardware e Windows: processador, memória, vídeo, placa-mãe e BIOS, armazenamento, rede, monitores, uptime).
+Dois painéis: **Desempenho** (CPU total e por núcleo, clock, temperatura e potência, memória, GPU, disco e rede, ao vivo) e **Sistema** (hardware e Windows: processador, memória, vídeo, placa-mãe e BIOS, armazenamento, rede, monitores, uptime).
 
 Com um jogo desenhando quadros, o cartão da GPU mostra o **FPS** e o tempo de quadro (lidos do RTSS, o mesmo do MSI Afterburner).
 

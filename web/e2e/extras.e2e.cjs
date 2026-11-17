@@ -40,7 +40,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       const { page, close } = await open(836, 387);
       try {
         await tapTab(page, 'pc');
-        await paneTab(page, 'processes');
+        await paneTab(page, 'system');
         await tapTab(page, 'apps');
         deck.model.fps = { fps: 90, frameMs: 11.1, app: 'Jogo', source: 'RTSS' };
         deck.model.pushGame();
@@ -225,7 +225,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       const { page, close } = await open(411, 914);
       try {
         await tapTab(page, 'pc');
-        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.pc-page .seg-btn')].map((b) => b.textContent)`), ['Desempenho', 'Processos', 'Sistema']);
+        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.pc-page .seg-btn')].map((b) => b.textContent)`), ['Desempenho', 'Sistema']);
         deck.model.pushValues({ 'temp.cpu': { data: 21.5, at: 1, expiresAt: null }, nota: { data: { a: 1 }, at: 1, expiresAt: null } });
         await page.waitFor(`[...document.querySelectorAll('.pc-page .seg-btn')].some((b) => b.textContent === 'Painel')`, 'the pane appears');
         await tapUntil(page, '.pc-page .seg-btn[data-seg="push"]', `document.querySelector('.pc-page .seg-btn[data-seg="push"]').getAttribute('aria-selected') === 'true'`, 'the Painel pane');

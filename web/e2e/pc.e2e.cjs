@@ -1,7 +1,7 @@
 'use strict';
 
 // The PC page of the new interface in a real headless browser against the fake deck server: the old interface's layout cases (three
-// scenes in six viewports: Desempenho, Processos and Sistema fit their cards, nothing overlaps or is cut, the selector is 48 px),
+// scenes in six viewports: Desempenho and Sistema fit their cards, nothing overlaps or is cut, the selector is 48 px),
 // the rule that only the visible pane subscribes to / asks the PC for data, and what each pane shows.
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -59,8 +59,8 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
   try {
     const page = await open(411, 914);
 
-    await test('PC: the selector has three 48 px buttons and the panes switch, one shown at a time; only the active one subscribes to / asks the PC for data', async () => {
-      assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.pc-page .seg-btn')].map((b) => b.textContent)`), ['Desempenho', 'Processos', 'Sistema']);
+    await test('PC: the selector has two 48 px buttons and the panes switch, one shown at a time; only the active one subscribes to / asks the PC for data', async () => {
+      assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.pc-page .seg-btn')].map((b) => b.textContent)`), ['Desempenho', 'Sistema']);
       assert.ok(await page.eval(`[...document.querySelectorAll('.pc-page .seg-btn')].every((b) => b.getBoundingClientRect().height >= 48 && b.getBoundingClientRect().width >= 48)`));
       assert.strictEqual(await pane(page), 'monitor', 'it opens on Desempenho');
       const only = async (name, wanted) => {
@@ -78,15 +78,13 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
         assert.strictEqual(shown.length, 1, `${name}: ${shown}`);
       };
       await page.waitFor(`document.querySelector('.c-cpu .big').textContent.startsWith('23')`, 'the sample drawn');
-      await only('processes', 'processes');
-      await page.waitFor(`document.querySelectorAll('.processes-page .proc').length === 12`, 'every row the PC sends is shown');
       await only('system', null);
       await page.waitFor(`document.querySelector('.system-page').textContent.includes('PC-TESTE')`, 'the system facts inline');
       await only('monitor', 'monitor');
     });
 
     await test('PC: leaving the page from each pane drops the subscription it had', async () => {
-      for (const name of ['monitor', 'processes', 'system']) {
+      for (const name of ['monitor', 'system']) {
         await openPane(page, name);
         const before = await until(() => {
           const now = topicsNow();
@@ -162,7 +160,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
 
     for (const scene of Object.keys(PC_SCENES)) {
       for (const [width, height] of [[836, 387], [740, 360], [411, 914], [360, 740], [844, 390], [390, 844]]) {
-        await test(`PC (${scene}) ${width}x${height}: Desempenho, Processos and Sistema fit their cards, nothing overlaps or is cut, the selector is 48 px`, async () => {
+        await test(`PC (${scene}) ${width}x${height}: Desempenho and Sistema fit their cards, nothing overlaps or is cut, the selector is 48 px`, async () => {
           PC_SCENES[scene]();
           let pcp;
           const landscape = width > height;
@@ -193,14 +191,6 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
             const kinds = await pcp.eval(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); return { cpuH: Math.round(r('.c-cpu').height), memH: Math.round(r('.c-mem').height), cols: getComputedStyle(document.querySelector('.perf-grid')).gridTemplateColumns.split(' ').length }; })()`);
             assert.strictEqual(kinds.cols, landscape ? 3 : 2);
             if (landscape) assert.ok(Math.abs(kinds.cpuH - kinds.memH) <= 2, `the CPU card is not the dominant one: ${JSON.stringify(kinds)}`);
-            // Processos
-            await openPane(pcp, 'processes');
-            await pcp.waitFor(`document.querySelectorAll('.processes-page .proc').length === 12`, 'the processes');
-            await sleep(300);
-            info = await measure('processes-page');
-            assert.deepStrictEqual({ o: info.overlaps, t: info.text, out: info.outside }, { o: [], t: [], out: 0 }, JSON.stringify(info));
-            const rows = await pcp.eval(`[...document.querySelectorAll('.processes-page .proc')].map((e) => Math.round(e.getBoundingClientRect().height))`);
-            assert.ok(rows.every((hh) => hh >= 40), JSON.stringify(rows));
             // Sistema
             await openPane(pcp, 'system');
             await pcp.waitFor(`document.querySelectorAll('.system-page .card').length === 8`, 'the system cards');

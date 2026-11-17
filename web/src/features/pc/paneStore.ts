@@ -1,10 +1,9 @@
 import { useSyncExternalStore } from 'react';
 
-export type Pane = 'monitor' | 'processes' | 'system' | 'push';
+export type Pane = 'monitor' | 'system' | 'push';
 
 export const PANES: ReadonlyArray<{ id: Pane; label: string }> = [
   { id: 'monitor', label: 'Desempenho' },
-  { id: 'processes', label: 'Processos' },
   { id: 'system', label: 'Sistema' },
 ];
 

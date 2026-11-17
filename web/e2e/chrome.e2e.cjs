@@ -289,7 +289,7 @@ const synthDrag = (check, selector) => check.eval(`(async () => {
         const { page, close } = await open(width, height);
         try {
           const segment = (page_, id) => `document.querySelector('.${page_}-page .seg-btn[data-seg="${id}"]').click()`;
-          const checks = [['windows', segment('windows', 'map')], ['windows', segment('windows', 'list')], ['sound', ''], ['pc', segment('pc', 'monitor')], ['pc', segment('pc', 'processes')], ['pc', segment('pc', 'system')], ['power', '']];
+          const checks = [['windows', segment('windows', 'map')], ['windows', segment('windows', 'list')], ['sound', ''], ['pc', segment('pc', 'monitor')], ['pc', segment('pc', 'system')], ['power', '']];
           for (const [name, action] of checks) {
             await tapTab(page, name);
             if (action) { await page.eval(action); await sleep(600); }

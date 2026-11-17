@@ -26,7 +26,7 @@ Transforma um celular em um painel de controle do seu PC com Windows: abrir prog
 </tr>
 <tr>
 <td><img src="docs/img/som.png" alt="Som e mídia"><br><b>Som</b>: o que está tocando (capa, tempo, controles), saída e entrada, volume por aplicativo.</td>
-<td><img src="docs/img/pc.png" alt="Desempenho do PC"><br><b>PC</b>: CPU, memória, GPU, disco e rede ao vivo; processos; hardware; FPS do jogo.</td>
+<td><img src="docs/img/pc.png" alt="Desempenho do PC"><br><b>PC</b>: CPU, memória, GPU, disco e rede ao vivo; hardware; FPS do jogo.</td>
 </tr>
 <tr>
 <td><img src="docs/img/energia.png" alt="Energia"><br><b>Energia</b>: bloquear, suspender, reiniciar, desligar, com confirmação por toque longo e contagem regressiva.</td>
