@@ -2,7 +2,6 @@ import type { components } from '../../api/schema';
 
 export type MonitorSample = components['schemas']['MonitorSample'];
 export type Processes = components['schemas']['Processes'];
-export type SystemInfo = components['schemas']['SystemInfo'];
 export type GameFps = components['schemas']['GameFps'];
 
 export type Level = 'ok' | 'warn' | 'crit';
@@ -44,27 +43,3 @@ export function sparkPaths(values: readonly number[], max: number | null, floor:
 export const usedPercent = (totalGB: number, freeGB: number): number => ((totalGB - freeGB) / totalGB) * 100;
 
 export const sizeText = (gb: number): string => (gb >= 1000 ? `${Math.round(gb / 100) / 10} TB` : `${gb} GB`);
-
-type Disk = SystemInfo['storage'][number];
-type Drive = SystemInfo['drives'][number];
-
-export interface StorageBlock {
-  /** the physical disk, or null for the block of partitions whose disk is unknown */
-  disk: Disk | null;
-  /** "SSD · NVMe · 1 TB" */
-  kind: string;
-  drives: Drive[];
-}
-
-/** Physical disks (model, then kind) with their partitions; partitions with no known disk go in one extra block. */
-export function storageBlocks(disks: readonly Disk[], drives: readonly Drive[]): StorageBlock[] {
-  const known = new Set(disks.map((disk) => disk.id));
-  const blocks: StorageBlock[] = disks.map((disk) => ({
-    disk,
-    kind: [disk.type && disk.type !== 'Unspecified' ? disk.type : '', disk.bus, sizeText(disk.sizeGB)].filter(Boolean).join(' · '),
-    drives: drives.filter((drive) => drive.disk !== null && drive.disk !== undefined && drive.disk === disk.id),
-  }));
-  const loose = drives.filter((drive) => drive.disk === null || drive.disk === undefined || !known.has(drive.disk));
-  if (loose.length) blocks.push({ disk: null, kind: '', drives: loose });
-  return blocks;
-}

@@ -5,7 +5,7 @@ interface SegmentedProps<T extends string> {
   label: string;
 }
 
-/** A segmented selector ("Lista | Mapa", "Desempenho | Processos | Sistema"): one 48 px button per item, exactly one selected. */
+/** A segmented selector ("Lista | Mapa", "Desempenho | Painel"): one 48 px button per item, exactly one selected. */
 export function Segmented<T extends string>({ items, value, onChange, label }: SegmentedProps<T>) {
   return (
     <div className="seg" role="tablist" aria-label={label}>

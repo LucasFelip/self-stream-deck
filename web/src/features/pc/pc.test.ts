@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HISTORY, gpuShortName, level, orDash, pushHistory, sizeText, sparkPaths, storageBlocks, usedPercent } from './pc';
+import { HISTORY, gpuShortName, level, orDash, pushHistory, sizeText, sparkPaths, usedPercent } from './pc';
 
 describe('level and orDash', () => {
   it('level: ok under warn, warn from warn, crit from crit, ok when unknown', () => {
@@ -59,28 +59,5 @@ describe('names and sizes', () => {
     expect(sizeText(1000)).toBe('1 TB');
     expect(sizeText(1862)).toBe('1.9 TB');
     expect(usedPercent(500, 200)).toBe(60);
-  });
-});
-
-describe('storageBlocks', () => {
-  const disks = [
-    { id: 0, model: 'NVMe A', sizeGB: 1000, type: 'SSD', bus: 'NVMe' },
-    { id: 1, model: 'Disco B', sizeGB: 500, type: 'Unspecified', bus: 'SATA' },
-  ];
-  const drive = (name: string, disk: number | null | undefined) => ({ name, totalGB: 100, freeGB: 50, disk });
-
-  it('puts each partition under its disk and the rest in one extra block', () => {
-    const blocks = storageBlocks(disks, [drive('C:', 0), drive('D:', 1), drive('E:', 0), drive('F:', null), drive('G:', 9), drive('H:', undefined)]);
-    expect(blocks.map((b) => [b.disk?.model ?? null, b.drives.map((d) => d.name)])).toEqual([
-      ['NVMe A', ['C:', 'E:']],
-      ['Disco B', ['D:']],
-      [null, ['F:', 'G:', 'H:']],
-    ]);
-  });
-
-  it('describes the kind of disk without "Unspecified" and has no extra block when nothing is loose', () => {
-    const blocks = storageBlocks(disks, [drive('C:', 0)]);
-    expect(blocks.map((b) => b.kind)).toEqual(['SSD · NVMe · 1 TB', 'SATA · 500 GB']);
-    expect(blocks).toHaveLength(2);
   });
 });
