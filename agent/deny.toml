@@ -7,6 +7,8 @@ targets = ["x86_64-pc-windows-msvc", "x86_64-pc-windows-gnu"]
 
 [advisories]
 version = 2
+# chrono is flagged as unmaintained with no safe upgrade; it only comes in through wmi (hardware facts). Revisit when wmi moves off chrono.
+ignore = ["RUSTSEC-2026-0543"]
 
 [licenses]
 version = 2

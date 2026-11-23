@@ -65,7 +65,7 @@ button.chip:active { background: var(--border); }
 
 .muted { color: var(--muted); }
 
-/* segmented selector (Deck.segmented): "Lista | Mapa", "Desempenho | Processos | Sistema". 48 px targets, one lit. */
+/* segmented selector (Deck.segmented): "Lista | Mapa", "Desempenho | Painel". 48 px targets, one lit. */
 .seg { display: flex; flex: none; gap: 6px; }
 .seg-btn { flex: 1 1 0; min-width: 0; height: 48px; padding: 0 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--muted); font-family: inherit; font-size: 0.8rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; touch-action: manipulation; }
 .seg-btn:active { background: var(--surface-2); }
@@ -90,7 +90,7 @@ button.chip:active { background: var(--border); }
 .range:disabled { opacity: 0.35; }
 
 /* module pages scroll vertically *inside* their cards if a screen is too small for them */
-.audio-page, .media-page, .monitor-page, .system-page, .processes-page, .power-page { height: 100%; min-height: 0; }
+.audio-page, .media-page, .monitor-page, .processes-page, .power-page { height: 100%; min-height: 0; }
 
 /* --- media ---------------------------------------------------------------------------------- */
 
@@ -309,20 +309,10 @@ button.chip:active { background: var(--border); }
 .drive .row { display: flex; justify-content: space-between; margin-bottom: 3px; color: var(--muted); }
 .drive .row b { color: var(--text); font-weight: 600; }
 
-/* Sistema: themed cards in a balanced flow of CSS columns (3 in landscape, 1 in portrait), no card taller than its content */
-.system-page { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-x pan-y; scrollbar-width: none; }
-.system-page::-webkit-scrollbar { display: none; }
-.system-page .col { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; }
-.system-page .card { flex: 1 1 auto; display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; }
-.system-page .kv { flex: 1; align-content: space-evenly; }
-.system-page .disk { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; gap: 3px; padding: 4px 0; }
-.system-page .disk + .disk { border-top: 1px solid var(--border); }
-.disk-name { font-size: 0.7rem; font-weight: 600; line-height: 1.2; }
-.disk-kind { margin-top: -2px; font-size: 0.62rem; color: var(--muted); }
-.system-page > .loading { grid-column: 1 / -1; }
 .kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1px 8px; margin: 0; font-size: 0.64rem; line-height: 1.25; }
 .kv dt { color: var(--muted); white-space: nowrap; }
 .kv dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+
 .divider { height: 1px; margin: 4px 0; background: var(--border); }
 .loading { padding: 24px 0; text-align: center; font-size: 0.8rem; color: var(--muted); }
 
@@ -589,9 +579,6 @@ button.chip:active { background: var(--border); }
   .win-side { overflow: visible; }
   .sel-chips { display: flex; }
   .windows-page .wmap-col { flex: none; height: 62vh; }
-  .system-page { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: min-content; align-content: start; }
-  .system-page .col { display: contents; }
-  .system-page .card { flex: none; }
   .actions-grid { --cols: 2; --rows: 4; min-height: 454px; } /* four rows of at least 104 px: shorter screens scroll the page instead of squashing the keys */
   .card .scroll { overflow: visible; }
 

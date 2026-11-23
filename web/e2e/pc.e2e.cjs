@@ -1,13 +1,13 @@
 'use strict';
 
 // The PC page of the new interface in a real headless browser against the fake deck server: the old interface's layout cases (three
-// scenes in six viewports: Desempenho and Sistema fit their cards, nothing overlaps or is cut, the selector is 48 px),
+// scenes in six viewports: Desempenho fits its cards and nothing overlaps or is cut),
 // the rule that only the visible pane subscribes to / asks the PC for data, and what each pane shows.
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const { fakeDeck, launchBrowser, findBrowser, sleep } = require('./harness.cjs');
-const { tapTab, tapUntil } = require('./support.cjs');
+const { tapTab } = require('./support.cjs');
 
 const DIST = path.join(__dirname, '..', 'dist', 'index.html');
 
@@ -27,10 +27,6 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
     await page.waitFor(`document.body.dataset.state === 'online'`, 'online', 9000);
     await tapTab(page, 'pc');
     return page;
-  };
-  const pane = (page) => page.eval(`document.querySelector('.pc-page .seg-btn[aria-selected="true"]')?.dataset.seg`);
-  const openPane = async (page, name) => {
-    await tapUntil(page, `.pc-page .seg-btn[data-seg="${name}"]`, `document.querySelector('.pc-page .seg-btn[data-seg="${name}"]').getAttribute('aria-selected') === 'true'`, `the ${name} pane`);
   };
   // waits (polling, not a fixed pause: a CI runner is slower than a PC) until `check()` holds, and gives back its value
   const until = async (check, what, ms = 10000) => {
@@ -59,52 +55,24 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
   try {
     const page = await open(411, 914);
 
-    await test('PC: the selector has two 48 px buttons and the panes switch, one shown at a time; only the active one subscribes to / asks the PC for data', async () => {
-      assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.pc-page .seg-btn')].map((b) => b.textContent)`), ['Desempenho', 'Sistema']);
-      assert.ok(await page.eval(`[...document.querySelectorAll('.pc-page .seg-btn')].every((b) => b.getBoundingClientRect().height >= 48 && b.getBoundingClientRect().width >= 48)`));
-      assert.strictEqual(await pane(page), 'monitor', 'it opens on Desempenho');
-      const only = async (name, wanted) => {
-        deck.model.calls.length = 0;
-        await openPane(page, name);
-        // the stream reconnects with the new topics
-        const topics = await until(() => {
-          const now = topicsNow();
-          return now && ['monitor', 'processes'].every((topic) => now.includes(topic) === (topic === wanted)) ? now : null;
-        }, `${name}: the page resubscribed with the topics of this pane`).catch(() => topicsNow());
-        assert.ok(topics, `${name}: the page did not resubscribe`);
-        for (const topic of ['monitor', 'processes']) assert.strictEqual(topics.includes(topic), topic === wanted, `${name}: topics ${topics}`);
-        assert.strictEqual(infoCalls() > 0, name === 'system', `${name}: /api/monitor/info calls ${infoCalls()}`);
-        const shown = await page.eval(`[...document.querySelectorAll('.pc-page > .pc-pane')].filter((p) => p.getBoundingClientRect().width > 0).map((p) => p.className.split(' ')[0])`);
-        assert.strictEqual(shown.length, 1, `${name}: ${shown}`);
-      };
+    await test('PC: with nothing pushed there is no selector, only Desempenho shows and it is the only pane subscribing to / asking the PC for data', async () => {
+      assert.strictEqual(await page.eval(`document.querySelectorAll('.pc-page .seg-btn').length`), 0, 'no selector with a single pane');
       await page.waitFor(`document.querySelector('.c-cpu .big').textContent.startsWith('23')`, 'the sample drawn');
-      await only('system', null);
-      await page.waitFor(`document.querySelector('.system-page').textContent.includes('PC-TESTE')`, 'the system facts inline');
-      await only('monitor', 'monitor');
+      const topics = await until(() => { const now = topicsNow(); return now && now.includes('monitor') ? now : null; }, 'the page subscribed to monitor');
+      assert.ok(topics.includes('monitor'), `topics ${topics}`);
+      assert.ok(!topics.includes('processes'), `topics ${topics}`);
+      assert.strictEqual(infoCalls(), 0, '/api/monitor/info is never asked');
+      const shown = await page.eval(`[...document.querySelectorAll('.pc-page > .pc-pane')].filter((p) => p.getBoundingClientRect().width > 0).map((p) => p.className.split(' ')[0])`);
+      assert.strictEqual(shown.length, 1, `${shown}`);
     });
 
-    await test('PC: leaving the page from each pane drops the subscription it had', async () => {
-      for (const name of ['monitor', 'system']) {
-        await openPane(page, name);
-        const before = await until(() => {
-          const now = topicsNow();
-          return name === 'system' ? now : now && now.includes(name) ? now : null;
-        }, `${name}: subscribed`).catch(() => topicsNow());
-        deck.model.calls.length = 0;
-        await tapTab(page, 'apps');
-        // leaving the page changes the subscription (the system pane has none to drop)
-        const away = await until(() => {
-          const now = topicsNow();
-          return now && !now.includes('monitor') && !now.includes('processes') ? now : null;
-        }, `${name}: the subscription dropped`, name === 'system' ? 1500 : 10000).catch(() => topicsNow());
-        if (name !== 'system') {
-          assert.ok(before && before.includes(name), `${name}: was subscribed before leaving (${before})`);
-          assert.ok(away, `${name}: leaving the page did not change the subscription`);
-        }
-        assert.ok(!away || (!away.includes('monitor') && !away.includes('processes')), `${name} away: ${away}`);
-        await tapTab(page, 'pc');
-      }
-      await openPane(page, 'monitor');
+    await test('PC: leaving the page drops the subscription it had', async () => {
+      const before = await until(() => { const now = topicsNow(); return now && now.includes('monitor') ? now : null; }, 'subscribed');
+      deck.model.calls.length = 0;
+      await tapTab(page, 'apps');
+      const away = await until(() => { const now = topicsNow(); return now && !now.includes('monitor') && !now.includes('processes') ? now : null; }, 'the subscription dropped');
+      assert.ok(before.includes('monitor') && away, `before ${before}, away ${away}`);
+      await tapTab(page, 'pc');
     });
 
     await test('PC > Desempenho: the five cards show the sample (levels, per-core bars, GPU name, drives, network)', async () => {
@@ -160,7 +128,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
 
     for (const scene of Object.keys(PC_SCENES)) {
       for (const [width, height] of [[836, 387], [740, 360], [411, 914], [360, 740], [844, 390], [390, 844]]) {
-        await test(`PC (${scene}) ${width}x${height}: Desempenho and Sistema fit their cards, nothing overlaps or is cut, the selector is 48 px`, async () => {
+        await test(`PC (${scene}) ${width}x${height}: Desempenho fits its cards and nothing overlaps or is cut`, async () => {
           PC_SCENES[scene]();
           let pcp;
           const landscape = width > height;
@@ -180,25 +148,16 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
               const text = [...root.querySelectorAll('.stats span, .kv dd, .kv dt, .big, .proc .name, .proc .val, .drive .row span, .drive .row b')].filter(shown).filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent.slice(0, 24));
               const page = document.querySelector('.pc-page').getBoundingClientRect();
               const outside = cards.filter((c) => rect(c).right > page.right + 1 || rect(c).left < page.left - 1).length;
-              return { cards: cards.length, overlaps, cut, text, outside, rootScrolls: root.scrollHeight > root.clientHeight + 1, seg: Math.round(rect(document.querySelector('.pc-page .seg-btn')).height) };
+              return { cards: cards.length, overlaps, cut, text, outside, rootScrolls: root.scrollHeight > root.clientHeight + 1 };
             })()`);
             // Desempenho
             let info = await measure('monitor-page');
             assert.strictEqual(info.cards, 5, JSON.stringify(info));
             assert.deepStrictEqual({ o: info.overlaps, c: info.cut, t: info.text, out: info.outside }, { o: [], c: [], t: [], out: 0 }, JSON.stringify(info));
-            assert.ok(info.seg >= 48, JSON.stringify(info));
             if (landscape) assert.strictEqual(info.rootScrolls, false, `landscape Desempenho must not scroll: ${JSON.stringify(info)}`);
             const kinds = await pcp.eval(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); return { cpuH: Math.round(r('.c-cpu').height), memH: Math.round(r('.c-mem').height), cols: getComputedStyle(document.querySelector('.perf-grid')).gridTemplateColumns.split(' ').length }; })()`);
             assert.strictEqual(kinds.cols, landscape ? 3 : 2);
             if (landscape) assert.ok(Math.abs(kinds.cpuH - kinds.memH) <= 2, `the CPU card is not the dominant one: ${JSON.stringify(kinds)}`);
-            // Sistema
-            await openPane(pcp, 'system');
-            await pcp.waitFor(`document.querySelectorAll('.system-page .card').length === 8`, 'the system cards');
-            await sleep(900);
-            info = await measure('system-page');
-            assert.deepStrictEqual({ o: info.overlaps, c: info.cut, out: info.outside }, { o: [], c: [], out: 0 }, `${scene} ${width}x${height} ${JSON.stringify(info)}`);
-            if (landscape || height >= 900) assert.strictEqual(info.rootScrolls, false, `Sistema must not scroll here: ${JSON.stringify(info)}`);
-            if (landscape) assert.strictEqual(await pcp.eval(`getComputedStyle(document.querySelector('.system-page')).gridTemplateColumns.split(' ').length`), 4);
           } finally {
             deck.model.drives = DEFAULT_DRIVES;
             deck.model.noGpu = false;
@@ -207,33 +166,6 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
         });
       }
     }
-
-    await test('PC > Sistema: the facts are listed (uptime ticks, partitions under their disk) and, when the machine cannot be read, the pane says so', async () => {
-      await openPane(page, 'system');
-      await page.waitFor(`document.querySelectorAll('.system-page .card').length === 8`, 'the cards');
-      const facts = await page.eval(`(() => ({
-        titles: [...document.querySelectorAll('.system-page .card h3')].map((h) => h.textContent),
-        windows: [...document.querySelectorAll('.system-page .kv')][0].textContent,
-        uptime: [...document.querySelectorAll('.system-page .kv dt')].find((d) => d.textContent === 'Ligado há').nextSibling.textContent,
-        disks: [...document.querySelectorAll('.system-page .disk')].map((d) => d.textContent),
-      }))()`);
-      assert.deepStrictEqual(facts.titles, ['Sistema', 'Monitores', 'Processador', 'Memória', 'Placa-mãe', 'Vídeo', 'Rede', 'Armazenamento']);
-      assert.match(facts.windows, /ComputadorPC-TESTE/);
-      assert.match(facts.windows, /Windows 11 Pro/);
-      assert.match(facts.uptime, /min|h|d/);
-      assert.strictEqual(facts.disks.length, 2, 'the physical disk, then one block for the partition without a known disk');
-      assert.match(facts.disks[0], /NVMe de teste.*SSD · NVMe · 1 TB/);
-      assert.match(facts.disks[1], /C: Sistema · NTFS/);
-      deck.model.infoFails = true;
-      const bad = await open(836, 387);
-      try {
-        await openPane(bad, 'system');
-        await bad.waitFor(`document.querySelector('.system-page .loading')?.textContent.startsWith('Não foi possível')`, 'the error text');
-      } finally {
-        deck.model.infoFails = false;
-        bad.close();
-      }
-    });
   } finally {
     extra.forEach((browser) => browser.close());
     deck.close();

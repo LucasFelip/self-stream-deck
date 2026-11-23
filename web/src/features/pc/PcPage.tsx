@@ -7,14 +7,13 @@ import { Segmented } from '../../ui/Segmented';
 import { PANES, PUSH_PANE, paneStore, usePane } from './paneStore';
 import { PushPane } from '../webhooks/PushPane';
 import { PerformancePane } from './PerformancePane';
-import { SystemPane } from './SystemPane';
 
 const SAMPLE_MS = 2000;
 const PUSH_MS = 5000;
 
 /**
- * "PC": one page, two panes behind a selector. Only the active pane of the visible page does any work: samples for Desempenho,
- * the one-off facts and the uptime clock for Sistema.
+ * "PC": Desempenho, plus the Painel pane while webhooks have values to show; the selector appears only when there is more than one pane.
+ * Only the visible page samples.
  */
 export function PcPage() {
   const onScreen = useIsActive('pc');
@@ -29,15 +28,12 @@ export function PcPage() {
 
   // every sample is new (the numbers always move): the agent pushes each one and there is no slowing down
   const sample = useLiveQuery('monitor', ['monitor'], () => call(client.GET('/api/monitor/sample')), { enabled: onScreen && shownPane === 'monitor', pollMs: SAMPLE_MS });
-  // what the machine is does not change while the app is open: asked once, the first time Sistema opens
-  const info = useQuery({ queryKey: ['system-info'], queryFn: () => call(client.GET('/api/monitor/info')), enabled: onScreen && shownPane === 'system', staleTime: Infinity, retry: false });
 
   return (
     <Page section="pc" className="pc-page">
-      <Segmented items={hasPushed ? [...PANES, PUSH_PANE] : PANES} value={shownPane} onChange={(id) => paneStore.set(id)} label="PC" />
+      {hasPushed ? <Segmented items={[...PANES, PUSH_PANE]} value={shownPane} onChange={(id) => paneStore.set(id)} label="PC" /> : null}
       <PerformancePane hidden={shownPane !== 'monitor'} sample={sample.data} stamp={sample.dataUpdatedAt} loading={!sample.data && onScreen && shownPane === 'monitor'} />
       <PushPane hidden={shownPane !== 'push'} data={pushed.data} rules={rules.data} onPause={pauseRules} />
-      <SystemPane hidden={shownPane !== 'system'} active={onScreen && shownPane === 'system'} info={info.data} error={info.error} />
     </Page>
   );
 }

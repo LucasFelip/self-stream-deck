@@ -33,18 +33,16 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
     await tapUntil(page, '#menu', `!document.getElementById('menu-pop').hidden`, 'the menu');
     await page.eval(`[...document.querySelectorAll('#menu-pop button')].find((b) => b.textContent.trim() === ${JSON.stringify(label)}).click()`);
   };
-  const paneTab = (page, name) => tapUntil(page, `.pc-page .seg-btn[data-seg="${name}"]`, `document.querySelector('.pc-page .seg-btn[data-seg="${name}"]').getAttribute('aria-selected') === 'true'`, `the ${name} pane`);
 
   try {
-    await test('a game starting opens PC > Desempenho even from another pane, the counter shows on every other page and goes away when the game ends', async () => {
+    await test('a game starting opens PC > Desempenho the counter shows on every other page and goes away when the game ends', async () => {
       const { page, close } = await open(836, 387);
       try {
         await tapTab(page, 'pc');
-        await paneTab(page, 'system');
         await tapTab(page, 'apps');
         deck.model.fps = { fps: 90, frameMs: 11.1, app: 'Jogo', source: 'RTSS' };
         deck.model.pushGame();
-        await page.waitFor(`document.querySelector('#tabs .tab[data-section="pc"]').getAttribute('aria-selected') === 'true' && document.querySelector('.pc-page .seg-btn[data-seg="monitor"]').getAttribute('aria-selected') === 'true'`, 'PC > Desempenho for the game', 8000);
+        await page.waitFor(`document.querySelector('#tabs .tab[data-section="pc"]').getAttribute('aria-selected') === 'true' && document.querySelector('.monitor-page').getBoundingClientRect().width > 0`, 'PC > Desempenho for the game', 8000);
         assert.strictEqual(await page.eval(`document.getElementById('fps').hidden`), true, 'the counter hides on Desempenho');
         const easing = `getComputedStyle(document.querySelector('.monitor-page .bar > i')).transitionDuration`;
         await page.waitFor(`document.querySelector('.monitor-page').classList.contains('gaming')`, 'the page knowing about the game');
@@ -73,7 +71,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       const { page, close } = await open(836, 387);
       try {
         // slides to Desempenho once the pages exist (the counter hides there), then shows on any other page
-        await page.waitFor(`document.querySelector('#tabs .tab[data-section="pc"]')?.getAttribute('aria-selected') === 'true' && document.querySelector('.pc-page .seg-btn[data-seg="monitor"]')?.getAttribute('aria-selected') === 'true'`, 'the slide to PC > Desempenho', 8000);
+        await page.waitFor(`document.querySelector('#tabs .tab[data-section="pc"]')?.getAttribute('aria-selected') === 'true' && document.querySelector('.monitor-page')?.getBoundingClientRect().width > 0`, 'the slide to PC > Desempenho', 8000);
         await tapTab(page, 'apps');
         await page.waitFor(`!document.getElementById('fps').hidden && document.querySelector('#fps b').textContent === '72'`, 'the counter');
       } finally { deck.model.fps = null; close(); }
@@ -220,19 +218,20 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       } finally { close(); }
     });
 
-    await test('webhooks: the Painel pane of PC exists only while there are pushed values, and lists them', async () => {
+    await test('webhooks: the Painel pane of PC (and the selector) exists only while there are pushed values, and lists them', async () => {
       deck.model.pushed = { values: {}, version: 0 };
       const { page, close } = await open(411, 914);
       try {
         await tapTab(page, 'pc');
-        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.pc-page .seg-btn')].map((b) => b.textContent)`), ['Desempenho', 'Sistema']);
+        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.pc-page .seg-btn')].map((b) => b.textContent)`), []);
         deck.model.pushValues({ 'temp.cpu': { data: 21.5, at: 1, expiresAt: null }, nota: { data: { a: 1 }, at: 1, expiresAt: null } });
         await page.waitFor(`[...document.querySelectorAll('.pc-page .seg-btn')].some((b) => b.textContent === 'Painel')`, 'the pane appears');
+        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.pc-page .seg-btn')].map((b) => b.textContent)`), ['Desempenho', 'Painel']);
         await tapUntil(page, '.pc-page .seg-btn[data-seg="push"]', `document.querySelector('.pc-page .seg-btn[data-seg="push"]').getAttribute('aria-selected') === 'true'`, 'the Painel pane');
         assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.push-pane dt')].map((d) => d.textContent)`), ['nota', 'temp.cpu']);
         assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.push-pane dd')].map((d) => d.textContent)`), ['{"a":1}', '21.5']);
         deck.model.pushValues({});
-        await page.waitFor(`![...document.querySelectorAll('.pc-page .seg-btn')].some((b) => b.textContent === 'Painel') && document.querySelector('.pc-page .seg-btn[aria-selected="true"]').dataset.seg === 'monitor'`, 'back to Desempenho when the values are gone');
+        await page.waitFor(`[...document.querySelectorAll('.pc-page .seg-btn')].length === 0 && document.querySelector('.monitor-page').getBoundingClientRect().width > 0`, 'back to Desempenho when the values are gone');
         assert.ok(!page.errors.length, JSON.stringify(page.errors));
       } finally { deck.model.pushed = { values: {}, version: 0 }; close(); }
     });
@@ -243,6 +242,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       try {
         await tapTab(page, 'pc');
         await page.waitFor(`[...document.querySelectorAll('.pc-page .seg-btn')].some((b) => b.textContent === 'Painel')`, 'the pane appears');
+        assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.pc-page .seg-btn')].map((b) => b.textContent)`), ['Desempenho', 'Painel']);
         await tapUntil(page, '.pc-page .seg-btn[data-seg="push"]', `document.querySelector('.pc-page .seg-btn[data-seg="push"]').getAttribute('aria-selected') === 'true'`, 'the Painel pane');
         assert.deepStrictEqual(await page.eval(`[...document.querySelectorAll('.rules-card dd')].map((d) => d.textContent)`), ['som', '2']);
         await page.tap('.rules-card [data-rules-pause]');
