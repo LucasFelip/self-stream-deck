@@ -8,6 +8,8 @@ Como publicar uma versão: [docs/desenvolvimento.md](docs/desenvolvimento.md#pub
 
 ## [Não lançado]
 
+## [0.2.0] - 2026-11-22
+
 ### Segurança
 
 - O editor do celular não aceita mais tecla que escreve sozinha (letra, número, Enter, Espaço): um atalho ou passo de macro precisa de Ctrl, Alt ou
@@ -108,7 +110,8 @@ A reestruturação ([plano](docs/plano-reestruturacao.md), [retrospectiva](docs/
 O protótipo em Node: painel de apps, atalhos, som, janelas, PC e energia; editor de botões e macros; acesso por Wi-Fi com certificado fixado;
 câmera do celular como webcam; notificações do Windows; redesign por orientação (trilho em paisagem, barra em retrato); suporte ao iPhone.
 
-[Não lançado]: https://github.com/LucasFelip/self-stream-deck/compare/v0.1.7...HEAD
+[Não lançado]: https://github.com/LucasFelip/self-stream-deck/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/LucasFelip/self-stream-deck/compare/v0.1.7...v0.2.0
 [0.1.7]: https://github.com/LucasFelip/self-stream-deck/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/LucasFelip/self-stream-deck/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/LucasFelip/self-stream-deck/compare/v0.1.4...v0.1.5
