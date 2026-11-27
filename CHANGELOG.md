@@ -8,6 +8,11 @@ Como publicar uma versão: [docs/desenvolvimento.md](docs/desenvolvimento.md#pub
 
 ## [Não lançado]
 
+### Mudado
+
+- **PC > Desempenho:** seis cartões do mesmo tamanho, em 3×2 (celular deitado) ou 2×3 (em pé). O FPS do jogo ganhou um cartão fixo no lugar da faixa
+  do topo, e Memória e GPU ganharam o gráfico de uso.
+
 ## [0.2.0] - 2026-11-22
 
 ### Segurança

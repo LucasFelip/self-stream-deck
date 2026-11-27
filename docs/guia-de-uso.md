@@ -52,7 +52,7 @@ Um **mapa em escala das suas telas**, com cada janela desenhada onde ela está.
 
 **Desempenho** (CPU total e por núcleo, clock, temperatura e potência, memória, GPU, disco e rede, ao vivo).
 
-Com um jogo desenhando quadros, o cartão da GPU mostra o **FPS** e o tempo de quadro (lidos do RTSS, o mesmo do MSI Afterburner).
+Com um jogo desenhando quadros, o cartão **FPS** mostra a taxa e o tempo de quadro (lidos do RTSS, o mesmo do MSI Afterburner).
 
 **Fontes opcionais:** o Windows não expõe os sensores de temperatura, potência e clock reais de todo processador; o painel os lê do **MSI Afterburner** (memória compartilhada) quando ele está aberto, e sem ele esses campos ficam em "–". A GPU vem do `nvidia-smi` (placas NVIDIA); sem ele o cartão da GPU fica vazio.
 
