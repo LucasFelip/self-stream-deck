@@ -12,8 +12,8 @@ android {
         minSdk = 24
         targetSdk = 34
         // the version of the whole project (agent/Cargo.toml); the code is major*10000 + minor*100 + patch. tools/version-check keeps them equal
-        versionCode = 200
-        versionName = "0.2.0"
+        versionCode = 201
+        versionName = "0.2.1"
     }
 
     // The release build is signed when the keystore is given in the environment (a release workflow, or the owner's PC); without it the

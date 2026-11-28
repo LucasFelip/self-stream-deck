@@ -1062,7 +1062,7 @@ dependencies = [
 
 [[package]]
 name = "ssd-agent"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "axum",
  "hyper",
@@ -1084,7 +1084,7 @@ dependencies = [
 
 [[package]]
 name = "ssd-api"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "axum",
  "http-body-util",
@@ -1099,7 +1099,7 @@ dependencies = [
 
 [[package]]
 name = "ssd-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "getrandom",
  "serde",
@@ -1109,7 +1109,7 @@ dependencies = [
 
 [[package]]
 name = "ssd-platform-linux"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "serde_json",
  "ssd-core",
@@ -1117,7 +1117,7 @@ dependencies = [
 
 [[package]]
 name = "ssd-platform-windows"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "jpeg-decoder",
  "png",
