@@ -37,8 +37,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     SetProcessDPIAware, SetWindowPos, ShowWindow, TranslateMessage, EVENT_OBJECT_CREATE,
     EVENT_OBJECT_NAMECHANGE, EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_MINIMIZEEND,
     EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MOVESIZEEND, GWL_EXSTYLE, GW_OWNER, MSG, PM_NOREMOVE,
-    SWP_NOACTIVATE, SWP_NOZORDER, SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE, WINEVENT_OUTOFCONTEXT,
-    WINEVENT_SKIPOWNPROCESS, WM_QUIT, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
+    SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE,
+    WINEVENT_OUTOFCONTEXT, WINEVENT_SKIPOWNPROCESS, WM_QUIT, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
 };
 
 fn hwnd(handle: i64) -> HWND {
@@ -327,6 +327,32 @@ fn set_visible_rect(window: HWND, x: i32, y: i32, w: i32, h: i32) {
     }
 }
 
+/// A window with a minimum size wider than the zone (OBS on a portrait screen) grows past it, and Windows may grow it to the *left*, onto the
+/// neighbouring monitor. Shifts it right so its visible left edge is on `work`; any excess then runs off the far side instead.
+fn keep_left_edge_inside(window: HWND, work: RECT) {
+    unsafe {
+        let Some(frame) = visible_frame(window) else {
+            return;
+        };
+        if frame.left >= work.left {
+            return;
+        }
+        let mut outer = RECT::default();
+        if GetWindowRect(window, &mut outer).is_err() {
+            return;
+        }
+        let _ = SetWindowPos(
+            window,
+            HWND::default(),
+            outer.left + (work.left - frame.left),
+            outer.top,
+            0,
+            0,
+            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+        );
+    }
+}
+
 fn move_window(window: HWND, target: usize) -> PortResult<()> {
     let screens = screens();
     let Some(to) = screens.get(target) else {
@@ -569,6 +595,20 @@ impl WindowsPort for WindowsWindows {
             move_window(window, monitor)?;
             unsafe {
                 let _ = ShowWindow(window, SW_MAXIMIZE);
+                // maximized but still starting left of the screen: its minimum width is wider than the screen, and a maximized window cannot be
+                // moved, so fill the work area as a normal window and pull it back inside
+                if visible_frame(window).is_some_and(|f| f.left < screen.work.left) {
+                    let _ = ShowWindow(window, SW_RESTORE);
+                    let work = screen.work;
+                    set_visible_rect(
+                        window,
+                        work.left,
+                        work.top,
+                        work.right - work.left,
+                        work.bottom - work.top,
+                    );
+                    keep_left_edge_inside(window, work);
+                }
             }
             return Ok(());
         }
@@ -585,6 +625,7 @@ impl WindowsPort for WindowsWindows {
         } else {
             set_visible_rect(window, work.left + half, work.top, width - half, height);
         }
+        keep_left_edge_inside(window, work);
         Ok(())
     }
 

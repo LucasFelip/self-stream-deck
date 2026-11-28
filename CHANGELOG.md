@@ -13,6 +13,11 @@ Como publicar uma versão: [docs/desenvolvimento.md](docs/desenvolvimento.md#pub
 - **PC > Desempenho:** seis cartões do mesmo tamanho, em 3×2 (celular deitado) ou 2×3 (em pé). O FPS do jogo ganhou um cartão fixo no lugar da faixa
   do topo, e Memória e GPU ganharam o gráfico de uso.
 
+### Corrigido
+
+- **Janelas:** uma janela mais larga que a área de destino (o OBS em uma tela em pé, por exemplo) não vaza mais para o monitor à esquerda ao ser
+  encaixada ou maximizada pelo celular.
+
 ## [0.2.0] - 2026-11-22
 
 ### Segurança
