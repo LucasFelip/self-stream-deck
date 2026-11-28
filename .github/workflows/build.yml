@@ -54,7 +54,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: EmbarkStudios/cargo-deny-action@17aeb3c839e42274e2b8adf721c8c65edfdc74dd # v2
+      - uses: EmbarkStudios/cargo-deny-action@81891abc19297b21343b15ef67dc61e4aea74fda # v2
         # the action runs in a container whose rustup would try to install the toolchain of rust-toolchain.toml: it only needs `cargo metadata`
         env: { RUSTUP_TOOLCHAIN: stable }
         with: { manifest-path: agent/Cargo.toml, command: check }
