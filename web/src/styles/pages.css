@@ -229,17 +229,17 @@ button.chip:active { background: var(--border); }
 
 /* --- monitor -------------------------------------------------------------------------------- */
 
-/* Desempenho: five cards of a similar size (CPU, Memória, GPU, Disco, Rede), sized by their content. Landscape: 3 columns x 2 rows, the Disco card
-   (the one with the drives) is two columns wide; portrait: 2 columns. The FPS strip shows above them only while a game is drawing frames. */
+/* Desempenho: six cards of the same size (CPU, Memória, GPU, Disco, Rede, FPS), a uniform grid like the keys of Apps: 3 columns x 2 rows in
+   landscape, 2 columns x 3 rows in portrait. The FPS card shows a dash while no game is drawing frames. */
 .monitor-page { display: flex; flex-direction: column; gap: 8px; }
 .perf-grid { display: grid; flex: 1; min-height: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .monitor-page .card { overflow: hidden; gap: 4px; padding-top: 8px; padding-bottom: 8px; }
-.monitor-page .c-dsk { grid-column: span 2; display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr); grid-template-rows: auto auto minmax(0, 1fr); align-content: start; gap: 4px 12px; }
+.monitor-page .c-dsk { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); align-content: start; gap: 4px 12px; } /* the reading and its rates side by side, the drives under them */
 .monitor-page .c-dsk > .head { grid-column: 1 / -1; }
 .monitor-page .c-dsk .big { grid-column: 1; }
-.monitor-page .c-dsk .stats { grid-column: 1; grid-row: 3; grid-template-columns: 1fr; align-self: start; }
-.monitor-page .c-dsk > .scroll { grid-column: 2; grid-row: 2 / span 2; }
-.monitor-page .c-cpu .spark, .monitor-page .c-net .spark { flex: 1; height: auto; min-height: 16px; }
+.monitor-page .c-dsk .stats { grid-column: 2; grid-row: 2; grid-template-columns: 1fr; align-self: center; }
+.monitor-page .c-dsk > .scroll { grid-column: 1 / -1; grid-row: 3; }
+.monitor-page .card .spark { flex: 1; height: auto; min-height: 16px; }
 .monitor-page .big { font-size: clamp(1.5rem, 5vh, 2.2rem); }
 /* the color of each reading (--c-* in style.css): title, bar, chart and cores; an alert level still wins */
 .monitor-page .card { --metric: var(--accent); }
@@ -257,17 +257,9 @@ button.chip:active { background: var(--border); }
 .monitor-page .c-net .big { color: var(--c-net); }
 .monitor-page .c-net .stats > div:first-child span:last-child { color: var(--c-net-up); }
 .monitor-page .c-mem .stats, .monitor-page .c-gpu .stats { grid-template-columns: 1fr; }
-.monitor-page .c-gpu .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.monitor-page .c-gpu .stats { grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr); } /* Fan is short, Clock needs the room */
 .monitor-page .c-gpu .stats > :nth-child(-n + 3) { grid-column: 1 / -1; }
-/* the FPS strip */
-.monitor-page .c-fps { display: none; flex: none; flex-direction: row; align-items: center; gap: 12px; padding-top: 6px; padding-bottom: 6px; }
-.monitor-page .c-fps.on { display: flex; }
 .monitor-page.gaming .bar > i, .monitor-page.gaming .cores i b { transition: none; } /* the bars and cores follow the numbers at once during a game */
-.c-fps .fps-info { display: flex; flex: none; flex-direction: column; gap: 2px; max-width: 30%; min-width: 0; }
-.c-fps .fps-game { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem; font-weight: 600; }
-.c-fps .fps-frame { font-size: 0.66rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-.c-fps .big { flex: none; font-size: 1.6rem; color: var(--accent); }
-.c-fps .spark { flex: 1; min-width: 0; height: 26px; }
 .monitor-page .stats > div[hidden] { display: none; }
 .monitor-page .c-dsk .drive { padding: 0; }
 .monitor-page .c-dsk .drive .row { margin-bottom: 1px; }
@@ -567,15 +559,15 @@ button.chip:active { background: var(--border); }
   .chip.wide { flex: none; height: auto; padding: 9px 10px; font-size: 0.74rem; }
   .hold.small { flex: none; height: 36px; }
   .wpane-map > * { flex: none; }
-  /* Desempenho: every card keeps its natural height (the sparkline gets 90 px) and the pane scrolls, instead of squeezing the CPU card */
+  /* Desempenho: the cards are as tall as their content needs and the pane scrolls, instead of squeezing the CPU card */
   .perf-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; }
   .monitor-page .card { flex: none; }
-  .perf-grid .c-cpu, .perf-grid .c-gpu, .perf-grid .c-dsk { grid-column: 1 / -1; }
-  .perf-grid .c-cpu { order: 1; } .perf-grid .c-mem { order: 2; } .perf-grid .c-net { order: 3; } .perf-grid .c-gpu { order: 4; } .perf-grid .c-dsk { order: 5; }
+  .perf-grid .c-cpu { order: 1; } .perf-grid .c-mem { order: 2; } .perf-grid .c-gpu { order: 3; } .perf-grid .c-net { order: 4; } .perf-grid .c-dsk { order: 5; } .perf-grid .c-fps { order: 6; }
   .monitor-page .c-cpu .spark { min-height: 48px; }
-  .perf-grid { flex: 1; grid-auto-rows: minmax(min-content, 1fr); }
-  .monitor-page .c-net .stats { grid-template-columns: 1fr; }
-  .monitor-page .c-dsk { grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr); }
+  .perf-grid { flex: 1 0 auto; grid-auto-rows: 1fr; } /* equal rows, as tall as the card with the most to show */
+  .monitor-page .perf-grid > .card { min-height: auto; overflow: visible; }
+  .monitor-page .stats { grid-template-columns: 1fr; } /* half the screen wide: one reading per line */
+  .monitor-page .c-dsk .drive .row { flex-wrap: wrap; column-gap: 6px; }
   .win-side { overflow: visible; }
   .sel-chips { display: flex; }
   .windows-page .wmap-col { flex: none; height: 62vh; }

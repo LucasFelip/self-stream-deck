@@ -75,7 +75,7 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       await tapTab(page, 'pc');
     });
 
-    await test('PC > Desempenho: the five cards show the sample (levels, per-core bars, GPU name, drives, network)', async () => {
+    await test('PC > Desempenho: the cards show the sample (levels, per-core bars, GPU name, drives, network)', async () => {
       await page.waitFor(`document.querySelector('.c-cpu .big').textContent.startsWith('23')`, 'the sample drawn');
       const info = await page.eval(`(() => {
         const t = (s) => document.querySelector(s).textContent;
@@ -90,10 +90,10 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
           drives: [...document.querySelectorAll('.c-dsk .drive')].map((d) => d.textContent),
           netSub: t('.c-net .sub'), net: t('.c-net .big'),
           sparks: document.querySelectorAll('.perf-grid .spark path.line').length,
-          fpsOn: document.querySelector('.c-fps').classList.contains('on'),
+          fps: [t('.c-fps .sub'), t('.c-fps .big'), t('.c-fps .stats')],
         };
       })()`);
-      assert.strictEqual(info.cards, 5);
+      assert.strictEqual(info.cards, 6);
       assert.strictEqual(info.cpu, '23%');
       assert.strictEqual(info.cpuLevel, 'ok');
       assert.deepStrictEqual(info.cpuStats, ['Clock4.20 GHz', 'Temp.51 °C', 'Potência40 W', 'Tarefas210 · 3100']);
@@ -107,20 +107,20 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
       assert.deepStrictEqual(info.drives, ['C: Sistema200 GB livres', 'D: Laika195 GB livres', 'E: Strelka408 GB livres']);
       assert.strictEqual(info.netSub, 'Ethernet');
       assert.strictEqual(info.net, '↓ 4.9 KB/s');
-      assert.ok(info.sparks >= 2);
-      assert.strictEqual(info.fpsOn, false, 'the frame-rate strip is hidden without a game');
+      assert.strictEqual(info.sparks, 5, 'CPU, memory, GPU, network and frame rate each have a chart');
+      assert.deepStrictEqual(info.fps, ['nenhum jogo', '–', 'Quadro–'], 'the frame-rate card has nothing to show without a game');
     });
 
-    await test('PC > Desempenho: a game shows its frame rate in the strip above the cards', async () => {
+    await test('PC > Desempenho: a game shows its frame rate in the FPS card', async () => {
       const wide = await open(836, 387);
       try {
         deck.model.fps = { fps: 142, frameMs: 7, app: 'Jogo Teste', source: 'RTSS' };
         // a new answer arrives with the next push or poll: reopen the page so the sample carries the game
         await tapTab(wide, 'apps');
         await tapTab(wide, 'pc');
-        await wide.waitFor(`document.querySelector('.c-fps').classList.contains('on')`, 'the strip', 8000);
-        const strip = await wide.eval(`(() => ({ game: document.querySelector('.fps-game').textContent, title: document.querySelector('.fps-game').title, frame: document.querySelector('.fps-frame').textContent, big: document.querySelector('.c-fps .big').textContent, gaming: document.querySelector('.monitor-page').classList.contains('gaming') }))()`);
-        assert.deepStrictEqual(strip, { game: 'Jogo Teste', title: 'Fonte: RTSS', frame: '7 ms', big: '142FPS', gaming: true });
+        await wide.waitFor(`document.querySelector('.c-fps .big').textContent === '142'`, 'the frame rate', 8000);
+        const card = await wide.eval(`(() => ({ game: document.querySelector('.c-fps .sub').textContent, title: document.querySelector('.c-fps .stats > div').title, frame: document.querySelector('.c-fps .stats > div').textContent, big: document.querySelector('.c-fps .big').textContent, gaming: document.querySelector('.monitor-page').classList.contains('gaming') }))()`);
+        assert.deepStrictEqual(card, { game: 'Jogo Teste', title: 'Fonte: RTSS', frame: 'Quadro7 ms', big: '142', gaming: true });
       } finally {
         delete deck.model.fps;
       }
@@ -152,12 +152,12 @@ const test = async (name, fn) => { await fn(); passed += 1; console.log(`ok     
             })()`);
             // Desempenho
             let info = await measure('monitor-page');
-            assert.strictEqual(info.cards, 5, JSON.stringify(info));
+            assert.strictEqual(info.cards, 6, JSON.stringify(info));
             assert.deepStrictEqual({ o: info.overlaps, c: info.cut, t: info.text, out: info.outside }, { o: [], c: [], t: [], out: 0 }, JSON.stringify(info));
             if (landscape) assert.strictEqual(info.rootScrolls, false, `landscape Desempenho must not scroll: ${JSON.stringify(info)}`);
-            const kinds = await pcp.eval(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); return { cpuH: Math.round(r('.c-cpu').height), memH: Math.round(r('.c-mem').height), cols: getComputedStyle(document.querySelector('.perf-grid')).gridTemplateColumns.split(' ').length }; })()`);
+            const kinds = await pcp.eval(`(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); return { sizes: [...new Set([...document.querySelectorAll('.perf-grid > .card')].map((c) => Math.round(c.getBoundingClientRect().width) + "x" + Math.round(c.getBoundingClientRect().height)))], cols: getComputedStyle(document.querySelector('.perf-grid')).gridTemplateColumns.split(' ').length }; })()`);
             assert.strictEqual(kinds.cols, landscape ? 3 : 2);
-            if (landscape) assert.ok(Math.abs(kinds.cpuH - kinds.memH) <= 2, `the CPU card is not the dominant one: ${JSON.stringify(kinds)}`);
+            assert.strictEqual(kinds.sizes.length, 1, `the cards are not all the same size: ${JSON.stringify(kinds)}`);
           } finally {
             deck.model.drives = DEFAULT_DRIVES;
             deck.model.noGpu = false;

@@ -14,7 +14,7 @@ interface PerformancePaneProps {
 const gbNumber = (mb: number): string => gb(mb).replace(' GB', '');
 const CORES = 16;
 
-/** Desempenho: live CPU (per core), memory, GPU, disk and network, plus the game's frame rate in a strip while a game draws frames. */
+/** Desempenho: live CPU (per core), memory, GPU, disk, network and the frame rate of the game that is drawing frames. */
 export function PerformancePane({ hidden, sample, stamp, loading }: PerformancePaneProps) {
   const cpuHistory = useHistory(sample?.cpu.usage, stamp);
   const netDown = sample ? sample.network.reduce((sum, adapter) => sum + (adapter.downBps || 0), 0) : undefined;
@@ -22,6 +22,8 @@ export function PerformancePane({ hidden, sample, stamp, loading }: PerformanceP
   const netHistory = useHistory(netDown, stamp);
   const fps: GameFps = sample?.fps ?? null;
   const fpsHistory = useHistory(fps?.fps, stamp);
+  const memoryHistory = useHistory(sample?.memory.usedPct, stamp);
+  const gpuHistory = useHistory(sample?.gpu?.usage ?? undefined, stamp);
   const gaming = Boolean(fps);
 
   const cpu = sample?.cpu;
@@ -31,15 +33,6 @@ export function PerformancePane({ hidden, sample, stamp, loading }: PerformanceP
 
   return (
     <section className={`monitor-page pc-pane${gaming ? ' gaming' : ''}`} hidden={hidden}>
-      <div className={`card c-fps${gaming ? ' on' : ''}`}>
-        <div className="fps-info">
-          <span className="fps-game" title={fps?.source ? `Fonte: ${fps.source}` : undefined}>{fps ? fps.app || 'Jogo' : ''}</span>
-          <span className="fps-frame">{fps?.frameMs !== undefined ? `${fps.frameMs} ms` : ''}</span>
-        </div>
-        <div className="big">{fps ? <>{fps.fps}<small>FPS</small></> : null}</div>
-        <Spark values={fpsHistory} floor={60} />
-      </div>
-
       <div className="perf-grid">
         <MonitorCard title="CPU" sub={loading ? 'iniciando sensores…' : ''} className="c-cpu">
           <Big value={String(Math.round(cpu?.usage ?? 0))} unit="%" level={level(cpu?.usage, 80, 95)} />
@@ -65,6 +58,7 @@ export function PerformancePane({ hidden, sample, stamp, loading }: PerformanceP
 
         <MonitorCard title="Memória" className="c-mem">
           <Big value={memory ? String(memory.usedPct) : '–'} unit={memory ? '%' : undefined} level={level(memory?.usedPct, 80, 92)} />
+          <Spark values={memoryHistory} max={100} />
           <Bar percent={memory?.usedPct ?? 0} level={level(memory?.usedPct, 80, 92)} />
           <div className="stats">
             <Stat label="Em uso" value={memory ? `${gbNumber(memory.usedMB)} / ${gb(memory.totalMB)}` : '–'} />
@@ -75,6 +69,7 @@ export function PerformancePane({ hidden, sample, stamp, loading }: PerformanceP
 
         <MonitorCard title="GPU" sub={gpu ? gpuShortName(gpu.name) : ''} className="c-gpu">
           {gpu ? <Big value={String(Math.round(gpu.usage ?? 0))} unit="%" level={level(gpu.usage, 80, 95)} /> : <div className="big" data-level="ok">–</div>}
+          <Spark values={gpu ? gpuHistory : []} max={100} />
           <Bar percent={gpu ? ((gpu.memUsedMB ?? 0) / (gpu.memTotalMB || 1)) * 100 : 0} level={gpu ? level(((gpu.memUsedMB ?? 0) / (gpu.memTotalMB || 1)) * 100, 85, 95) : 'ok'} />
           <div className="stats">
             <Stat label="VRAM" value={gpu && gpu.memUsedMB !== undefined && gpu.memTotalMB !== undefined ? `${gbNumber(gpu.memUsedMB)} / ${gb(gpu.memTotalMB)}` : '–'} />
@@ -110,6 +105,14 @@ export function PerformancePane({ hidden, sample, stamp, loading }: PerformanceP
           <div className="stats">
             <Stat label="Envio" value={`↑ ${rate(netUp)}`} />
             <Stat label="Link" value={sample?.network[0]?.speed ?? '–'} />
+          </div>
+        </MonitorCard>
+
+        <MonitorCard title="FPS" sub={fps ? fps.app || 'Jogo' : 'nenhum jogo'} className="c-fps">
+          <Big value={fps ? String(fps.fps) : '–'} />
+          <Spark values={fps ? fpsHistory : []} floor={60} />
+          <div className="stats">
+            <Stat label="Quadro" value={fps?.frameMs !== undefined ? `${fps.frameMs} ms` : '–'} title={fps?.source ? `Fonte: ${fps.source}` : undefined} />
           </div>
         </MonitorCard>
       </div>
